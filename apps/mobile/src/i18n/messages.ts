@@ -1,4 +1,14 @@
 export const en = {
+  'email.title': 'Sign in with email', 'email.intro': 'We’ll email you a one-time link. No password to remember.',
+  'email.address': 'Email address', 'email.send': 'Email me a sign-in link',
+  'email.sent': 'If this address can sign in, a link will arrive shortly. Links expire in 15 minutes.',
+  'email.resend': 'Send a new sign-in link', 'email.resendIn': 'Send another link in {seconds}s',
+  'email.confirmHelp': 'Your sign-in link is ready. Confirm to continue to your account.',
+  'email.verify': 'Verify sign-in', 'email.recover': 'Request a new link',
+  'email.failure': 'This sign-in request could not be completed. Check your connection or request a new link.',
+  'email.rateLimited': 'Please wait before trying again.', 'email.localLink': 'Load local development link',
+  'email.back': 'Back to sign-in',
+
   'language.title': 'Language', 'language.he': 'עברית', 'language.en': 'English',
   'language.saveError': 'Language changed for this session, but could not be saved. Try again.',
   'common.retry': 'Try again', 'common.signIn': 'Sign in', 'common.loading': 'Loading…',
@@ -41,6 +51,16 @@ export const en = {
 export type MessageKey = keyof typeof en;
 export type Locale = 'he' | 'en';
 export const he: Record<MessageKey, string> = {
+  'email.title': 'כניסה בדואר אלקטרוני', 'email.intro': 'נשלח קישור חד־פעמי לכניסה. אין צורך בסיסמה.',
+  'email.address': 'כתובת דואר אלקטרוני', 'email.send': 'שליחת קישור לכניסה',
+  'email.sent': 'אם אפשר להיכנס עם הכתובת הזו, קישור יישלח בקרוב. הקישור תקף ל־15 דקות.',
+  'email.resend': 'שליחת קישור חדש לכניסה', 'email.resendIn': 'אפשר לשלוח קישור נוסף בעוד {seconds} שניות',
+  'email.confirmHelp': 'הקישור שלכם מוכן. אשרו כדי להמשיך לחשבון.',
+  'email.verify': 'אישור כניסה', 'email.recover': 'בקשת קישור חדש',
+  'email.failure': 'לא ניתן להשלים את הכניסה. בדקו את החיבור או בקשו קישור חדש.',
+  'email.rateLimited': 'יש להמתין לפני ניסיון נוסף.', 'email.localLink': 'טעינת קישור פיתוח מקומי',
+  'email.back': 'חזרה למסך הכניסה',
+
   'language.title': 'שפה', 'language.he': 'עברית', 'language.en': 'English',
   'language.saveError': 'השפה הוחלפה להפעלה זו, אך לא נשמרה. אפשר לנסות שוב.',
   'common.retry': 'ניסיון נוסף', 'common.signIn': 'כניסה', 'common.loading': 'בטעינה…',

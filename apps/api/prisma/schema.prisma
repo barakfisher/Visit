@@ -131,6 +131,7 @@ model ExternalIdentity {
 }
 
 model EmailChallenge {
+  deliveredAt  DateTime?
   id           String          @id @default(cuid())
   identityId   String?
   email        String

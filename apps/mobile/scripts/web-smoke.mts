@@ -63,7 +63,7 @@ try {
   if (redis.status === 'wait') await redis.connect();
   // Only the local test IP's OTP counters are reset; fixture phone numbers are unique.
   const ipHash = createHash('sha256').update('127.0.0.1').digest('hex');
-  await redis.del(`visit:otp:limit:ip:${ipHash}`, `visit:otp:limit:verify-ip:${ipHash}`);
+  await redis.del(`visit:otp:limit:ip:${ipHash}`, `visit:otp:limit:verify-ip:${ipHash}`, `visit:email:limit:ip:${ipHash}`, `visit:email:limit:verify:${ipHash}`);
   apiProcess = spawn(process.execPath, ['--import', 'tsx', 'src/server.ts'], { cwd: path.join(repoRoot, 'apps/api'), env: process.env, stdio: 'ignore' });
   await ready(`${apiUrl}/health/ready`, apiProcess, 'API');
   for (const name of ['North', 'South']) {
@@ -102,6 +102,10 @@ try {
     await localePage.screenshot({ path: path.join(diagnostics, 'login-he-mobile.png'), fullPage: true });
     await localePage.setViewportSize({ width: 1280, height: 900 });
     await localePage.screenshot({ path: path.join(diagnostics, 'login-he-desktop.png'), fullPage: true });
+    await localePage.goto(`${webUrl}/auth/email`);
+    await localePage.getByRole('heading', { name: 'כניסה בדואר אלקטרוני', exact: true }).waitFor();
+    assert.equal(await localePage.getByLabel('כתובת דואר אלקטרוני', { exact: true }).evaluate(node => getComputedStyle(node).direction), 'ltr');
+    assert.equal(await localePage.getByRole('button', { name: 'שליחת קישור לכניסה', exact: true }).isDisabled(), true);
     await localePage.goto(`${webUrl}/two`);
     await localePage.getByTestId('language-en').click();
     await localePage.getByRole('heading', { name: 'Account', exact: true }).waitFor();
@@ -216,15 +220,31 @@ try {
     const emailContext = await browser.newContext({ viewport: { width: 390, height: 844 } }); contexts.push(emailContext);
     await emailContext.addInitScript(() => { if (!localStorage.getItem('visit.locale.v1.guest')) localStorage.setItem('visit.locale.v1.guest', 'en'); });
     const emailPage = await emailContext.newPage(); capture = emailPage;
+    const emailRequestUrls: string[] = []; let emailVerifications = 0;
+    emailPage.on('pageerror', error => pageErrors.push(error.message));
+    emailPage.on('request', request => { emailRequestUrls.push(request.url()); if (request.url().endsWith('/v1/auth/email-challenges/verify')) emailVerifications++; });
     await emailPage.goto(`${webUrl}/auth/login`);
     await emailPage.getByRole('link', { name: 'Continue with email', exact: true }).click();
     await emailPage.getByLabel('Email address').fill(identities[1]!.email!);
     await emailPage.getByRole('button', { name: 'Email me a sign-in link' }).click();
     await emailPage.getByText(/If this address can sign in/).waitFor();
     const mail = await fetch(`${apiUrl}/__dev/mailbox?email=${encodeURIComponent(identities[1]!.email!)}`).then((response) => response.json()) as { token: string };
-    await emailPage.getByLabel('One-time sign-in link token').fill(mail.token);
+    await emailPage.goto(`${webUrl}/auth/email#token=${encodeURIComponent(mail.token)}`);
+    await emailPage.getByRole('button', { name: 'Verify sign-in', exact: true }).waitFor();
+    await emailPage.waitForFunction(() => window.location.hash.length === 0);
+    assert.equal(new URL(emailPage.url()).hash.length === 0, true, 'email credential must be removed from the URL');
+    assert.equal((await emailContext.request.get(`${apiUrl}/v1/me`)).status(), 401, 'opening a link must not consume it');
+    assert.equal(await emailPage.getByLabel('One-time sign-in link token').count(), 0);
+    assert.equal(await emailPage.evaluate(token => JSON.stringify(history.state).includes(token), mail.token), false);
+    await emailPage.route('**/api/auth/me', route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAVAILABLE' } }) }));
+    await emailPage.getByRole('button', { name: 'Verify sign-in' }).click();
+    await emailPage.getByRole('alert').filter({ hasText: 'This sign-in request could not be completed' }).waitFor();
+    await emailPage.unroute('**/api/auth/me');
     await emailPage.getByRole('button', { name: 'Verify sign-in' }).click();
     await emailPage.waitForURL('**/discover');
+    assert.equal(emailVerifications, 1, 'profile loading retry must not replay the one-time link');
+    assert.equal(emailRequestUrls.some(url => url.includes(mail.token)), false);
+    console.log('PASS: fragment link is scrubbed, opening does not authenticate, and profile outage recovery does not replay it.');
     console.log('PASS: email fallback completes authentication and routes to consumer discovery.');
     await emailPage.goto(`${webUrl}/two`);
     const languageSaved = emailPage.waitForResponse(response => response.url().endsWith('/api/account/preferences') && response.status() === 200);
