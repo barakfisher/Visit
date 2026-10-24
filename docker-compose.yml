@@ -1,0 +1,72 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: development
+      API_HOST: 0.0.0.0
+      API_PORT: 3000
+      DATABASE_URL: postgresql://visit:visit_local_only@postgres:5432/visit?schema=public
+      REDIS_URL: redis://redis:6379
+      SESSION_SECRET: ${SESSION_SECRET:-replace-with-a-random-local-development-secret-at-least-32-characters}
+      EMAIL_DELIVERY_MODE: local-inbox
+      EMAIL_FROM: Visit <login@localhost>
+      WEB_APP_URL: ${WEB_APP_URL:-http://localhost:8081}
+      SMS_DELIVERY_MODE: ${SMS_DELIVERY_MODE:-disabled}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_VERIFY_SERVICE_SID: ${TWILIO_VERIFY_SERVICE_SID:-}
+      GOOGLE_CLIENT_IDS: ${GOOGLE_CLIENT_IDS:-}
+      PLATFORM_ADMIN_EMAILS: ${PLATFORM_ADMIN_EMAILS:-}
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [internal]
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: visit
+      POSTGRES_USER: visit
+      POSTGRES_PASSWORD: visit_local_only
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - visit-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U visit -d visit"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [internal]
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - visit-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [internal]
+
+volumes:
+  visit-postgres:
+  visit-redis:
+
+networks:
+  internal:
+    driver: bridge

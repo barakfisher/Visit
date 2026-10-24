@@ -1,0 +1,7 @@
+import { ScrollView, Text, View } from 'react-native';
+import { ActiveBookingCard } from './ActiveBookingCard';
+import type { ActiveBooking } from '../src/types/flows';
+export function ActiveBookings({ bookings, onReschedule, onCancel }: { bookings: ActiveBooking[]; onReschedule?: (booking: ActiveBooking) => void; onCancel?: (booking: ActiveBooking) => void }) {
+  if (!bookings.length) return <View className="rounded-card border border-line bg-surface p-4"><Text className="text-sm text-muted">No upcoming appointments. Find your next visit below.</Text></View>;
+  return <ScrollView horizontal={bookings.length > 1} showsHorizontalScrollIndicator={false} contentContainerClassName="gap-3"><View className="flex-row gap-3">{bookings.map((booking) => <View key={booking.id} testID={`active-booking-${booking.id}`} style={bookings.length > 1 ? { width: 310 } : { flex: 1 }}><ActiveBookingCard service={booking.service.name} provider={`${booking.staff.displayName} · ${booking.business.name}`} dateLabel={new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: booking.business.timezone }).format(new Date(booking.startsAt))} timeLabel={new Intl.DateTimeFormat(undefined, { timeStyle: 'short', timeZone: booking.business.timezone }).format(new Date(booking.startsAt))} timezone={booking.business.timezone} onReschedule={onReschedule ? () => onReschedule(booking) : undefined} onCancel={onCancel ? () => onCancel(booking) : undefined} /></View>)}</View></ScrollView>;
+}

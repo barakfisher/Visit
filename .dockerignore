@@ -1,0 +1,15 @@
+.git
+.env
+node_modules
+**/node_modules
+.expo
+**/.expo
+dist
+**/dist
+coverage
+**/coverage
+apps/mobile/package-lock.json
+**/test-results
+**/storybook-static
+**/.env
+**/.env.local

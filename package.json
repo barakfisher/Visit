@@ -1,0 +1,15 @@
+{
+  "name": "visit-scheduling-platform",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "test:infra": "node apps/api/scripts/infra-smoke.mjs",
+    "dev:api": "npm run dev --workspace @visit/api",
+    "dev:mobile": "npm run start --workspace @visit/mobile",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "db:generate": "npm run db:generate --workspace @visit/api",
+    "db:migrate": "npm run db:migrate --workspace @visit/api"
+  }
+}

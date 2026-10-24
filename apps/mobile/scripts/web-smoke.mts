@@ -1,0 +1,229 @@
+import assert from 'node:assert/strict';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { randomUUID, randomInt, createHash } from 'node:crypto';
+import { mkdir, readFile } from 'node:fs/promises';
+import { createServer } from 'node:net';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { Page, BrowserContext } from 'playwright';
+import dotenv from 'dotenv';
+
+const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const repoRoot = path.resolve(appRoot, '../..');
+dotenv.config({ path: path.join(repoRoot, '.env') });
+const apiUrl = 'http://127.0.0.1:3001';
+const webPort = 8082;
+const webUrl = `http://127.0.0.1:${webPort}`;
+Object.assign(process.env, { API_PORT: '3001', API_HOST: '127.0.0.1', NODE_ENV: 'development', SMS_DELIVERY_MODE: 'local-inbox', EMAIL_DELIVERY_MODE: 'local-inbox', EXPO_PUBLIC_API_URL: apiUrl, WEB_APP_URL: webUrl });
+const { prisma } = await import('../../api/src/db/client.js');
+const { redis } = await import('../../api/src/infra/redis.js');
+const { chromium } = await import('playwright');
+const run = randomUUID();
+const date = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+let apiProcess: ChildProcess | undefined, webProcess: ChildProcess | undefined;
+const businessIds: string[] = [], identityIds: string[] = [];
+const contexts: BrowserContext[] = [];
+let capture: Page | undefined;
+const pageErrors: string[] = [];
+const diagnostics = path.join(appRoot, 'test-results');
+
+async function available(port: number) {
+  await new Promise<void>((resolve, reject) => { const server = createServer(); server.once('error', () => reject(new Error(`Test port ${port} is occupied; stop that test server before running.`))); server.listen(port, '127.0.0.1', () => server.close(() => resolve())); });
+}
+async function ready(url: string, child: ChildProcess, label: string) {
+  const until = Date.now() + 60000;
+  while (Date.now() < until) {
+    if (child.exitCode !== null) throw new Error(`${label} exited (${child.exitCode}).`);
+    try { if ((await fetch(url)).ok) return; } catch { /* Wait for startup. */ }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`${label} startup timed out.`);
+}
+async function otpLogin(page: Page, phone: string, provider = false) {
+  await page.goto(`${webUrl}/auth/login`);
+  await page.getByRole('heading', { name: 'Welcome to Visit' }).waitFor();
+  await page.getByLabel('Phone number', { exact: true }).fill(phone);
+  await page.getByRole('button', { name: 'Send verification code', exact: true }).click();
+  const otp = page.getByLabel('Six-digit verification code');
+  await otp.waitFor(); assert.equal(await otp.getAttribute('autocomplete'), 'one-time-code');
+  const response = await fetch(`${apiUrl}/__dev/otp?phone=${encodeURIComponent(phone)}`);
+  assert.equal(response.status, 200);
+  const { code } = await response.json() as { code: string };
+  await otp.fill(code);
+  await page.getByRole('button', { name: 'Verify & continue' }).click();
+  await page.waitForURL(provider ? '**/provider/dashboard' : '**/discover');
+}
+async function openBooking(page: Page, businessId: string, serviceId: string) {
+  await page.goto(`${webUrl}/booking/${businessId}?serviceId=${serviceId}&date=${date}`);
+  await page.getByRole('heading', { name: 'Available appointments' }).waitFor();
+  await page.getByRole('button', { name: /09:00 · Alex North/ }).waitFor();
+}
+try {
+  await available(3001); await available(webPort); await mkdir(diagnostics, { recursive: true });
+  if (redis.status === 'wait') await redis.connect();
+  // Only the local test IP's OTP counters are reset; fixture phone numbers are unique.
+  const ipHash = createHash('sha256').update('127.0.0.1').digest('hex');
+  await redis.del(`visit:otp:limit:ip:${ipHash}`, `visit:otp:limit:verify-ip:${ipHash}`);
+  apiProcess = spawn(process.execPath, ['--import', 'tsx', 'src/server.ts'], { cwd: path.join(repoRoot, 'apps/api'), env: process.env, stdio: 'ignore' });
+  await ready(`${apiUrl}/health/ready`, apiProcess, 'API');
+  for (const name of ['North', 'South']) {
+    const business = await prisma.business.create({ data: { name: `Visit QA ${name} ${run.slice(0, 6)}`, slug: `qa-${name.toLowerCase()}-${run}`, timezone: 'UTC', location: name === 'North' ? 'Jerusalem' : 'Tel Aviv', category: 'Wellness', approvalStatus: 'APPROVED' } });
+    businessIds.push(business.id);
+    const service = await prisma.service.create({ data: { businessId: business.id, name: name === 'North' ? 'QA consultation' : 'South consultation', durationMinutes: 30, priceMinor: 6500, currency: 'USD' } });
+    const staff = await prisma.staff.create({ data: { businessId: business.id, displayName: name === 'North' ? 'Alex North' : 'Sam South', parallelCapacity: 1 } });
+    await prisma.staffService.create({ data: { businessId: business.id, staffId: staff.id, serviceId: service.id } });
+    await prisma.bookingPolicy.create({ data: { businessId: business.id, minimumNoticeMinutes: 0, maximumAdvanceDays: 30, cancellationCutoffMinutes: 0, rescheduleCutoffMinutes: 0 } });
+    await prisma.businessWeeklyAvailability.createMany({ data: Array.from({ length: 7 }, (_, weekday) => ({ businessId: business.id, weekday, startLocal: '09:00', endLocal: '17:00' })) });
+  }
+  const identities = await Promise.all(['consumer-a', 'consumer-b', 'owner'].map((name) => prisma.identity.create({ data: { email: `${name}-${run}@example.test`, phone: `+1555${randomInt(1000000, 9999999)}` } })));
+  identityIds.push(...identities.map((identity) => identity.id));
+  await prisma.membership.create({ data: { identityId: identities[2]!.id, businessId: businessIds[0]!, status: 'ACTIVE', role: 'OWNER' } });
+  const service = await prisma.service.findFirstOrThrow({ where: { businessId: businessIds[0]! } });
+  webProcess = spawn(process.execPath, [path.join(repoRoot, 'node_modules/expo/bin/cli'), 'serve', 'dist', '--port', String(webPort)], { cwd: appRoot, env: { ...process.env, NODE_PATH: path.join(appRoot, 'node_modules') }, stdio: 'ignore' });
+  await ready(webUrl, webProcess, 'Web');
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const localization = await browser.newContext({ viewport: { width: 390, height: 844 } }); contexts.push(localization);
+    const localePage = await localization.newPage(); capture = localePage;
+    localePage.on('pageerror', error => pageErrors.push(error.message));
+    await localePage.goto(`${webUrl}/auth/login`);
+    await localePage.getByRole('heading', { name: 'ברוכים הבאים ל־Visit' }).waitFor();
+    assert.equal(await localePage.locator('html').getAttribute('lang'), 'he');
+    assert.equal(await localePage.locator('html').getAttribute('dir'), 'rtl');
+    assert.equal(await localePage.getByLabel('מספר טלפון', { exact: true }).evaluate(node => getComputedStyle(node).direction), 'ltr');
+    await localePage.screenshot({ path: path.join(diagnostics, 'login-he-mobile.png'), fullPage: true });
+    await localePage.setViewportSize({ width: 1280, height: 900 });
+    await localePage.screenshot({ path: path.join(diagnostics, 'login-he-desktop.png'), fullPage: true });
+    await localePage.goto(`${webUrl}/two`);
+    await localePage.getByTestId('language-en').click();
+    await localePage.getByRole('heading', { name: 'Account', exact: true }).waitFor();
+    assert.equal(await localePage.locator('html').getAttribute('dir'), 'ltr');
+    await localePage.reload();
+    await localePage.getByRole('heading', { name: 'Account', exact: true }).waitFor();
+    await localePage.goto(`${webUrl}/auth/login`);
+    await localePage.getByRole('heading', { name: 'Welcome to Visit' }).waitFor();
+    await localePage.screenshot({ path: path.join(diagnostics, 'login-en-desktop.png'), fullPage: true });
+    await localePage.setViewportSize({ width: 390, height: 844 });
+    await localePage.screenshot({ path: path.join(diagnostics, 'login-en-mobile.png'), fullPage: true });
+    console.log('PASS: Hebrew default/RTL, LTR phone input, language switching and guest preference persistence at mobile/desktop sizes.');
+
+    const consumer = await browser.newContext({ viewport: { width: 390, height: 844 } }); contexts.push(consumer);
+    await consumer.addInitScript(() => { if (!localStorage.getItem('visit.locale.v1.guest')) localStorage.setItem('visit.locale.v1.guest', 'en'); });
+    const page = await consumer.newPage(); capture = page; page.on('pageerror', (error) => pageErrors.push(error.message));
+    await otpLogin(page, identities[0]!.phone!);
+    await page.getByLabel('Search businesses').fill(`Visit QA North ${run.slice(0, 6)}`);
+    await page.locator(`a[href="/booking/${businessIds[0]}"]`).click();
+    await page.getByRole('heading', { name: 'Available appointments' }).waitFor();
+    await page.getByRole('button', { name: /QA consultation/ }).click();
+    const dateResponse = page.waitForResponse((response) => response.url().includes('/availability?') && response.url().includes(`date=${date}`));
+    await page.getByLabel('Appointment date', { exact: true }).fill(date); await dateResponse;
+    const lockResponse = page.waitForResponse((response) => response.url().endsWith('/api/bookings/lock-slot'));
+    await page.getByRole('button', { name: /09:00 · Alex North/ }).click();
+    const holdResponse = await lockResponse; assert.equal(holdResponse.status(), 201);
+    const hold = await holdResponse.json(); assert.ok(await redis.get(`visit:hold:${hold.holdId}`));
+    await page.getByText(/Slot held for \d\d:\d\d mins/).waitFor();
+    await page.screenshot({ path: path.join(diagnostics, 'booking-hold-mobile.png'), fullPage: true });
+    await page.getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).click();
+    await page.getByRole('heading', { name: 'You’re all set' }).waitFor();
+    assert.equal(await prisma.booking.count({ where: { id: hold.holdId, status: 'CONFIRMED' } }), 1);
+    const download = page.waitForEvent('download'); await page.getByRole('button', { name: 'Add to calendar (.ics)' }).click();
+    const calendarFile = await download; const calendar = await readFile((await calendarFile.path())!, 'utf8'); assert.ok(calendar.includes(`UID:${hold.holdId}@visit.app`));
+    console.log('PASS: full consumer journey, Redis hold, confirmation, and calendar export.');
+
+    const owner = await browser.newContext({ viewport: { width: 1280, height: 900 } }); contexts.push(owner);
+    await owner.addInitScript(() => { if (!localStorage.getItem('visit.locale.v1.guest')) localStorage.setItem('visit.locale.v1.guest', 'en'); });
+    const providerPage = await owner.newPage(); capture = providerPage; providerPage.on('pageerror', (error) => pageErrors.push(error.message));
+    await otpLogin(providerPage, identities[2]!.phone!, true);
+    await providerPage.getByLabel('Agenda date').fill(date);
+    await providerPage.getByText('QA consultation', { exact: true }).waitFor();
+    await providerPage.getByRole('button', { name: 'Call', exact: true }).waitFor();
+    await providerPage.screenshot({ path: path.join(diagnostics, 'provider-agenda-desktop.png'), fullPage: true });
+    await providerPage.getByRole('button', { name: 'Block time / add a break' }).click();
+    await providerPage.getByLabel('Break start time').fill('10:00'); await providerPage.getByLabel('Break end time').fill('10:30');
+    await providerPage.getByRole('button', { name: 'Save blocked time' }).click();
+    await providerPage.getByRole('button', { name: 'Remove blocked time' }).waitFor();
+    console.log('PASS: approved-provider smart routing, agenda verification and manual break.');
+
+    const rival = await browser.newContext({ viewport: { width: 390, height: 844 } }); contexts.push(rival);
+    await rival.addInitScript(() => { if (!localStorage.getItem('visit.locale.v1.guest')) localStorage.setItem('visit.locale.v1.guest', 'en'); });
+    const pageB = await rival.newPage(); pageB.on('pageerror', (error) => pageErrors.push(error.message));
+    await otpLogin(pageB, identities[1]!.phone!);
+    await Promise.all([openBooking(page, businessIds[0]!, service.id), openBooking(pageB, businessIds[0]!, service.id)]);
+    capture = pageB;
+    assert.equal(await page.getByRole('button', { name: /10:00 · Alex North/ }).isDisabled(), true);
+    let arrived = 0; let unblock!: () => void;
+    const barrier = new Promise<void>((resolve) => { unblock = resolve; });
+    const barrierTimeout = setTimeout(unblock, 10000);
+    for (const contestant of [page, pageB]) await contestant.route('**/api/bookings/lock-slot', async (route) => { arrived++; if (arrived === 2) unblock(); await barrier; await route.continue(); });
+    const replies = [page, pageB].map((contestant) => contestant.waitForResponse((response) => response.url().endsWith('/api/bookings/lock-slot')));
+    await Promise.all([page, pageB].map((contestant) => contestant.getByRole('button', { name: /11:00 · Alex North/ }).click()));
+    const results = await Promise.all(replies); clearTimeout(barrierTimeout);
+    assert.equal(arrived, 2); assert.deepEqual(results.map((response) => response.status()).sort(), [201, 409]);
+    const winnerIndex = results.findIndex((response) => response.status() === 201), winner = [page, pageB][winnerIndex]!, loser = [page, pageB][1 - winnerIndex]!;
+    capture = loser;
+    await loser.getByRole('alert').waitFor();
+    await loser.waitForFunction(() => Array.from(document.querySelectorAll('[role="button"]')).some((element) => element.textContent?.includes('11:00 · Alex North') && element.getAttribute('aria-disabled') === 'true'));
+    await loser.screenshot({ path: path.join(diagnostics, 'slot-conflict-mobile.png'), fullPage: true });
+    await winner.getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).click();
+    await winner.getByRole('heading', { name: 'You’re all set' }).waitFor();
+    assert.equal(await prisma.booking.count({ where: { businessId: businessIds[0]!, startsAt: new Date(`${date}T11:00:00Z`), status: 'CONFIRMED' } }), 1);
+    console.log('PASS: two simultaneous browser contexts produce exactly one winner, one conflict, and a disabled slot.');
+
+    // Existing appointment actions remain covered after the new screen flow.
+    capture = page;
+    await page.goto(`${webUrl}/booking/${businessIds[0]}?serviceId=${service.id}&date=${date}&fromBookingId=${hold.holdId}`);
+    await page.getByRole('button', { name: /14:00 · Alex North/ }).click();
+    await page.getByRole('button', { name: 'Confirm reschedule' }).click();
+    await page.getByRole('heading', { name: 'You’re all set' }).waitFor();
+    await page.goto(`${webUrl}/discover`);
+    const currentBooking = page.locator(`[data-testid="active-booking-${hold.holdId}"]:visible`);
+    await currentBooking.waitFor();
+    await currentBooking.scrollIntoViewIfNeeded();
+    page.once('dialog', (dialog) => dialog.accept());
+    const cancelled = page.waitForResponse((response) => response.url().endsWith(`/${hold.holdId}/cancel`) && response.status() === 200);
+    await currentBooking.getByRole('button', { name: 'Cancel', exact: true }).click(); await cancelled;
+    assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: hold.holdId } })).status, 'CANCELLED');
+    const emailContext = await browser.newContext({ viewport: { width: 390, height: 844 } }); contexts.push(emailContext);
+    await emailContext.addInitScript(() => { if (!localStorage.getItem('visit.locale.v1.guest')) localStorage.setItem('visit.locale.v1.guest', 'en'); });
+    const emailPage = await emailContext.newPage(); capture = emailPage;
+    await emailPage.goto(`${webUrl}/auth/login`);
+    await emailPage.getByRole('link', { name: 'Continue with email', exact: true }).click();
+    await emailPage.getByLabel('Email address').fill(identities[1]!.email!);
+    await emailPage.getByRole('button', { name: 'Email me a sign-in link' }).click();
+    await emailPage.getByText(/If this address can sign in/).waitFor();
+    const mail = await fetch(`${apiUrl}/__dev/mailbox?email=${encodeURIComponent(identities[1]!.email!)}`).then((response) => response.json()) as { token: string };
+    await emailPage.getByLabel('One-time sign-in link token').fill(mail.token);
+    await emailPage.getByRole('button', { name: 'Verify sign-in' }).click();
+    await emailPage.waitForURL('**/discover');
+    console.log('PASS: email fallback completes authentication and routes to consumer discovery.');
+    await emailPage.goto(`${webUrl}/two`);
+    const languageSaved = emailPage.waitForResponse(response => response.url().endsWith('/api/account/preferences') && response.status() === 200);
+    await emailPage.getByTestId('language-he').click();
+    await languageSaved;
+    await emailPage.getByRole('heading', { name: 'חשבון', exact: true }).waitFor();
+    assert.equal((await prisma.identity.findUniqueOrThrow({ where: { id: identities[1]!.id } })).preferredLocale, 'he');
+    // Same server session, fresh local storage: server preference must win over device defaults.
+    const cookieState = await emailContext.cookies();
+    const freshDevice = await browser.newContext({ viewport: { width: 390, height: 844 } }); contexts.push(freshDevice);
+    await freshDevice.addCookies(cookieState);
+    await freshDevice.addInitScript(() => localStorage.setItem('visit.locale.v1.guest', 'en'));
+    const freshPage = await freshDevice.newPage();
+    await freshPage.goto(`${webUrl}/two`);
+    await freshPage.getByRole('heading', { name: 'חשבון', exact: true }).waitFor();
+    assert.equal(await freshPage.locator('html').getAttribute('dir'), 'rtl');
+    console.log('PASS: authenticated language preference persists on the server and restores with fresh browser storage.');
+
+    assert.deepEqual(pageErrors, []);
+    console.log('PASS: reschedule, cancellation, and no browser runtime exceptions.');
+  } catch (error) { if (capture) { console.error((await capture.locator('body').innerText()).slice(0, 3500)); await capture.screenshot({ path: path.join(diagnostics, 'web-smoke-failure.png'), fullPage: true }).catch(() => {}); } throw error; }
+  finally { await Promise.all(contexts.map((context) => context.close())); await browser.close(); }
+} finally {
+  webProcess?.kill('SIGTERM'); apiProcess?.kill('SIGTERM');
+  const holds = await prisma.booking.findMany({ where: { businessId: { in: businessIds } }, select: { id: true } });
+  if (holds.length) await redis.del(...holds.map((hold) => `visit:hold:${hold.id}`));
+  for (const id of businessIds) { const keys: string[] = []; for await (const batch of redis.scanStream({ match: `visit:reservation:${id}:*` })) keys.push(...batch); if (keys.length) await redis.del(...keys); }
+  await prisma.booking.deleteMany({ where: { businessId: { in: businessIds } } });
+  await prisma.business.deleteMany({ where: { id: { in: businessIds } } });
+  await prisma.identity.deleteMany({ where: { id: { in: identityIds } } });
+  await Promise.allSettled([redis.quit(), prisma.$disconnect()]);
+}

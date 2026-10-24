@@ -1,0 +1,38 @@
+{
+  "name": "@visit/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "tsx --test test/*.test.ts",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.1.0",
+    "@js-temporal/polyfill": "^0.5.1",
+    "@prisma/adapter-pg": "^7.2.0",
+    "@prisma/client": "^7.2.0",
+    "dotenv": "^17.2.3",
+    "fastify": "^5.6.2",
+    "google-auth-library": "^11.3.1",
+    "ioredis": "^5.8.2",
+    "pg": "^8.16.3",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.1",
+    "@types/pg": "^8.15.5",
+    "prisma": "^7.2.0",
+    "tsx": "^4.20.6",
+    "typescript": "~5.9.3"
+  },
+  "optionalDependencies": {
+    "@esbuild/darwin-arm64": "^0.28.2"
+  }
+}

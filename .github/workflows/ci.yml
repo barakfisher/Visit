@@ -1,0 +1,65 @@
+name: Quality gates
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: visit
+          POSTGRES_USER: visit
+          POSTGRES_PASSWORD: visit_ci_only
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U visit -d visit"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: [6379:6379]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://visit:visit_ci_only@localhost:5432/visit?schema=public
+      REDIS_URL: redis://localhost:6379
+      SESSION_SECRET: ci-only-session-secret-not-for-production-000000
+      EMAIL_DELIVERY_MODE: local-inbox
+      EXPO_PUBLIC_API_URL: http://127.0.0.1:3001
+      WEB_APP_URL: http://127.0.0.1:8082
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate --workspace @visit/api
+      - run: npm run db:deploy --workspace @visit/api
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test --workspace @visit/api
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build-storybook --workspace @visit/mobile
+      - run: npm run test-storybook --workspace @visit/mobile
+      - run: npm run export:web --workspace @visit/mobile
+      - run: npm run test:web --workspace @visit/mobile
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: web-smoke-failure-screenshot
+          path: apps/mobile/test-results/*.png
+          if-no-files-found: ignore

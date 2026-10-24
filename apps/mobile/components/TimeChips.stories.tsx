@@ -1,0 +1,12 @@
+import type { Meta, StoryObj } from '@storybook/react';
+import { expect, fn, userEvent } from 'storybook/test';
+import { TimeChips } from './TimeChips';
+const slots = [{ id: '0900', label: '09:00' }, { id: '0930', label: '09:30' }, { id: '1000', label: '10:00' }];
+const meta = { title: 'Booking/TimeChips', component: TimeChips, args: { slots, timezone: 'Asia/Jerusalem' } } satisfies Meta<typeof TimeChips>;
+export default meta;
+type Story = StoryObj<typeof meta>;
+export const Default: Story = { args: { onSelect: fn() }, play: async ({ canvas, args }) => { await userEvent.click(canvas.getByRole('button', { name: /09:30/ })); await expect(args.onSelect).toHaveBeenCalledWith('0930'); } };
+export const Selected: Story = { args: { selectedId: '0930' } };
+export const Locked: Story = { args: { slots: slots.map((slot) => ({ ...slot, locked: true })), onSelect: fn() }, play: async ({ canvas, args }) => { const slot = canvas.getByRole('button', { name: /09:00/ }); await expect(slot).toHaveAttribute('aria-disabled', 'true'); await expect(args.onSelect).not.toHaveBeenCalled(); } };
+export const Disabled: Story = { args: { slots: slots.map((slot) => ({ ...slot, disabled: true })) } };
+export const SkeletonLoading: Story = { args: { loading: true }, play: async ({ canvas }) => { await expect(canvas.queryAllByRole('button')).toHaveLength(0); } };
