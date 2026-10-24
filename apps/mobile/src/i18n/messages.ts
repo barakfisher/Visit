@@ -1,4 +1,5 @@
 export const en = {
+  'email.nativeBuild': 'Email sign-in (development build required)',
   'email.title': 'Sign in with email', 'email.intro': 'We’ll email you a one-time link. No password to remember.',
   'email.address': 'Email address', 'email.send': 'Email me a sign-in link',
   'email.sent': 'If this address can sign in, a link will arrive shortly. Links expire in 15 minutes.',
@@ -51,6 +52,7 @@ export const en = {
 export type MessageKey = keyof typeof en;
 export type Locale = 'he' | 'en';
 export const he: Record<MessageKey, string> = {
+  'email.nativeBuild': 'כניסה בדואר אלקטרוני (נדרשת גרסת פיתוח)',
   'email.title': 'כניסה בדואר אלקטרוני', 'email.intro': 'נשלח קישור חד־פעמי לכניסה. אין צורך בסיסמה.',
   'email.address': 'כתובת דואר אלקטרוני', 'email.send': 'שליחת קישור לכניסה',
   'email.sent': 'אם אפשר להיכנס עם הכתובת הזו, קישור יישלח בקרוב. הקישור תקף ל־15 דקות.',

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Link, useLocalSearchParams } from 'expo-router';
 import { Platform, ScrollView, TextInput, View } from 'react-native';
 import { ActionButton } from '@/components/ActionButton';
@@ -12,6 +13,7 @@ type ChallengeResult = { accepted: boolean; resendAfterSeconds: number };
 type LoginResult = { sessionToken?: string };
 export default function AuthScreen() {
   const { t } = useAppLocale();
+  const buildRequired = Platform.OS !== 'web' && Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
   const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
   const received = useEmailLink();
   const [email, setEmail] = useState(''), [localToken, setLocalToken] = useState('');
@@ -60,9 +62,9 @@ export default function AuthScreen() {
         <ActionButton label={t('email.verify')} busy={busy} onPress={() => void verify()} />
         <ActionButton secondary label={t('email.recover')} disabled={busy} onPress={recover} />
       </> : <>
-        <TextInput autoCapitalize="none" autoCorrect={false} autoComplete="email" keyboardType="email-address" accessibilityLabel={t('email.address')} placeholder="you@example.com" value={email} onChangeText={setEmail} style={{ writingDirection: 'ltr', textAlign: 'left' }} className="rounded-control border border-line px-4 py-4 text-ink" />
+        <TextInput autoCapitalize="none" autoCorrect={false} autoComplete="email" keyboardType="email-address" accessibilityLabel={t('email.address')} placeholder="you@example.com" value={email} editable={!buildRequired} onChangeText={setEmail} style={{ writingDirection: 'ltr', textAlign: 'left' }} className="rounded-control border border-line px-4 py-4 text-ink" />
         {sent ? <Text accessibilityRole="status" className="leading-6 text-body">{t('email.sent')}</Text> : null}
-        <ActionButton label={cooldown ? t('email.resendIn', { seconds: cooldown }) : sent ? t('email.resend') : t('email.send')} busy={busy} disabled={!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || cooldown > 0} onPress={() => void requestLink()} />
+        <ActionButton label={buildRequired ? t('email.nativeBuild') : cooldown ? t('email.resendIn', { seconds: cooldown }) : sent ? t('email.resend') : t('email.send')} busy={busy} disabled={buildRequired || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || cooldown > 0} onPress={() => void requestLink()} />
         {__DEV__ && sent ? <ActionButton secondary label={t('email.localLink')} busy={busy} onPress={() => void loadLocalLink()} /> : null}
       </>}
       {error ? <Text accessibilityRole="alert" className="text-sm text-danger">{error}</Text> : null}
