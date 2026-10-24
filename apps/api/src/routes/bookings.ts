@@ -9,6 +9,7 @@ import { localDateTimeToInstant, possibleLocalInstants } from '../scheduling/loc
 import { acquireIntervalLocks } from '../scheduling/redis-slot-lock.js';
 import { authenticate } from '../security/sessions.js';
 import { requireBusinessMembership } from '../security/tenant-context.js';
+import { withBookingTransaction } from '../scheduling/booking-transaction.js';
 import { listCustomerBookings, listProviderBookings } from '../repositories/bookings.js';
 
 const activeStatuses = [BookingStatus.HELD, BookingStatus.CONFIRMED];
@@ -36,7 +37,7 @@ async function assertWorkingHours(businessId: string, timezone: string, staffId:
   if (!contained(businessWindows) || !contained(staffWindows)) throw conflict('This time is outside the business or provider’s working hours.');
 }
 
-export async function registerBookingRoutes(app: FastifyInstance) {
+export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks = acquireIntervalLocks }: { acquireLocks?: typeof acquireIntervalLocks } = {}) {
   app.get('/v1/businesses', async () => {
     const businesses = await prisma.business.findMany({ where: { approvalStatus: BusinessApprovalStatus.APPROVED, services: { some: { active: true } } }, orderBy: { name: 'asc' }, select: { id: true, name: true, slug: true, timezone: true } });
     return { businesses };
@@ -144,10 +145,10 @@ export async function registerBookingRoutes(app: FastifyInstance) {
       reply.code(200);
       return { id: prior.id, status: prior.status, startsAt: prior.startsAt.toISOString(), endsAt: prior.endsAt.toISOString(), holdExpiresAt: prior.holdExpiresAt?.toISOString() };
     }
-    const slotLock = await acquireIntervalLocks(business.id, staffLink.staff.id, occupied);
+    const slotLock = await acquireLocks(business.id, staffLink.staff.id, occupied);
     if (!slotLock.acquired) throw conflict('That time is being booked. Choose another time or retry shortly.');
     try {
-      const booking = await prisma.$transaction(async (tx) => {
+      const booking = await withBookingTransaction(async (tx) => {
         const existing = await tx.booking.findUnique({ where: { businessId_idempotencyKey: { businessId: business.id, idempotencyKey: input.idempotencyKey } } });
         if (existing) {
           if (!matchesRequest(existing)) throw conflict('That idempotency key was already used for a different booking request.');
@@ -158,7 +159,7 @@ export async function registerBookingRoutes(app: FastifyInstance) {
         if (!assertCapacity(occupied, conflicts.map((item) => ({ startsAt: item.occupiedFrom, endsAt: item.occupiedUntil })), staffLink.staff.parallelCapacity)) throw conflict('That time was just booked. Choose another time.');
         if (await tx.timeBlock.count({ where: { businessId: business.id, staffId: input.staffId, startsAt: { lt: occupied.endsAt }, endsAt: { gt: occupied.startsAt } } })) throw conflict('This provider has blocked this time. Choose another time.');
         return tx.booking.create({ data: { businessId: business.id, customerId: identity.id, staffId: input.staffId, serviceId: service.id, startsAt, endsAt, occupiedFrom: occupied.startsAt, occupiedUntil: occupied.endsAt, idempotencyKey: input.idempotencyKey, status: BookingStatus.HELD, holdExpiresAt } });
-      }, { isolationLevel: 'Serializable' });
+      });
       reply.code(201);
       return { id: booking.id, status: booking.status, startsAt: booking.startsAt.toISOString(), endsAt: booking.endsAt.toISOString(), holdExpiresAt: booking.holdExpiresAt?.toISOString() };
     } catch (error) {
@@ -211,17 +212,17 @@ export async function registerBookingRoutes(app: FastifyInstance) {
     const endsAt = new Date(startsAt.getTime() + existing.service.durationMinutes * 60_000);
     await assertWorkingHours(existing.businessId, existing.business.timezone, body.data.staffId, startsAt, endsAt);
     const occupied = occupiedInterval(startsAt, existing.service.durationMinutes, policy.bufferBeforeMinutes, policy.bufferAfterMinutes);
-    const slotLock = await acquireIntervalLocks(existing.businessId, staffService.staff.id, occupied);
+    const slotLock = await acquireLocks(existing.businessId, staffService.staff.id, occupied);
     if (!slotLock.acquired) throw conflict('That time is being booked. Choose another time or retry shortly.');
     try {
-      const updated = await prisma.$transaction(async (tx) => {
+      const updated = await withBookingTransaction(async (tx) => {
         if (await tx.timeBlock.count({ where: { businessId: existing.businessId, staffId: staffService.staff.id, startsAt: { lt: occupied.endsAt }, endsAt: { gt: occupied.startsAt } } })) throw conflict('This provider has blocked this time.');
-        const conflicts = await tx.booking.findMany({ where: { businessId: existing.businessId, staffId: staffService.staff.id, id: { not: existing.id }, status: { in: activeStatuses }, occupiedFrom: { lt: occupied.endsAt }, occupiedUntil: { gt: occupied.startsAt } }, select: { occupiedFrom: true, occupiedUntil: true } });
+        const conflicts = await tx.booking.findMany({ where: { businessId: existing.businessId, staffId: staffService.staff.id, id: { not: existing.id }, OR: [{ status: BookingStatus.CONFIRMED }, { status: BookingStatus.HELD, holdExpiresAt: { gt: new Date() } }], occupiedFrom: { lt: occupied.endsAt }, occupiedUntil: { gt: occupied.startsAt } }, select: { occupiedFrom: true, occupiedUntil: true } });
         if (!assertCapacity(occupied, conflicts.map((item) => ({ startsAt: item.occupiedFrom, endsAt: item.occupiedUntil })), staffService.staff.parallelCapacity)) throw conflict('That time was just booked. Choose another time.');
         const updated = await tx.booking.updateMany({ where: { id: existing.id, customerId: identity.id, status: BookingStatus.CONFIRMED }, data: { staffId: staffService.staff.id, startsAt, endsAt, occupiedFrom: occupied.startsAt, occupiedUntil: occupied.endsAt } });
         if (updated.count !== 1) throw conflict('This appointment changed before it could be rescheduled.');
         return tx.booking.findUniqueOrThrow({ where: { id: existing.id } });
-      }, { isolationLevel: 'Serializable' });
+      });
       return { id: updated.id, status: updated.status, startsAt: updated.startsAt.toISOString(), endsAt: updated.endsAt.toISOString() };
     } catch (error) {
       if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2034') throw conflict('Availability changed. Choose another time and retry.');

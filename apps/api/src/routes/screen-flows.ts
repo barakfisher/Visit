@@ -8,6 +8,7 @@ import { AppError, conflict, notFound } from '../http/errors.js';
 import { reserveHold, requireHold, releaseHold } from '../scheduling/reservations.js';
 import { acquireIntervalLocks } from '../scheduling/redis-slot-lock.js';
 import { localDateTimeToInstant } from '../scheduling/local-time.js';
+import { withBookingTransaction } from '../scheduling/booking-transaction.js';
 import { listCustomerBookings } from '../repositories/bookings.js';
 
 // Compatibility boundary: reuse the existing validated, tenant-scoped v1 handlers.
@@ -113,10 +114,10 @@ export async function registerScreenFlows(app: FastifyInstance) {
     const lock = await acquireIntervalLocks(businessId, staff.id, { startsAt, endsAt });
     if (!lock.acquired) throw conflict('This time is being booked. Retry shortly.');
     try {
-      const block = await prisma.$transaction(async (tx) => {
+      const block = await withBookingTransaction(async (tx) => {
         if (await tx.booking.count({ where: { businessId, staffId: staff.id, occupiedFrom: { lt: endsAt }, occupiedUntil: { gt: startsAt }, OR: [{ status: 'CONFIRMED' }, { status: 'HELD', holdExpiresAt: { gt: new Date() } }] } })) throw conflict('This break overlaps an appointment or active hold.');
         return tx.timeBlock.create({ data: { businessId, staffId: staff.id, startsAt, endsAt, reason: input.reason ?? null } });
-      }, { isolationLevel: 'Serializable' });
+      });
       reply.code(201); return block;
     } catch (error) { if (typeof error === 'object' && error && 'code' in error && error.code === 'P2034') throw conflict('Availability changed. Try again.'); throw error; }
     finally { await lock.release(); }

@@ -159,8 +159,8 @@ test('tenant repositories and both HTTP surfaces enforce scope, ownership and cu
       await assert.rejects(prisma.staffWeeklyAvailability.create({ data: { businessId: a!.id, staffId: staffB!.id, weekday: 1, startLocal: '09:00', endLocal: '10:00' } }), foreignKey);
       await assert.rejects(prisma.staffScheduleOverride.create({ data: { businessId: a!.id, staffId: staffB!.id, date: new Date(`${date}T00:00:00Z`), isOpen: false } }), foreignKey);
       await assert.rejects(prisma.timeBlock.create({ data: { businessId: a!.id, staffId: staffB!.id, startsAt: bookingA.startsAt, endsAt: bookingA.endsAt } }), foreignKey);
-      await assert.rejects(prisma.booking.create({ data: { ...seedBooking(0, ownerA!.id), staffId: staffB!.id } }), foreignKey);
-      await assert.rejects(prisma.booking.create({ data: { ...seedBooking(0, ownerA!.id), serviceId: serviceB!.id } }), foreignKey);
+      await assert.rejects(prisma.booking.create({ data: { ...seedBooking(0, ownerA!.id), staffId: staffB!.id, startsAt: new Date(`${date}T15:00:00Z`), endsAt: new Date(`${date}T15:30:00Z`), occupiedFrom: new Date(`${date}T15:00:00Z`), occupiedUntil: new Date(`${date}T15:30:00Z`) } }), foreignKey);
+      await assert.rejects(prisma.booking.create({ data: { ...seedBooking(0, ownerA!.id), serviceId: serviceB!.id, startsAt: new Date(`${date}T15:00:00Z`), endsAt: new Date(`${date}T15:30:00Z`), occupiedFrom: new Date(`${date}T15:00:00Z`), occupiedUntil: new Date(`${date}T15:30:00Z`) } }), foreignKey);
       assert.equal(await prisma.booking.count({ where: { businessId: { in: [a!.id, b!.id] } } }), before);
     });
 
