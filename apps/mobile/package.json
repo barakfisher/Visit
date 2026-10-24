@@ -58,7 +58,8 @@
     "export:web": "NODE_PATH=./node_modules expo export --platform web",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "test:foundation": "tsx --test test/*.test.ts"
   },
   "private": true
 }

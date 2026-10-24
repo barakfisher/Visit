@@ -1,4 +1,5 @@
 import { useLocalSearchParams } from 'expo-router';
+import { useSessionStore } from '@/src/state/session';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
@@ -12,6 +13,12 @@ const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frida
 const money = (value: string) => value.trim() === '' ? undefined : Math.round(Number(value) * 100);
 
 export default function ProviderDashboard() {
+  const { businessId } = useLocalSearchParams<{ businessId: string }>();
+  const identityId = useSessionStore((state) => state.identityId);
+  return <BusinessSettings key={`${identityId}:${businessId}`} />;
+}
+
+function BusinessSettings() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const client = useQueryClient();
   const key = ['provider', businessId];

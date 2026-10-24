@@ -17,6 +17,13 @@ type Agenda = {
 };
 const field = 'rounded-control border border-line bg-surface px-4 py-3 text-ink';
 export default function ProviderDashboard() {
+  const profile = useAuthStore((state) => state.profile);
+  const activeBusinessId = useAuthStore((state) => state.activeBusinessId);
+  const { businessId } = useLocalSearchParams<{ businessId?: string }>();
+  return <ProviderWorkspace key={`${profile?.id}:${activeBusinessId || businessId || profile?.businesses[0]?.id}`} />;
+}
+
+function ProviderWorkspace() {
   const { businessId: requestedBusinessId } = useLocalSearchParams<{ businessId?: string }>();
   const profile = useAuthStore((state) => state.profile);
   const activeBusinessId = useAuthStore((state) => state.activeBusinessId);
@@ -61,7 +68,7 @@ export default function ProviderDashboard() {
         <Text className="text-xl font-semibold text-ink">Daily agenda</Text>{!agenda.data?.bookings.length ? <Text className="text-body">No appointments for this day.</Text> : agenda.data.bookings.map((booking) => <View key={booking.id} className="gap-3 rounded-card border border-line bg-surface p-5"><Text className="font-bold text-brand">{time(booking.startsAt)} – {time(booking.endsAt)}</Text><Text className="text-lg font-semibold text-ink">{booking.service.name}</Text><Text className="text-sm text-body">{booking.staff.displayName} · {booking.customer.phone ?? booking.customer.email ?? 'Customer'}</Text><View className="flex-row gap-2"><View className="flex-1"><ActionButton secondary label={booking.customer.phone ? 'Call' : 'Call (no phone number)'} disabled={!booking.customer.phone} onPress={() => void Linking.openURL(`tel:${booking.customer.phone}`).catch(() => setFeedback('Could not open the phone app.'))}/></View><View className="flex-1"><ActionButton secondary label={booking.customer.phone ? 'WhatsApp' : 'WhatsApp (no phone number)'} disabled={!booking.customer.phone} onPress={() => void Linking.openURL(`https://wa.me/${booking.customer.phone!.replace(/\D/g, '')}`).catch(() => setFeedback('Could not open WhatsApp.'))}/></View></View></View>)}
         {agenda.data?.blocks.map((item) => <View key={item.id} className="gap-2 rounded-control border border-line bg-slate-100 p-4"><Text className="font-semibold text-body">{time(item.startsAt)} – {time(item.endsAt)} · {item.reason || 'Blocked time'}</Text><Text className="text-sm text-muted">{item.staff.displayName}</Text><ActionButton secondary label="Remove blocked time" onPress={() => void removeBlock(item.id)}/></View>)}
       </>}
-    </> : tab === 'Service Catalog' ? <ServiceCatalog key={business.id} businessId={business.id} staff={agenda.data?.staff ?? []}/> : <WorkingHours businessId={business.id}/>}
+    </> : tab === 'Service Catalog' ? <ServiceCatalog key={business.id} businessId={business.id} staff={agenda.data?.staff ?? []}/> : <WorkingHours key={business.id} businessId={business.id}/>}
     <Link href={{ pathname: '/provider/[businessId]', params: { businessId: business.id } }} className="text-center font-semibold text-brand">Advanced business settings</Link>
   </ScrollView>;
 }

@@ -22,6 +22,12 @@ await app.register(cors, {
   methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
 });
 
+// Never persist identity, tenant data, OTP challenges or error bodies in HTTP caches.
+app.addHook("onSend", async (_request, reply, payload) => {
+  reply.header("Cache-Control", "no-store");
+  return payload;
+});
+
 await registerAuthRoutes(app);
 await registerProviderRoutes(app);
 await registerBookingRoutes(app);

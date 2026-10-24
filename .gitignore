@@ -12,3 +12,4 @@ apps/api/prisma/generated/
 apps/mobile/storybook-static/
 apps/mobile/test-results/
 apps/api/test-results/
+apps/mobile/dist-native/

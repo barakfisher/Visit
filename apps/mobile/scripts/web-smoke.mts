@@ -77,7 +77,7 @@ try {
   }
   const identities = await Promise.all(['consumer-a', 'consumer-b', 'owner'].map((name) => prisma.identity.create({ data: { email: `${name}-${run}@example.test`, phone: `+1555${randomInt(1000000, 9999999)}` } })));
   identityIds.push(...identities.map((identity) => identity.id));
-  await prisma.membership.create({ data: { identityId: identities[2]!.id, businessId: businessIds[0]!, status: 'ACTIVE', role: 'OWNER' } });
+  await prisma.membership.createMany({ data: businessIds.map(businessId => ({ identityId: identities[2]!.id, businessId, status: 'ACTIVE' as const, role: 'OWNER' as const })) });
   const service = await prisma.service.findFirstOrThrow({ where: { businessId: businessIds[0]! } });
   webProcess = spawn(process.execPath, [path.join(repoRoot, 'node_modules/expo/bin/cli'), 'serve', 'dist', '--port', String(webPort)], { cwd: appRoot, env: { ...process.env, NODE_PATH: path.join(appRoot, 'node_modules') }, stdio: 'ignore' });
   await ready(webUrl, webProcess, 'Web');
@@ -88,6 +88,14 @@ try {
     localePage.on('pageerror', error => pageErrors.push(error.message));
     await localePage.goto(`${webUrl}/auth/login`);
     await localePage.getByRole('heading', { name: 'ברוכים הבאים ל־Visit' }).waitFor();
+    assert.equal(await localePage.locator('link[rel=manifest]').getAttribute('href'), '/manifest.json');
+    const manifestResponse = await fetch(`${webUrl}/manifest.json`);
+    const manifest = await manifestResponse.json() as { icons: { src: string }[]; display: string };
+    assert.equal(manifest.display, 'standalone');
+    for (const icon of manifest.icons) assert.equal((await fetch(`${webUrl}${icon.src}`)).status, 200);
+    assert.equal((await fetch(`${apiUrl}/api/providers`)).headers.get('cache-control'), 'no-store');
+    assert.deepEqual(await localePage.evaluate(async () => ({ caches: await caches.keys(), registrations: (await navigator.serviceWorker.getRegistrations()).length })), { caches: [], registrations: 0 });
+    console.log('PASS: linked PWA manifest/icons, network-only shell and no-store API response policy.');
     assert.equal(await localePage.locator('html').getAttribute('lang'), 'he');
     assert.equal(await localePage.locator('html').getAttribute('dir'), 'rtl');
     assert.equal(await localePage.getByLabel('מספר טלפון', { exact: true }).evaluate(node => getComputedStyle(node).direction), 'ltr');
@@ -134,6 +142,7 @@ try {
     await owner.addInitScript(() => { if (!localStorage.getItem('visit.locale.v1.guest')) localStorage.setItem('visit.locale.v1.guest', 'en'); });
     const providerPage = await owner.newPage(); capture = providerPage; providerPage.on('pageerror', (error) => pageErrors.push(error.message));
     await otpLogin(providerPage, identities[2]!.phone!, true);
+    await providerPage.getByRole('button', { name: `Visit QA North ${run.slice(0, 6)}`, exact: true }).click();
     await providerPage.getByLabel('Agenda date').fill(date);
     await providerPage.getByText('QA consultation', { exact: true }).waitFor();
     await providerPage.getByRole('button', { name: 'Call', exact: true }).waitFor();
@@ -143,6 +152,18 @@ try {
     await providerPage.getByRole('button', { name: 'Save blocked time' }).click();
     await providerPage.getByRole('button', { name: 'Remove blocked time' }).waitFor();
     console.log('PASS: approved-provider smart routing, agenda verification and manual break.');
+    await providerPage.getByRole('tab', { name: 'Service Catalog', exact: true }).click();
+    await providerPage.getByLabel('Service name', { exact: true }).fill('Unsaved North draft');
+    await providerPage.getByRole('button', { name: `Visit QA South ${run.slice(0, 6)}`, exact: true }).click();
+    await providerPage.getByRole('tab', { name: 'Service Catalog', exact: true }).click();
+    await providerPage.getByText('South consultation · 30 min', { exact: true }).waitFor();
+    assert.equal(await providerPage.getByLabel('Service name', { exact: true }).inputValue(), '');
+    assert.equal(await providerPage.getByText('QA consultation · 30 min', { exact: true }).count(), 0);
+    await providerPage.getByRole('button', { name: `Visit QA North ${run.slice(0, 6)}`, exact: true }).click();
+    await providerPage.getByRole('tab', { name: 'Service Catalog', exact: true }).click();
+    await providerPage.getByText('QA consultation · 30 min', { exact: true }).waitFor();
+    assert.equal(await providerPage.getByLabel('Service name', { exact: true }).inputValue(), '');
+    console.log('PASS: business switching resets drafts and shows only the selected business catalog.');
 
     const rival = await browser.newContext({ viewport: { width: 390, height: 844 } }); contexts.push(rival);
     await rival.addInitScript(() => { if (!localStorage.getItem('visit.locale.v1.guest')) localStorage.setItem('visit.locale.v1.guest', 'en'); });
