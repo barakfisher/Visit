@@ -14,6 +14,8 @@ This contract separates identity (who is signed in) from authorization (which bu
 
 Every repository call that touches a business-owned row receives an `AuthorizedBusinessContext` created by server-side membership authorization. Record-id lookups also include the business id. The API rejects attempts to associate rows from different businesses, with composite database constraints as a second boundary.
 
+See [tenant inventory and repository isolation](tenant-isolation.md) for every table classification, opaque runtime contexts, customer/admin/public exceptions and executable negative tests. Customer-owned booking access uses a validated global session plus customerId; it does not require provider membership.
+
 ## Authentication and onboarding states
 
 - Anonymous → request passwordless email challenge or OAuth/phone challenge → challenge verified → authenticated session.

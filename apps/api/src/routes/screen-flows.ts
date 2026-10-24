@@ -8,6 +8,7 @@ import { AppError, conflict, notFound } from '../http/errors.js';
 import { reserveHold, requireHold, releaseHold } from '../scheduling/reservations.js';
 import { acquireIntervalLocks } from '../scheduling/redis-slot-lock.js';
 import { localDateTimeToInstant } from '../scheduling/local-time.js';
+import { listCustomerBookings } from '../repositories/bookings.js';
 
 // Compatibility boundary: reuse the existing validated, tenant-scoped v1 handlers.
 async function invoke(app: FastifyInstance, request: FastifyRequest, method: HTTPMethods, url: string, payload?: unknown) {
@@ -49,9 +50,7 @@ export async function registerScreenFlows(app: FastifyInstance) {
     return invoke(app, request, 'GET', `/v1/businesses/${encodeURIComponent(providerId)}/availability?${new URLSearchParams({ ...query, includeUnavailable: 'true' })}`);
   });
   app.get('/api/consumer/bookings/active', async (request) => {
-    const { identity } = await authenticate(request);
-    const bookings = await prisma.booking.findMany({ where: { customerId: identity.id, status: 'CONFIRMED', startsAt: { gte: new Date() } }, include: { business: { select: { id: true, name: true, timezone: true } }, service: { select: { id: true, name: true } }, staff: { select: { displayName: true } } }, orderBy: { startsAt: 'asc' } });
-    return { bookings };
+    return { bookings: await listCustomerBookings(await authenticate(request), true) };
   });
   app.post('/api/bookings/lock-slot', async (request, reply) => {
     const { identity } = await authenticate(request);
@@ -62,7 +61,7 @@ export async function registerScreenFlows(app: FastifyInstance) {
     const { ensureRedisReady } = await import('../infra/redis.js');
     try { await ensureRedisReady(); } catch { throw new AppError(503, 'LOCK_UNAVAILABLE', 'Reservations are temporarily unavailable.'); }
     const result = await invoke(app, request, 'POST', '/v1/bookings', { ...input, businessId: providerId });
-    const booking = await prisma.booking.findFirstOrThrow({ where: { id: result.id, customerId: identity.id }, include: { staff: true } });
+    const booking = await prisma.booking.findFirstOrThrow({ where: { id: result.id, businessId: providerId, customerId: identity.id }, include: { staff: true } });
     if (booking.status !== 'HELD') throw conflict('This reservation is no longer active.');
     try { await reserveHold(booking, booking.staff.parallelCapacity); }
     catch (error) { await prisma.booking.updateMany({ where: { id: booking.id, customerId: identity.id, status: 'HELD' }, data: { status: 'CANCELLED', holdExpiresAt: null } }); throw error; }

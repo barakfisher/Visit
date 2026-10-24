@@ -4,8 +4,10 @@ import { BusinessApprovalStatus, MembershipRole, MembershipStatus, PlatformRole 
 import { prisma } from '../db/client.js';
 import { AppError, conflict, forbidden, notFound } from '../http/errors.js';
 import { authenticate } from '../security/sessions.js';
-import { assertMembershipRole, requireBusinessMembership, requirePublicBusiness } from '../security/tenant-context.js';
-import { createBusinessService, getBusinessService, listBusinessServices, listPublicServices, updateBusinessService } from '../repositories/services.js';
+import { requireBusinessMembership, requirePublicBusiness } from '../security/tenant-context.js';
+import { createBusinessService, deleteBusinessService, getBusinessService, listBusinessServices, listPublicServices, updateBusinessService } from '../repositories/services.js';
+
+import { getBusinessSettings, getBusinessPolicy, saveBusinessPolicy, getBusinessAvailability, saveBusinessAvailability, listBusinessStaff, createBusinessStaff, saveStaffAvailability } from '../repositories/provider-settings.js';
 
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const businessIdParams = z.object({ businessId: z.string().min(1) });
@@ -26,9 +28,7 @@ export async function registerProviderRoutes(app: FastifyInstance) {
     if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
     const context = await requireBusinessMembership(identity.id, params.data.businessId);
-    const business = await prisma.business.findUnique({ where: { id: context.businessId }, select: { id: true, name: true, slug: true, timezone: true, approvalStatus: true } });
-    if (!business) throw notFound();
-    return { business, role: context.role };
+    return getBusinessSettings(context);
   });
 
   app.post('/v1/provider-applications', async (request, reply) => {
@@ -173,15 +173,7 @@ export async function registerProviderRoutes(app: FastifyInstance) {
     if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
     const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
-    const service = await prisma.service.findFirst({ where: { id: params.data.serviceId, businessId: context.businessId } });
-    if (!service) throw notFound();
-    const bookingCount = await prisma.booking.count({ where: { businessId: context.businessId, serviceId: service.id, status: { in: [ 'HELD', 'CONFIRMED', 'COMPLETED' ] } } });
-    if (bookingCount) {
-      await prisma.service.update({ where: { id: service.id }, data: { active: false } });
-      return { deleted: false, archived: true, message: 'This service has booking history, so it was archived and removed from discovery.' };
-    }
-    await prisma.service.delete({ where: { id: service.id } });
-    return { deleted: true, archived: false };
+    return deleteBusinessService(context, params.data.serviceId);
   });
 
   app.get('/v1/provider/businesses/:businessId/booking-policy', async (request) => {
@@ -189,9 +181,7 @@ export async function registerProviderRoutes(app: FastifyInstance) {
     if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
     const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
-    assertMembershipRole(context, [MembershipRole.OWNER, MembershipRole.MANAGER]);
-    const policy = await prisma.bookingPolicy.findUnique({ where: { businessId: context.businessId } });
-    return { policy };
+    return getBusinessPolicy(context);
   });
 
   app.put('/v1/provider/businesses/:businessId/booking-policy', async (request) => {
@@ -207,7 +197,7 @@ export async function registerProviderRoutes(app: FastifyInstance) {
     if (!params.success || !body.success) throw new AppError(400, 'VALIDATION_ERROR', 'Review the booking policy values.');
     const { identity } = await authenticate(request);
     const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
-    return prisma.bookingPolicy.upsert({ where: { businessId: context.businessId }, create: { businessId: context.businessId, ...body.data }, update: body.data });
+    return saveBusinessPolicy(context, body.data);
   });
 
   app.get('/v1/provider/businesses/:businessId/availability-rules', async (request) => {
@@ -215,11 +205,7 @@ export async function registerProviderRoutes(app: FastifyInstance) {
     if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
     const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
-    const [weekly, overrides] = await Promise.all([
-      prisma.businessWeeklyAvailability.findMany({ where: { businessId: context.businessId }, orderBy: [{ weekday: 'asc' }, { startLocal: 'asc' }] }),
-      prisma.scheduleOverride.findMany({ where: { businessId: context.businessId }, orderBy: { date: 'asc' } }),
-    ]);
-    return { weekly, overrides };
+    return getBusinessAvailability(context);
   });
 
   app.put('/v1/provider/businesses/:businessId/availability-rules', async (request) => {
@@ -234,14 +220,7 @@ export async function registerProviderRoutes(app: FastifyInstance) {
     if (new Set(body.data.weekly.map((day) => day.weekday)).size !== body.data.weekly.length || new Set(body.data.overrides.map((day) => day.date)).size !== body.data.overrides.length) throw new AppError(400, 'VALIDATION_ERROR', 'Each weekday and override date can appear once.');
     const { identity } = await authenticate(request);
     const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
-    await prisma.$transaction(async (tx) => {
-      await tx.businessWeeklyAvailability.deleteMany({ where: { businessId: context.businessId } });
-      await tx.scheduleOverride.deleteMany({ where: { businessId: context.businessId } });
-      const weeklyRows = body.data.weekly.flatMap((day) => day.intervals.map((hours) => ({ businessId: context.businessId, weekday: day.weekday, ...hours })));
-      if (weeklyRows.length) await tx.businessWeeklyAvailability.createMany({ data: weeklyRows });
-      if (body.data.overrides.length) await tx.scheduleOverride.createMany({ data: body.data.overrides.map((override) => ({ businessId: context.businessId, date: new Date(`${override.date}T00:00:00.000Z`), isOpen: override.isOpen, startLocal: override.isOpen ? override.startLocal! : null, endLocal: override.isOpen ? override.endLocal! : null })) });
-    });
-    return { saved: true, weeklyIntervals: body.data.weekly.reduce((count, day) => count + day.intervals.length, 0), overrides: body.data.overrides.length };
+    return saveBusinessAvailability(context, body.data);
   });
 
   app.get('/v1/provider/businesses/:businessId/staff', async (request) => {
@@ -249,8 +228,7 @@ export async function registerProviderRoutes(app: FastifyInstance) {
     if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
     const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
-    const staff = await prisma.staff.findMany({ where: { businessId: context.businessId }, include: { services: { include: { service: { select: { id: true, name: true } } } } }, orderBy: { displayName: 'asc' } });
-    return { staff };
+    return listBusinessStaff(context);
   });
 
   app.post('/v1/provider/businesses/:businessId/staff', async (request, reply) => {
@@ -259,15 +237,8 @@ export async function registerProviderRoutes(app: FastifyInstance) {
     if (!params.success || !body.success || new Set(body.data.serviceIds).size !== body.data.serviceIds.length) throw new AppError(400, 'VALIDATION_ERROR', 'Provide a staff name and one or more unique services.');
     const { identity } = await authenticate(request);
     const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
-    const count = await prisma.service.count({ where: { businessId: context.businessId, id: { in: body.data.serviceIds }, active: true } });
-    if (count !== body.data.serviceIds.length) throw new AppError(400, 'VALIDATION_ERROR', 'Every selected service must be active in this business.');
-    const staff = await prisma.$transaction(async (tx) => {
-      const created = await tx.staff.create({ data: { businessId: context.businessId, displayName: body.data.displayName, parallelCapacity: 1 } });
-      await tx.staffService.createMany({ data: body.data.serviceIds.map((serviceId) => ({ businessId: context.businessId, staffId: created.id, serviceId })) });
-      return created;
-    });
     reply.code(201);
-    return staff;
+    return createBusinessStaff(context, body.data);
   });
 
   app.put('/v1/provider/businesses/:businessId/staff/:staffId/availability-rules', async (request) => {
@@ -278,15 +249,6 @@ export async function registerProviderRoutes(app: FastifyInstance) {
     if (!params.success || !body.success || new Set(body.data.weekly.map((day) => day.weekday)).size !== body.data.weekly.length || new Set(body.data.overrides.map((day) => day.date)).size !== body.data.overrides.length) throw new AppError(400, 'VALIDATION_ERROR', 'Review the staff weekly hours and date overrides.');
     const { identity } = await authenticate(request);
     const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
-    const staff = await prisma.staff.findFirst({ where: { id: params.data.staffId, businessId: context.businessId } });
-    if (!staff) throw notFound();
-    await prisma.$transaction(async (tx) => {
-      await tx.staffWeeklyAvailability.deleteMany({ where: { businessId: context.businessId, staffId: staff.id } });
-      await tx.staffScheduleOverride.deleteMany({ where: { businessId: context.businessId, staffId: staff.id } });
-      const weeklyRows = body.data.weekly.flatMap((day) => day.intervals.map((hours) => ({ businessId: context.businessId, staffId: staff.id, weekday: day.weekday, ...hours })));
-      if (weeklyRows.length) await tx.staffWeeklyAvailability.createMany({ data: weeklyRows });
-      if (body.data.overrides.length) await tx.staffScheduleOverride.createMany({ data: body.data.overrides.map((override) => ({ businessId: context.businessId, staffId: staff.id, date: new Date(`${override.date}T00:00:00.000Z`), isOpen: override.isOpen, startLocal: override.isOpen ? override.startLocal! : null, endLocal: override.isOpen ? override.endLocal! : null })) });
-    });
-    return { saved: true };
+    return saveStaffAvailability(context, params.data.staffId, body.data);
   });
 }

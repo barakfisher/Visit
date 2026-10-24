@@ -3,6 +3,9 @@ import { prisma } from '../db/client.js';
 import { forbidden, notFound } from '../http/errors.js';
 
 const contextBrand: unique symbol = Symbol('AuthorizedBusinessContext');
+const publicContextBrand: unique symbol = Symbol('PublicBusinessContext');
+const issuedMembershipContexts = new WeakSet<object>();
+const issuedPublicContexts = new WeakSet<object>();
 
 export type AuthorizedBusinessContext = Readonly<{
   identityId: string;
@@ -11,7 +14,7 @@ export type AuthorizedBusinessContext = Readonly<{
   [contextBrand]: true;
 }>;
 
-export type PublicBusinessContext = Readonly<{ businessId: string; timezone: string }>;
+export type PublicBusinessContext = Readonly<{ businessId: string; timezone: string; [publicContextBrand]: true }>;
 
 export async function requireBusinessMembership(
   identityId: string,
@@ -29,7 +32,9 @@ export async function requireBusinessMembership(
     select: { role: true },
   });
   if (!membership) throw forbidden();
-  return Object.freeze({ identityId, businessId, role: membership.role, [contextBrand]: true as const });
+  const context = Object.freeze({ identityId, businessId, role: membership.role, [contextBrand]: true as const });
+  issuedMembershipContexts.add(context);
+  return context;
 }
 
 export async function requirePublicBusiness(businessId: string): Promise<PublicBusinessContext> {
@@ -38,9 +43,23 @@ export async function requirePublicBusiness(businessId: string): Promise<PublicB
     select: { id: true, timezone: true },
   });
   if (!business) throw notFound();
-  return Object.freeze({ businessId: business.id, timezone: business.timezone });
+  const context = Object.freeze({ businessId: business.id, timezone: business.timezone, [publicContextBrand]: true as const });
+  issuedPublicContexts.add(context);
+  return context;
 }
 
 export function assertMembershipRole(context: AuthorizedBusinessContext, roles: readonly MembershipRole[]) {
-  if (!roles.includes(context.role)) throw forbidden();
+  if (!context || !issuedMembershipContexts.has(context) || !roles.includes(context.role)) throw forbidden();
+}
+
+export async function validateBusinessContext(context: AuthorizedBusinessContext, roles?: readonly MembershipRole[]) {
+  if (!context || !issuedMembershipContexts.has(context)) throw forbidden();
+  if (roles) assertMembershipRole(context, roles);
+  // Contexts are in-process capabilities, not permanent membership grants.
+  await requireBusinessMembership(context.identityId, context.businessId, [context.role]);
+}
+
+export async function validatePublicBusinessContext(context: PublicBusinessContext) {
+  if (!context || !issuedPublicContexts.has(context)) throw forbidden();
+  await requirePublicBusiness(context.businessId);
 }

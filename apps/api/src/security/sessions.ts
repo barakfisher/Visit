@@ -3,9 +3,17 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { prisma } from '../db/client.js';
 import { unauthenticated } from '../http/errors.js';
 import { env } from '../env.js';
+import type { Identity } from '../generated/prisma/client.js';
 
 const SESSION_COOKIE = 'visit_session';
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const sessionBrand: unique symbol = Symbol('AuthenticatedSession');
+const issuedSessions = new WeakSet<object>();
+export type AuthenticatedSession = Readonly<{
+  sessionId: string;
+  identity: Readonly<Pick<Identity, 'id' | 'email' | 'emailVerifiedAt' | 'platformRole'>>;
+  [sessionBrand]: true;
+}>;
 
 export function newOpaqueToken() {
   return randomBytes(32).toString('base64url');
@@ -46,7 +54,15 @@ export async function authenticate(request: FastifyRequest) {
     },
   });
   if (!session || session.revokedAt || session.expiresAt <= new Date()) throw unauthenticated();
-  return { sessionId: session.id, identity: session.identity };
+  const context = Object.freeze({ sessionId: session.id, identity: Object.freeze(session.identity), [sessionBrand]: true as const });
+  issuedSessions.add(context);
+  return context;
+}
+
+export async function validateAuthenticatedSession(context: AuthenticatedSession) {
+  if (!context || !issuedSessions.has(context)) throw unauthenticated();
+  const session = await prisma.session.findFirst({ where: { id: context.sessionId, identityId: context.identity.id, revokedAt: null, expiresAt: { gt: new Date() } }, select: { id: true } });
+  if (!session) throw unauthenticated();
 }
 
 export function issueSessionToken(reply: FastifyReply, request: FastifyRequest, rawToken: string) {

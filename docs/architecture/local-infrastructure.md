@@ -47,3 +47,5 @@ Run `npm run test:infra` from the repository root. The script:
 The test never stops the development app or resets its data. A sanitized result is written to `apps/api/test-results/infra-smoke.json`; raw service logs, credentials and child-process output are not printed on failure. If Docker itself prevents cleanup, the error names the isolated project for manual cleanup. A failed test is not evidence of success for the unexecuted later checks.
 
 Use this command in CI with Docker access and no production secrets. The ordinary API suite remains `npm test --workspace @visit/api`. Staging deployment, automatic backups and recovery objectives are tracked separately in VIS-40–42.
+
+For the complete API suite against the newly migrated isolated services, use `npm run test:infra -- --api-tests`. This adds an integration-suite gate before injecting outages and migration failure. Set VISIT_TEST_COMMIT to the exported source revision when recording commit-specific evidence; it is stored in the sanitized report.

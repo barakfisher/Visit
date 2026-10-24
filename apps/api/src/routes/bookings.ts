@@ -8,6 +8,8 @@ import { occupiedInterval, assertCapacity } from '../scheduling/intervals.js';
 import { localDateTimeToInstant, possibleLocalInstants } from '../scheduling/local-time.js';
 import { acquireIntervalLocks } from '../scheduling/redis-slot-lock.js';
 import { authenticate } from '../security/sessions.js';
+import { requireBusinessMembership } from '../security/tenant-context.js';
+import { listCustomerBookings, listProviderBookings } from '../repositories/bookings.js';
 
 const activeStatuses = [BookingStatus.HELD, BookingStatus.CONFIRMED];
 const isActiveStatus = (status: BookingStatus) => status === BookingStatus.HELD || status === BookingStatus.CONFIRMED;
@@ -266,18 +268,14 @@ export async function registerBookingRoutes(app: FastifyInstance) {
   });
 
   app.get('/v1/me/bookings', async (request) => {
-    const { identity } = await authenticate(request);
-    const bookings = await prisma.booking.findMany({ where: { customerId: identity.id }, include: { business: { select: { id: true, name: true, timezone: true } }, service: { select: { name: true, durationMinutes: true, priceMinor: true, currency: true } }, staff: { select: { displayName: true } } }, orderBy: { startsAt: 'asc' } });
-    return { bookings };
+    return { bookings: await listCustomerBookings(await authenticate(request)) };
   });
 
   app.get('/v1/provider/businesses/:businessId/bookings', async (request) => {
     const params = z.object({ businessId: z.string().min(1) }).safeParse(request.params);
     if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
-    const membership = await prisma.membership.findFirst({ where: { identityId: identity.id, businessId: params.data.businessId, role: { in: [MembershipRole.OWNER, MembershipRole.MANAGER] }, status: 'ACTIVE' } });
-    if (!membership) throw notFound();
-    const bookings = await prisma.booking.findMany({ where: { businessId: params.data.businessId }, include: { service: { select: { name: true } }, staff: { select: { displayName: true } } }, orderBy: { startsAt: 'asc' } });
-    return { bookings };
+    const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
+    return { bookings: await listProviderBookings(context) };
   });
 }
