@@ -82,7 +82,11 @@ test('service CRUD and booking snapshots stay scoped and preserve history on bot
       assert.equal(response.json().endsAt, `${date}T11:30:00.000Z`);
     });
     await t.test('an edit between availability selection and hold insertion rejects the stale selection', async () => {
-      changeBeforeBooking = async () => { await prisma.service.update({ where: { id: service.id }, data: { durationMinutes: 45 } }); };
+      changeBeforeBooking = async () => {
+        const before = await prisma.service.findUniqueOrThrow({ where: { id: service.id } });
+        // Even writes sharing a millisecond timestamp must invalidate a stale selection.
+        await prisma.service.update({ where: { id: service.id }, data: { durationMinutes: 45, updatedAt: before.updatedAt } });
+      };
       const response = await app.inject({ method: 'POST', url: '/v1/bookings', headers, payload: { businessId: business.id, serviceId: service.id, staffId: staff.id, startsAt: `${date}T13:00:00Z`, idempotencyKey: randomUUID() } });
       assert.equal(response.statusCode, 409, response.body);
       assert.equal(await prisma.booking.count({ where: { businessId: business.id } }), 1);
