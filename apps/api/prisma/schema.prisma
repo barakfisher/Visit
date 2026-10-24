@@ -55,6 +55,7 @@ model Identity {
   updatedAt             DateTime           @updatedAt
   memberships           Membership[]
   sessions              Session[]
+  googleAuthProofs      GoogleAuthProof[]
   externalIdentities    ExternalIdentity[]
   emailChallenges       EmailChallenge[]
   providerApplications  ProviderApplication[]
@@ -321,4 +322,13 @@ model TimeBlock {
   staff      Staff    @relation(fields: [businessId, staffId], references: [businessId, id], onDelete: Cascade)
 
   @@index([businessId, staffId, startsAt, endsAt])
+}
+
+model GoogleAuthProof {
+  hash String @id
+  identityId String
+  intent String
+  createdAt DateTime @default(now())
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  @@index([identityId])
 }

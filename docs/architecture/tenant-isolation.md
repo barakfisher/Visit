@@ -7,6 +7,7 @@ VIS-4 implementation contract and audit, 2026-10-24. Business IDs are selectors.
 | Table | Classification | Authorization and relationship boundary |
 | --- | --- | --- |
 | Identity | Global | Own verified identity only; privileged admin review exposes only required applicant fields. A person may span businesses. Language preference is personal, not tenant-owned. |
+| GoogleAuthProof | Global, identity-owned | One-time Google authentication/link proof digest, created transactionally for its resolved identity. Not a tenant capability; no public query route. |
 | ExternalIdentity | Global | Stable provider subject belongs to one global identity; never grant a business role from provider claims. |
 | EmailChallenge | Global | Expiring verified-ownership challenge; no business membership granted by challenge creation. |
 | Session | Global | Token digest resolves global identity; expiry/revocation checked. Session storage is not tenant-owned. |
