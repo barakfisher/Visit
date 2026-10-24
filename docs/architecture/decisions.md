@@ -53,7 +53,7 @@ Status: VIS-1 baseline with production-plan decisions reconciled for VIS-9, 2026
 ## Open implementation details
 
 - Resend is the initial production email adapter; configure its secret and verified sender on the server. Passwordless email, Google code + PKCE and phone OTP are in pilot scope. Disabled/unconfigured options must be labeled honestly. Hosting/deployment target is decided in VIS-40; real authentication/native evidence is VIS-43.
-- Exact per-business scheduling policy defaults need product review; until then, keep them explicit and configurable rather than silently applying a universal cutoff.
+- VIS-10 adopts configurable onboarding prefill: 60-minute notice, 60-day horizon, zero buffers, and 24-hour cancellation/reschedule cutoffs. Providers must explicitly save the policy; no universal cutoff activates silently. See [scheduling policy](scheduling-policy.md).
 - VIS-32 delivers admin-only review, recorded approval/rejection reasons and applicant notification status. VIS-33 prevents arbitrary existing-business ownership requests. VIS-34/35 deliver readiness and provider setup; approval alone never publishes.
 - Language policy confirmed for VIS-31: Hebrew and English, Hebrew default, account-settings language switch, persisted account preference and RTL Hebrew layouts. See [localization policy](localization.md) for bidirectional rendering and validation scope.
 

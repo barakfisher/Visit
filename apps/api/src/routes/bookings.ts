@@ -9,6 +9,7 @@ import { localDateTimeToInstant, possibleLocalInstants } from '../scheduling/loc
 import { acquireIntervalLocks } from '../scheduling/redis-slot-lock.js';
 import { authenticate } from '../security/sessions.js';
 import { requireBusinessMembership } from '../security/tenant-context.js';
+import { effectiveWindows } from '../scheduling/rules.js';
 import { withBookingTransaction } from '../scheduling/booking-transaction.js';
 import { listCustomerBookings, listProviderBookings } from '../repositories/bookings.js';
 
@@ -28,9 +29,8 @@ async function assertWorkingHours(businessId: string, timezone: string, staffId:
     prisma.staffScheduleOverride.findFirst({ where: { businessId, staffId, date: new Date(`${dateKey}T00:00:00.000Z`) } }),
     prisma.staffWeeklyAvailability.findMany({ where: { businessId, staffId } }),
   ]);
-  const windows = (override: { isOpen: boolean; startLocal: string | null; endLocal: string | null } | null, weekly: { startLocal: string; endLocal: string }[]) => override ? (override.isOpen && override.startLocal && override.endLocal ? [{ startLocal: override.startLocal, endLocal: override.endLocal }] : []) : weekly;
-  const businessWindows = windows(businessOverride, businessHours);
-  const staffWindows = windows(staffOverride, staffHours.length ? staffHours.filter((item) => item.weekday === weekday) : businessWindows);
+  const businessWindows = effectiveWindows(businessOverride, businessHours);
+  const staffWindows = effectiveWindows(staffOverride, staffHours.length ? staffHours.filter((item) => item.weekday === weekday) : businessWindows);
   const localStartTime = zonedStart.toPlainTime().toString({ smallestUnit: 'minute' });
   const localEndTime = zonedEnd.toPlainTime().toString({ smallestUnit: 'minute' });
   const contained = (items: { startLocal: string; endLocal: string }[]) => items.some(({ startLocal, endLocal }) => localDate.equals(zonedEnd.toPlainDate()) && localStartTime >= startLocal && localEndTime <= endLocal);
@@ -60,8 +60,7 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
       prisma.businessWeeklyAvailability.findMany({ where: { businessId: business.id, weekday }, orderBy: { startLocal: 'asc' } }),
       prisma.staffService.findMany({ where: { businessId: business.id, serviceId: service.id, staff: { active: true } }, include: { staff: true } }),
     ]);
-    const windows = (override: { isOpen: boolean; startLocal: string | null; endLocal: string | null } | null, weekly: { startLocal: string; endLocal: string }[]) => override ? (override.isOpen && override.startLocal && override.endLocal ? [{ startLocal: override.startLocal, endLocal: override.endLocal }] : []) : weekly;
-    const businessWindows = windows(businessOverride, businessHours);
+    const businessWindows = effectiveWindows(businessOverride, businessHours);
     if (!businessWindows.length) return { timezone: business.timezone, service: { id: service.id, durationMinutes: service.durationMinutes }, slots: [] };
     const dayStart = new Date(Number(date.toZonedDateTime({ timeZone: business.timezone, plainTime: '00:00' }).toInstant().epochMilliseconds));
     const dayEnd = new Date(Number(date.add({ days: 1 }).toZonedDateTime({ timeZone: business.timezone, plainTime: '00:00' }).toInstant().epochMilliseconds));
@@ -76,7 +75,7 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
         prisma.booking.findMany({ where: { businessId: business.id, staffId: staff.id, occupiedFrom: { lt: new Date(dayEnd.getTime() + bufferBeforeMinutes * 60_000) }, occupiedUntil: { gt: new Date(dayStart.getTime() - bufferAfterMinutes * 60_000) }, OR: [{ status: BookingStatus.CONFIRMED }, { status: BookingStatus.HELD, holdExpiresAt: { gt: now } }] }, select: { occupiedFrom: true, occupiedUntil: true, status: true } }),
         prisma.timeBlock.findMany({ where: { businessId: business.id, staffId: staff.id, startsAt: { lt: dayEnd }, endsAt: { gt: dayStart } } }),
       ]);
-      const staffWindows = windows(staffOverride, configuredStaffHours.length ? configuredStaffHours.filter((item) => item.weekday === weekday) : businessWindows);
+      const staffWindows = effectiveWindows(staffOverride, configuredStaffHours.length ? configuredStaffHours.filter((item) => item.weekday === weekday) : businessWindows);
       const sharedWindows = businessWindows.flatMap((businessWindow) => staffWindows.flatMap((staffWindow) => {
         const startLocal = businessWindow.startLocal > staffWindow.startLocal ? businessWindow.startLocal : staffWindow.startLocal;
         const endLocal = businessWindow.endLocal < staffWindow.endLocal ? businessWindow.endLocal : staffWindow.endLocal;

@@ -118,7 +118,8 @@ test('tenant repositories and both HTTP surfaces enforce scope, ownership and cu
       assert.equal((await app.inject({ method: 'PUT', url: `${base(a!.id)}/staff/${staffB!.id}/availability-rules`, headers: headers(0), payload: rules })).statusCode, 404);
       assert.equal((await app.inject({ method: 'PUT', url: `/api/provider/working-hours?businessId=${b!.id}`, headers: headers(0), payload: rules })).statusCode, 403);
       const context = await requireBusinessMembership(ownerA!.id, a!.id);
-      await saveBusinessPolicy(context, { ...policy, maximumAdvanceDays: 45, businessId: b!.id } as typeof policy);
+      await assert.rejects(saveBusinessPolicy(context, { ...policy, maximumAdvanceDays: 45, businessId: b!.id } as typeof policy), (error: unknown) => error instanceof AppError && error.statusCode === 400);
+      await saveBusinessPolicy(context, { ...policy, maximumAdvanceDays: 45 });
       assert.equal((await prisma.bookingPolicy.findUniqueOrThrow({ where: { businessId: a!.id } })).maximumAdvanceDays, 45);
       assert.equal((await prisma.bookingPolicy.findUniqueOrThrow({ where: { businessId: b!.id } })).maximumAdvanceDays, 30);
       assert.equal((await getBusinessAvailability(context)).weekly.length, 7);

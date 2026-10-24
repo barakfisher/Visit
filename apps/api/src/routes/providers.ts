@@ -186,18 +186,10 @@ export async function registerProviderRoutes(app: FastifyInstance) {
 
   app.put('/v1/provider/businesses/:businessId/booking-policy', async (request) => {
     const params = businessIdParams.safeParse(request.params);
-    const body = z.object({
-      minimumNoticeMinutes: z.number().int().min(0).max(525600),
-      maximumAdvanceDays: z.number().int().min(1).max(730),
-      bufferBeforeMinutes: z.number().int().min(0).max(1440),
-      bufferAfterMinutes: z.number().int().min(0).max(1440),
-      cancellationCutoffMinutes: z.number().int().min(0).max(525600),
-      rescheduleCutoffMinutes: z.number().int().min(0).max(525600),
-    }).safeParse(request.body);
-    if (!params.success || !body.success) throw new AppError(400, 'VALIDATION_ERROR', 'Review the booking policy values.');
+    if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
     const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
-    return saveBusinessPolicy(context, body.data);
+    return saveBusinessPolicy(context, request.body as Parameters<typeof saveBusinessPolicy>[1]);
   });
 
   app.get('/v1/provider/businesses/:businessId/availability-rules', async (request) => {
@@ -210,17 +202,10 @@ export async function registerProviderRoutes(app: FastifyInstance) {
 
   app.put('/v1/provider/businesses/:businessId/availability-rules', async (request) => {
     const params = businessIdParams.safeParse(request.params);
-    const time = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
-    const interval = z.object({ startLocal: time, endLocal: time }).refine((value) => value.startLocal < value.endLocal, 'End time must follow start time.');
-    const body = z.object({
-      weekly: z.array(z.object({ weekday: z.number().int().min(0).max(6), intervals: z.array(interval).max(8) })).max(7),
-      overrides: z.array(z.object({ date: z.string().date(), isOpen: z.boolean(), startLocal: time.optional(), endLocal: time.optional() }).refine((value) => value.isOpen ? Boolean(value.startLocal && value.endLocal && value.startLocal < value.endLocal) : value.startLocal === undefined && value.endLocal === undefined, 'Open overrides need a valid interval; closed overrides have no hours.')).max(400),
-    }).safeParse(request.body);
-    if (!params.success || !body.success) throw new AppError(400, 'VALIDATION_ERROR', 'Review the weekly hours and date overrides. Days without hours are closed.');
-    if (new Set(body.data.weekly.map((day) => day.weekday)).size !== body.data.weekly.length || new Set(body.data.overrides.map((day) => day.date)).size !== body.data.overrides.length) throw new AppError(400, 'VALIDATION_ERROR', 'Each weekday and override date can appear once.');
+    if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
     const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
-    return saveBusinessAvailability(context, body.data);
+    return saveBusinessAvailability(context, request.body as Parameters<typeof saveBusinessAvailability>[1]);
   });
 
   app.get('/v1/provider/businesses/:businessId/staff', async (request) => {
@@ -243,12 +228,9 @@ export async function registerProviderRoutes(app: FastifyInstance) {
 
   app.put('/v1/provider/businesses/:businessId/staff/:staffId/availability-rules', async (request) => {
     const params = z.object({ businessId: z.string().min(1), staffId: z.string().min(1) }).safeParse(request.params);
-    const time = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
-    const interval = z.object({ startLocal: time, endLocal: time }).refine((value) => value.startLocal < value.endLocal);
-    const body = z.object({ weekly: z.array(z.object({ weekday: z.number().int().min(0).max(6), intervals: z.array(interval).max(8) })).max(7), overrides: z.array(z.object({ date: z.string().date(), isOpen: z.boolean(), startLocal: time.optional(), endLocal: time.optional() }).refine((value) => value.isOpen ? Boolean(value.startLocal && value.endLocal && value.startLocal < value.endLocal) : value.startLocal === undefined && value.endLocal === undefined)).max(400) }).safeParse(request.body);
-    if (!params.success || !body.success || new Set(body.data.weekly.map((day) => day.weekday)).size !== body.data.weekly.length || new Set(body.data.overrides.map((day) => day.date)).size !== body.data.overrides.length) throw new AppError(400, 'VALIDATION_ERROR', 'Review the staff weekly hours and date overrides.');
+    if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
     const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
-    return saveStaffAvailability(context, params.data.staffId, body.data);
+    return saveStaffAvailability(context, params.data.staffId, request.body as Parameters<typeof saveStaffAvailability>[2]);
   });
 }
