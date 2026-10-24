@@ -4,11 +4,13 @@ import { Temporal } from '@js-temporal/polyfill';
 import { BookingStatus, BusinessApprovalStatus, MembershipRole } from '../generated/prisma/client.js';
 import { prisma } from '../db/client.js';
 import { AppError, conflict, notFound } from '../http/errors.js';
-import { occupiedInterval, assertCapacity } from '../scheduling/intervals.js';
-import { localDateTimeToInstant, possibleLocalInstants } from '../scheduling/local-time.js';
+import { occupiedInterval, assertCapacity, type Interval } from '../scheduling/intervals.js';
+import { localDateTimeToInstant } from '../scheduling/local-time.js';
 import { acquireIntervalLocks } from '../scheduling/redis-slot-lock.js';
 import { authenticate } from '../security/sessions.js';
-import { requireBusinessMembership } from '../security/tenant-context.js';
+import { requireBusinessMembership, requirePublicBusiness } from '../security/tenant-context.js';
+import { containsInterval, workingWindows } from '../scheduling/availability.js';
+import { getBusinessAvailability } from '../repositories/availability.js';
 import { effectiveWindows } from '../scheduling/rules.js';
 import { withBookingTransaction } from '../scheduling/booking-transaction.js';
 import { listCustomerBookings, listProviderBookings } from '../repositories/bookings.js';
@@ -17,9 +19,8 @@ const activeStatuses = [BookingStatus.HELD, BookingStatus.CONFIRMED];
 const isActiveStatus = (status: BookingStatus) => status === BookingStatus.HELD || status === BookingStatus.CONFIRMED;
 const asError = (error: unknown) => error instanceof Error ? error.message : 'Invalid time.';
 
-async function assertWorkingHours(businessId: string, timezone: string, staffId: string, startsAt: Date, endsAt: Date) {
+async function assertWorkingHours(businessId: string, timezone: string, staffId: string, startsAt: Date, occupied: Interval) {
   const zonedStart = Temporal.Instant.from(startsAt.toISOString()).toZonedDateTimeISO(timezone);
-  const zonedEnd = Temporal.Instant.from(endsAt.toISOString()).toZonedDateTimeISO(timezone);
   const localDate = zonedStart.toPlainDate();
   const weekday = zonedStart.dayOfWeek % 7;
   const dateKey = localDate.toString();
@@ -31,10 +32,8 @@ async function assertWorkingHours(businessId: string, timezone: string, staffId:
   ]);
   const businessWindows = effectiveWindows(businessOverride, businessHours);
   const staffWindows = effectiveWindows(staffOverride, staffHours.length ? staffHours.filter((item) => item.weekday === weekday) : businessWindows);
-  const localStartTime = zonedStart.toPlainTime().toString({ smallestUnit: 'minute' });
-  const localEndTime = zonedEnd.toPlainTime().toString({ smallestUnit: 'minute' });
-  const contained = (items: { startLocal: string; endLocal: string }[]) => items.some(({ startLocal, endLocal }) => localDate.equals(zonedEnd.toPlainDate()) && localStartTime >= startLocal && localEndTime <= endLocal);
-  if (!contained(businessWindows) || !contained(staffWindows)) throw conflict('This time is outside the business or provider’s working hours.');
+  const shared = workingWindows(dateKey, timezone, businessWindows, staffWindows);
+  if (!containsInterval(shared.intervals, occupied)) throw conflict('The appointment and its buffers must fit inside business and provider working hours.');
 }
 
 export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks = acquireIntervalLocks }: { acquireLocks?: typeof acquireIntervalLocks } = {}) {
@@ -47,64 +46,7 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
     const params = z.object({ businessId: z.string().min(1) }).safeParse(request.params);
     const query = z.object({ serviceId: z.string().min(1), date: z.string().date(), includeUnavailable: z.enum(['true']).optional() }).safeParse(request.query);
     if (!params.success || !query.success) throw new AppError(400, 'VALIDATION_ERROR', 'Choose a business, service, and local date.');
-    const business = await prisma.business.findFirst({ where: { id: params.data.businessId, approvalStatus: BusinessApprovalStatus.APPROVED }, include: { bookingPolicy: true } });
-    if (!business) throw notFound();
-    if (!business.bookingPolicy) throw conflict('This business has not finished setting its booking policy.');
-    const service = await prisma.service.findFirst({ where: { id: query.data.serviceId, businessId: business.id, active: true } });
-    if (!service) throw notFound();
-    const date = Temporal.PlainDate.from(query.data.date);
-    const weekday = date.dayOfWeek % 7;
-    const dateValue = new Date(`${query.data.date}T00:00:00.000Z`);
-    const [businessOverride, businessHours, staffLinks] = await Promise.all([
-      prisma.scheduleOverride.findFirst({ where: { businessId: business.id, date: dateValue } }),
-      prisma.businessWeeklyAvailability.findMany({ where: { businessId: business.id, weekday }, orderBy: { startLocal: 'asc' } }),
-      prisma.staffService.findMany({ where: { businessId: business.id, serviceId: service.id, staff: { active: true } }, include: { staff: true } }),
-    ]);
-    const businessWindows = effectiveWindows(businessOverride, businessHours);
-    if (!businessWindows.length) return { timezone: business.timezone, service: { id: service.id, durationMinutes: service.durationMinutes }, slots: [] };
-    const dayStart = new Date(Number(date.toZonedDateTime({ timeZone: business.timezone, plainTime: '00:00' }).toInstant().epochMilliseconds));
-    const dayEnd = new Date(Number(date.add({ days: 1 }).toZonedDateTime({ timeZone: business.timezone, plainTime: '00:00' }).toInstant().epochMilliseconds));
-    const slots: { startsAt: string; localTime: string; utcOffset: string; staffId: string; staffName: string; available: boolean; locked: boolean }[] = [];
-    const now = new Date();
-    const { minimumNoticeMinutes, maximumAdvanceDays, bufferBeforeMinutes, bufferAfterMinutes } = business.bookingPolicy;
-    const maximumLocalDate = Temporal.Now.zonedDateTimeISO(business.timezone).toPlainDate().add({ days: maximumAdvanceDays });
-    for (const { staff } of staffLinks) {
-      const [staffOverride, configuredStaffHours, existing, blocks] = await Promise.all([
-        prisma.staffScheduleOverride.findFirst({ where: { businessId: business.id, staffId: staff.id, date: dateValue } }),
-        prisma.staffWeeklyAvailability.findMany({ where: { businessId: business.id, staffId: staff.id }, orderBy: { startLocal: 'asc' } }),
-        prisma.booking.findMany({ where: { businessId: business.id, staffId: staff.id, occupiedFrom: { lt: new Date(dayEnd.getTime() + bufferBeforeMinutes * 60_000) }, occupiedUntil: { gt: new Date(dayStart.getTime() - bufferAfterMinutes * 60_000) }, OR: [{ status: BookingStatus.CONFIRMED }, { status: BookingStatus.HELD, holdExpiresAt: { gt: now } }] }, select: { occupiedFrom: true, occupiedUntil: true, status: true } }),
-        prisma.timeBlock.findMany({ where: { businessId: business.id, staffId: staff.id, startsAt: { lt: dayEnd }, endsAt: { gt: dayStart } } }),
-      ]);
-      const staffWindows = effectiveWindows(staffOverride, configuredStaffHours.length ? configuredStaffHours.filter((item) => item.weekday === weekday) : businessWindows);
-      const sharedWindows = businessWindows.flatMap((businessWindow) => staffWindows.flatMap((staffWindow) => {
-        const startLocal = businessWindow.startLocal > staffWindow.startLocal ? businessWindow.startLocal : staffWindow.startLocal;
-        const endLocal = businessWindow.endLocal < staffWindow.endLocal ? businessWindow.endLocal : staffWindow.endLocal;
-        return startLocal < endLocal ? [{ startLocal, endLocal }] : [];
-      }));
-      for (const window of sharedWindows) {
-        const startParts = window.startLocal.split(':').map(Number);
-        const endParts = window.endLocal.split(':').map(Number);
-        const from = Number(startParts[0]) * 60 + Number(startParts[1]);
-        const until = Number(endParts[0]) * 60 + Number(endParts[1]);
-        for (let minute = from; minute + service.durationMinutes <= until; minute += 15) {
-          const localTime = `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
-          for (const startsAt of possibleLocalInstants(query.data.date, localTime, business.timezone)) {
-            const endsAt = new Date(startsAt.getTime() + service.durationMinutes * 60_000);
-            if (startsAt < new Date(now.getTime() + minimumNoticeMinutes * 60_000) || Temporal.PlainDate.compare(date, maximumLocalDate) > 0) continue;
-            const occupied = occupiedInterval(startsAt, service.durationMinutes, bufferBeforeMinutes, bufferAfterMinutes);
-            const available = assertCapacity(occupied, existing.map((booking) => ({ startsAt: booking.occupiedFrom, endsAt: booking.occupiedUntil })), staff.parallelCapacity) && !blocks.some((block) => block.startsAt < occupied.endsAt && block.endsAt > occupied.startsAt);
-            if (!available && !query.data.includeUnavailable) continue;
-            const zoned = Temporal.Instant.from(startsAt.toISOString()).toZonedDateTimeISO(business.timezone);
-            const zonedEnd = Temporal.Instant.from(endsAt.toISOString()).toZonedDateTimeISO(business.timezone);
-            if (!date.equals(zonedEnd.toPlainDate())) continue;
-            if (!sharedWindows.some((hours) => zoned.toPlainTime().toString({ smallestUnit: 'minute' }) >= hours.startLocal && zonedEnd.toPlainTime().toString({ smallestUnit: 'minute' }) <= hours.endLocal)) continue;
-            slots.push({ startsAt: startsAt.toISOString(), localTime, utcOffset: zoned.offset, staffId: staff.id, staffName: staff.displayName, available, locked: !available && existing.some((booking) => booking.status === BookingStatus.HELD && booking.occupiedFrom < occupied.endsAt && booking.occupiedUntil > occupied.startsAt) });
-          }
-        }
-      }
-    }
-    slots.sort((a, b) => a.startsAt.localeCompare(b.startsAt) || a.staffName.localeCompare(b.staffName));
-    return { timezone: business.timezone, service: { id: service.id, durationMinutes: service.durationMinutes }, slots };
+    return getBusinessAvailability(await requirePublicBusiness(params.data.businessId), query.data.serviceId, query.data.date, query.data.includeUnavailable === 'true');
   });
 
   app.post('/v1/bookings', async (request, reply) => {
@@ -133,8 +75,8 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
     ]);
     if (!service || !staffLink?.staff.active) throw notFound();
     const endsAt = new Date(startsAt.getTime() + service.durationMinutes * 60_000);
-    await assertWorkingHours(business.id, business.timezone, input.staffId, startsAt, endsAt);
     const occupied = occupiedInterval(startsAt, service.durationMinutes, policy.bufferBeforeMinutes, policy.bufferAfterMinutes);
+    await assertWorkingHours(business.id, business.timezone, input.staffId, startsAt, occupied);
     if (startsAt.getTime() < now.getTime() + policy.minimumNoticeMinutes * 60_000) throw conflict('The requested time is outside this business’s booking window.');
     const holdExpiresAt = new Date(now.getTime() + 5 * 60_000);
     const matchesRequest = (candidate: { customerId: string; serviceId: string; staffId: string; startsAt: Date }) => candidate.customerId === identity.id && candidate.serviceId === service.id && candidate.staffId === staffLink.staff.id && candidate.startsAt.getTime() === startsAt.getTime();
@@ -212,8 +154,8 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
     const staffService = await prisma.staffService.findUnique({ where: { businessId_staffId_serviceId: { businessId: existing.businessId, staffId: body.data.staffId, serviceId: existing.serviceId } }, include: { staff: true } });
     if (!staffService?.staff.active) throw notFound();
     const endsAt = new Date(startsAt.getTime() + existing.serviceDurationMinutes * 60_000);
-    await assertWorkingHours(existing.businessId, existing.business.timezone, body.data.staffId, startsAt, endsAt);
     const occupied = occupiedInterval(startsAt, existing.serviceDurationMinutes, policy.bufferBeforeMinutes, policy.bufferAfterMinutes);
+    await assertWorkingHours(existing.businessId, existing.business.timezone, body.data.staffId, startsAt, occupied);
     const slotLock = await acquireLocks(existing.businessId, staffService.staff.id, occupied);
     if (!slotLock.acquired) throw conflict('That time is being booked. Choose another time or retry shortly.');
     try {

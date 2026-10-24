@@ -10,8 +10,10 @@ export function occupiedInterval(
   if (![bufferBeforeMinutes, bufferAfterMinutes].every((value) => Number.isInteger(value) && value >= 0)) {
     throw new RangeError('Booking buffers must be non-negative whole numbers of minutes.');
   }
+  if (!Number.isFinite(startsAt.getTime())) throw new RangeError('Start must be a valid timestamp.');
   const from = startsAt.getTime() - bufferBeforeMinutes * 60_000;
   const until = startsAt.getTime() + (durationMinutes + bufferAfterMinutes) * 60_000;
+  if (!Number.isFinite(new Date(from).getTime()) || !Number.isFinite(new Date(until).getTime())) throw new RangeError('Occupied range exceeds valid timestamp bounds.');
   return { startsAt: new Date(from), endsAt: new Date(until) };
 }
 

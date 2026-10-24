@@ -361,6 +361,28 @@ try {
     assert.equal((await owner.request.get(`${apiUrl}/v1/me`)).status(), 200);
     console.log('PASS: cross-origin logout is denied, outage preserves session, successful logout clears cookie and revokes only its login family.');
 
+    const nextFall = new Date(Date.UTC(new Date().getUTCFullYear() + 1, 10, 1));
+    nextFall.setUTCDate(1 + (7 - nextFall.getUTCDay()) % 7);
+    const foldDate = nextFall.toISOString().slice(0, 10);
+    const foldBusiness = await prisma.business.create({ data: { name: 'Synthetic DST studio', slug: `qa-fold-${run}`, timezone: 'America/New_York', approvalStatus: 'APPROVED' } });
+    businessIds.push(foldBusiness.id);
+    const foldService = await prisma.service.create({ data: { businessId: foldBusiness.id, name: 'DST consultation', durationMinutes: 30 } });
+    const foldStaff = await prisma.staff.create({ data: { businessId: foldBusiness.id, displayName: 'Fold specialist' } });
+    await prisma.staffService.create({ data: { businessId: foldBusiness.id, staffId: foldStaff.id, serviceId: foldService.id } });
+    await prisma.businessWeeklyAvailability.create({ data: { businessId: foldBusiness.id, weekday: 0, startLocal: '00:00', endLocal: '04:00' } });
+    await prisma.bookingPolicy.create({ data: { businessId: foldBusiness.id, minimumNoticeMinutes: 0, maximumAdvanceDays: 730, cancellationCutoffMinutes: 0, rescheduleCutoffMinutes: 0 } });
+    capture = providerPage;
+    await providerPage.goto(`${webUrl}/booking/${foldBusiness.id}?serviceId=${foldService.id}&date=${foldDate}`);
+    await providerPage.getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).waitFor();
+    await providerPage.getByRole('button', { name: /01:30 \(UTC-04:00\) · Fold specialist/ }).waitFor();
+    const foldHoldResponse = providerPage.waitForResponse(response => response.url().endsWith('/api/bookings/lock-slot'));
+    await providerPage.getByRole('button', { name: /01:30 \(UTC-05:00\) · Fold specialist/ }).click();
+    const foldHold = await (await foldHoldResponse).json(); assert.equal(foldHold.startsAt, `${foldDate}T06:30:00.000Z`);
+    await providerPage.getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).click();
+    await providerPage.getByRole('heading', { name: 'You’re all set' }).waitFor();
+    assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: foldHold.holdId } })).startsAt.toISOString(), `${foldDate}T06:30:00.000Z`);
+    console.log('PASS: two real DST-fold choices display distinct offsets and the selected second occurrence locks/confirms its exact UTC instant.');
+
     assert.deepEqual(pageErrors, []);
     console.log('PASS: reschedule, cancellation, and no browser runtime exceptions.');
   } catch (error) { if (capture) { console.error((await capture.locator('body').innerText()).slice(0, 3500)); await capture.screenshot({ path: path.join(diagnostics, 'web-smoke-failure.png'), fullPage: true }).catch(() => {}); } throw error; }

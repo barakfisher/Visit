@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent } from 'storybook/test';
+import { slotLabels } from '@/src/lib/slotLabels';
 import { TimeChips } from './TimeChips';
 const slots = [{ id: '0900', label: '09:00' }, { id: '0930', label: '09:30' }, { id: '1000', label: '10:00' }];
 const meta = { title: 'Booking/TimeChips', component: TimeChips, args: { slots, timezone: 'Asia/Jerusalem' } } satisfies Meta<typeof TimeChips>;
@@ -10,3 +11,10 @@ export const Selected: Story = { args: { selectedId: '0930' } };
 export const Locked: Story = { args: { slots: slots.map((slot) => ({ ...slot, locked: true })), onSelect: fn() }, play: async ({ canvas, args }) => { const slot = canvas.getByRole('button', { name: /09:00/ }); await expect(slot).toHaveAttribute('aria-disabled', 'true'); await expect(args.onSelect).not.toHaveBeenCalled(); } };
 export const Disabled: Story = { args: { slots: slots.map((slot) => ({ ...slot, disabled: true })) } };
 export const SkeletonLoading: Story = { args: { loading: true }, play: async ({ canvas }) => { await expect(canvas.queryAllByRole('button')).toHaveLength(0); } };
+
+const foldLabels = slotLabels([{ staffId: 'alex', staffName: 'Alex', localTime: '01:30', utcOffset: '+03:00' }, { staffId: 'alex', staffName: 'Alex', localTime: '01:30', utcOffset: '+02:00' }]);
+export const RepeatedClockTime: Story = { args: { slots: foldLabels.map((label, index) => ({ id: `fold-${index}`, label })), onSelect: fn() }, play: async ({ canvas, args }) => {
+  await expect(canvas.getByRole('button', { name: /UTC\+03:00/ })).toBeVisible();
+  await userEvent.click(canvas.getByRole('button', { name: /UTC\+02:00/ }));
+  await expect(args.onSelect).toHaveBeenCalledWith('fold-1');
+} };
