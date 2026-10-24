@@ -3,9 +3,10 @@ import { ApiError, apiRequest } from './api';
 import { saveSessionToken } from './sessionToken';
 import { useAuthStore } from '../state/auth';
 import type { AuthProfile } from '../types/flows';
-export async function completeSignIn(sessionToken?: string, returnTo?: string) {
+export async function completeSignIn(sessionToken?: string, returnTo?: string, expectedIdentityId?: string) {
   if (sessionToken) await saveSessionToken(sessionToken);
   const { profile } = await apiRequest<{ profile: AuthProfile }>('/api/auth/me');
+  if (expectedIdentityId && profile.id !== expectedIdentityId) throw new ApiError('The signed-in account changed. Please retry sign-in.', 'SESSION_CHANGED', 409);
   useAuthStore.getState().setAuth(sessionToken ?? null, profile);
   const target = returnTo && /^\/(booking\/|discover(?:\?|$))/.test(returnTo) && !returnTo.includes('://') ? returnTo : profile.is_provider ? '/provider/dashboard' : '/discover';
   router.replace(target as Href);

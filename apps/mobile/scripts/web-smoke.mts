@@ -123,6 +123,9 @@ try {
     await consumer.addInitScript(() => { if (!localStorage.getItem('visit.locale.v1.guest')) localStorage.setItem('visit.locale.v1.guest', 'en'); });
     const page = await consumer.newPage(); capture = page; page.on('pageerror', (error) => pageErrors.push(error.message));
     await otpLogin(page, identities[0]!.phone!);
+    // Settle login bootstrap before injecting expiry; otherwise a hard navigation
+    // can abandon a rotation already started by the previous document.
+    await page.waitForLoadState('networkidle');
     const originalCookie = (await consumer.cookies()).find(cookie => cookie.name === 'visit_session')!;
     await prisma.session.update({ where: { tokenHash: createHash('sha256').update(originalCookie.value).digest('hex') }, data: { expiresAt: new Date(Date.now() - 1000) } });
     const rotatedResponse = page.waitForResponse(response => response.url().endsWith('/v1/auth/refresh') && response.status() === 200);
@@ -239,6 +242,11 @@ try {
     await emailPage.route('**/api/auth/me', route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAVAILABLE' } }) }));
     await emailPage.getByRole('button', { name: 'Verify sign-in' }).click();
     await emailPage.getByRole('alert').filter({ hasText: 'This sign-in request could not be completed' }).waitFor();
+    await emailPage.unroute('**/api/auth/me');
+    await emailPage.route('**/api/auth/me', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ profile: { id: 'unexpected-identity', email: null, phone: null, is_provider: false, businesses: [] } }) }));
+    await emailPage.getByRole('button', { name: 'Verify sign-in' }).click();
+    await emailPage.getByRole('alert').filter({ hasText: 'This sign-in request could not be completed' }).waitFor();
+    assert.equal(new URL(emailPage.url()).pathname, '/auth/email');
     await emailPage.unroute('**/api/auth/me');
     await emailPage.getByRole('button', { name: 'Verify sign-in' }).click();
     await emailPage.waitForURL('**/discover');

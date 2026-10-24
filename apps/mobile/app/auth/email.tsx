@@ -10,7 +10,7 @@ import { useEmailLink } from '@/src/lib/useEmailLink';
 import { useAppLocale } from '@/src/i18n/LocaleContext';
 
 type ChallengeResult = { accepted: boolean; resendAfterSeconds: number };
-type LoginResult = { sessionToken?: string };
+type LoginResult = { sessionToken?: string; identity: { id: string } };
 export default function AuthScreen() {
   const { t } = useAppLocale();
   const buildRequired = Platform.OS !== 'web' && Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
@@ -43,7 +43,7 @@ export default function AuthScreen() {
         session = await apiRequest<LoginResult>('/v1/auth/email-challenges/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
         setIssued(session); received.clear(); setLocalToken('');
       }
-      await completeSignIn(session.sessionToken, returnTo);
+      await completeSignIn(session.sessionToken, returnTo, session.identity.id);
     } catch (reason) { setError(failure(reason)); }
     finally { setBusy(false); }
   }
