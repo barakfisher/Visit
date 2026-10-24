@@ -5,7 +5,7 @@ import { prisma } from '../db/client.js';
 import { AppError, conflict, forbidden, notFound } from '../http/errors.js';
 import { authenticate } from '../security/sessions.js';
 import { requireBusinessMembership, requirePublicBusiness } from '../security/tenant-context.js';
-import { createBusinessService, deleteBusinessService, getBusinessService, listBusinessServices, listPublicServices, updateBusinessService } from '../repositories/services.js';
+import { parseService, createBusinessService, deleteBusinessService, getBusinessService, listBusinessServices, listPublicServices, updateBusinessService } from '../repositories/services.js';
 
 import { getBusinessSettings, getBusinessPolicy, saveBusinessPolicy, getBusinessAvailability, saveBusinessAvailability, listBusinessStaff, createBusinessStaff, saveStaffAvailability } from '../repositories/provider-settings.js';
 
@@ -122,25 +122,12 @@ export async function registerProviderRoutes(app: FastifyInstance) {
 
   app.post('/v1/provider/businesses/:businessId/services', async (request, reply) => {
     const params = businessIdParams.safeParse(request.params);
-    const body = z.object({
-      name: z.string().trim().min(2).max(120),
-      description: z.string().trim().max(2000).optional(),
-      durationMinutes: z.number().int().min(5).max(1440),
-      priceMinor: z.number().int().nonnegative().optional(),
-      currency: z.string().regex(/^[A-Z]{3}$/).optional(),
-    }).safeParse(request.body);
-    if (!params.success || !body.success) throw new AppError(400, 'VALIDATION_ERROR', 'Review the service details.');
+    const input = parseService(request.body);
+    if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
     const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
     reply.code(201);
-    const { name, durationMinutes, description, priceMinor, currency } = body.data;
-    return createBusinessService(context, {
-      name,
-      durationMinutes,
-      ...(description !== undefined ? { description } : {}),
-      ...(priceMinor !== undefined ? { priceMinor } : {}),
-      ...(currency !== undefined ? { currency } : {}),
-    });
+    return createBusinessService(context, input);
   });
 
   app.get('/v1/provider/businesses/:businessId/services/:serviceId', async (request) => {
@@ -153,19 +140,11 @@ export async function registerProviderRoutes(app: FastifyInstance) {
 
   app.patch('/v1/provider/businesses/:businessId/services/:serviceId', async (request) => {
     const params = serviceParams.safeParse(request.params);
-    const body = z.object({
-      name: z.string().trim().min(2).max(120).optional(),
-      description: z.string().trim().max(2000).nullable().optional(),
-      durationMinutes: z.number().int().min(5).max(1440).optional(),
-      priceMinor: z.number().int().nonnegative().nullable().optional(),
-      currency: z.string().regex(/^[A-Z]{3}$/).nullable().optional(),
-      active: z.boolean().optional(),
-    }).safeParse(request.body);
-    if (!params.success || !body.success || Object.keys(body.data).length === 0) throw new AppError(400, 'VALIDATION_ERROR', 'Provide at least one valid service field.');
+    const input = parseService(request.body, true);
+    if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
     const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
-    const update = Object.fromEntries(Object.entries(body.data).filter(([, value]) => value !== undefined));
-    return updateBusinessService(context, params.data.serviceId, update);
+    return updateBusinessService(context, params.data.serviceId, input);
   });
 
   app.delete('/v1/provider/businesses/:businessId/services/:serviceId', async (request) => {

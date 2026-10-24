@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyRequest, HTTPMethods } from 'fastify';
 import { z } from 'zod';
 import { Temporal } from '@js-temporal/polyfill';
+import { parseService } from '../repositories/services.js';
+import { bookingServiceSnapshot } from '../repositories/bookings.js';
 import { prisma } from '../db/client.js';
 import { authenticate } from '../security/sessions.js';
 import { requireBusinessMembership } from '../security/tenant-context.js';
@@ -95,13 +97,13 @@ export async function registerScreenFlows(app: FastifyInstance) {
     const startsAt = new Date(Number(day.toZonedDateTime({ timeZone: business.timezone, plainTime: '00:00' }).epochMilliseconds));
     const endsAt = new Date(Number(day.add({ days: 1 }).toZonedDateTime({ timeZone: business.timezone, plainTime: '00:00' }).epochMilliseconds));
     const [bookings, blocks, staff] = await Promise.all([
-      prisma.booking.findMany({ where: { businessId, status: 'CONFIRMED', startsAt: { gte: startsAt, lt: endsAt } }, include: { service: { select: { name: true, priceMinor: true, currency: true } }, staff: { select: { displayName: true } }, customer: { select: { phone: true, email: true } } }, orderBy: { startsAt: 'asc' } }),
+      prisma.booking.findMany({ where: { businessId, status: 'CONFIRMED', startsAt: { gte: startsAt, lt: endsAt } }, include: { staff: { select: { displayName: true } }, customer: { select: { phone: true, email: true } } }, orderBy: { startsAt: 'asc' } }),
       prisma.timeBlock.findMany({ where: { businessId, startsAt: { lt: endsAt }, endsAt: { gt: startsAt } }, include: { staff: { select: { displayName: true } } }, orderBy: { startsAt: 'asc' } }),
       prisma.staff.findMany({ where: { businessId, active: true }, select: { id: true, displayName: true } }),
     ]);
     const revenue: Record<string, number> = {};
-    bookings.forEach((booking) => { if (booking.service.currency && booking.service.priceMinor !== null) revenue[booking.service.currency] = (revenue[booking.service.currency] ?? 0) + booking.service.priceMinor; });
-    return { business: { id: business.id, name: business.name, timezone: business.timezone }, bookings, blocks, staff, summary: { appointments: bookings.length, revenue } };
+    bookings.forEach((booking) => { if (booking.serviceCurrency && booking.servicePriceMinor !== null) revenue[booking.serviceCurrency] = (revenue[booking.serviceCurrency] ?? 0) + booking.servicePriceMinor; });
+    return { business: { id: business.id, name: business.name, timezone: business.timezone }, bookings: bookings.map(booking => ({ ...booking, service: bookingServiceSnapshot(booking) })), blocks, staff, summary: { appointments: bookings.length, revenue } };
   });
   app.post('/api/provider/block-time', async (request, reply) => {
     const input = z.object({ businessId: z.string().optional(), staffId: z.string(), date: z.string().date(), startLocal: z.string().regex(/^\d{2}:\d{2}$/), endLocal: z.string().regex(/^\d{2}:\d{2}$/), reason: z.string().max(200).optional() }).parse(request.body);
@@ -132,12 +134,14 @@ export async function registerScreenFlows(app: FastifyInstance) {
   });
   app.post('/api/provider/services', async (request, reply) => {
     const { businessId } = await providerContext(request, (request.query as { businessId?: string }).businessId);
-    const input = z.object({ name: z.string().trim().min(2).max(120), durationMinutes: z.number().int().min(5).max(1440), priceMinor: z.number().int().min(0).max(2000000000).optional(), currency: z.string().regex(/^[A-Z]{3}$/).optional(), staffIds: z.array(z.string()).min(1).max(100) }).parse(request.body);
-    if (input.priceMinor !== undefined && !input.currency) throw new AppError(400, 'VALIDATION_ERROR', 'Choose a currency for this price.');
-    const staffIds = [...new Set(input.staffIds)];
+    const body = z.object({ staffIds: z.array(z.string().min(1)).min(1).max(100) }).passthrough().parse(request.body);
+    const { staffIds: assigned, ...fields } = body;
+    const input = parseService(fields);
+    if ('active' in input) throw new AppError(400, 'VALIDATION_ERROR', 'New services start active.');
+    const staffIds = [...new Set(assigned)];
     if (await prisma.staff.count({ where: { businessId, id: { in: staffIds }, active: true } }) !== staffIds.length) throw notFound();
     const service = await prisma.$transaction(async (tx) => {
-      const service = await tx.service.create({ data: { businessId, name: input.name, durationMinutes: input.durationMinutes, priceMinor: input.priceMinor ?? null, currency: input.currency ?? null } });
+      const service = await tx.service.create({ data: { businessId, name: input.name.trim(), description: input.description?.trim() ?? null, durationMinutes: input.durationMinutes, priceMinor: input.priceMinor ?? null, currency: input.currency ?? null } });
       await tx.staffService.createMany({ data: staffIds.map((staffId) => ({ businessId, staffId, serviceId: service.id })) });
       return service;
     });

@@ -1,11 +1,13 @@
-import type { Prisma } from '../generated/prisma/client.js';
+import { validateService, type ServiceInput } from '@visit/contracts';
 import { prisma } from '../db/client.js';
 import type { AuthorizedBusinessContext, PublicBusinessContext } from '../security/tenant-context.js';
 import { validateBusinessContext, validatePublicBusinessContext } from '../security/tenant-context.js';
 import { AppError, notFound } from '../http/errors.js';
 
-function requireKnownFields(input: object, fields: readonly string[]) {
-  if (Object.keys(input).some((key) => !fields.includes(key))) throw new AppError(400, 'VALIDATION_ERROR', 'Only service fields may be changed.');
+export function parseService(input: unknown, partial = false) {
+  const errors = validateService(input, partial);
+  if (Object.keys(errors).length) throw new AppError(400, 'VALIDATION_ERROR', 'Review the service details.', errors);
+  return input as ServiceInput;
 }
 
 export async function listPublicServices(context: PublicBusinessContext) {
@@ -34,23 +36,29 @@ export async function getBusinessService(context: AuthorizedBusinessContext, ser
 
 export async function createBusinessService(
   context: AuthorizedBusinessContext,
-  input: Pick<Prisma.ServiceUncheckedCreateInput, 'name' | 'durationMinutes'> & Partial<Pick<Prisma.ServiceUncheckedCreateInput, 'description' | 'priceMinor' | 'currency'>>,
+  input: ServiceInput,
 ) {
   await validateBusinessContext(context, ['OWNER', 'MANAGER']);
-  requireKnownFields(input, ['name', 'description', 'durationMinutes', 'priceMinor', 'currency']);
-  return prisma.service.create({ data: { ...input, description: input.description ?? null, priceMinor: input.priceMinor ?? null, currency: input.currency ?? null, businessId: context.businessId } });
+  parseService(input);
+  if ('active' in input) throw new AppError(400, 'VALIDATION_ERROR', 'New services start active.');
+  return prisma.service.create({ data: { ...input, name: input.name.trim(), description: input.description?.trim() ?? null, priceMinor: input.priceMinor ?? null, currency: input.currency ?? null, businessId: context.businessId } });
 }
 
 export async function updateBusinessService(
   context: AuthorizedBusinessContext,
   serviceId: string,
-  input: Partial<Pick<Prisma.ServiceUpdateInput, 'name' | 'description' | 'durationMinutes' | 'priceMinor' | 'currency' | 'active'>>,
+  input: Partial<ServiceInput>,
 ) {
   await validateBusinessContext(context, ['OWNER', 'MANAGER']);
-  requireKnownFields(input, ['name', 'description', 'durationMinutes', 'priceMinor', 'currency', 'active']);
-  const exists = await prisma.service.findFirst({ where: { id: serviceId, businessId: context.businessId }, select: { id: true } });
-  if (!exists) throw notFound();
-  return prisma.service.update({ where: { id: serviceId, businessId: context.businessId }, data: input });
+  parseService(input, true);
+  return prisma.$transaction(async tx => {
+    // Serialize read/merge/write so partial price edits cannot produce a mismatched pair.
+    await tx.$queryRaw`SELECT id FROM "Service" WHERE id = ${serviceId} AND "businessId" = ${context.businessId} FOR UPDATE`;
+    const existing = await tx.service.findFirst({ where: { id: serviceId, businessId: context.businessId } });
+    if (!existing) throw notFound();
+    parseService({ name: existing.name, durationMinutes: existing.durationMinutes, priceMinor: existing.priceMinor, currency: existing.currency, ...input });
+    return tx.service.update({ where: { id: serviceId, businessId: context.businessId }, data: { ...input, ...(input.name !== undefined ? { name: input.name.trim() } : {}), ...(typeof input.description === 'string' ? { description: input.description.trim() } : {}) } });
+  });
 }
 
 export async function deleteBusinessService(context: AuthorizedBusinessContext, serviceId: string) {

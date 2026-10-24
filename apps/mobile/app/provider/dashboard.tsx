@@ -1,3 +1,4 @@
+import { ServiceCatalog } from '@/components/ServiceCatalog';
 import { useState } from 'react';
 import { Link, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -6,7 +7,7 @@ import { ActionButton } from '@/components/ActionButton';
 import { apiRequest } from '@/src/lib/api';
 import { useAuthStore } from '@/src/state/auth';
 import { todayInTimezone } from '@/src/lib/calendar';
-import { formatMoney, type Service } from '@/src/types/flows';
+import { formatMoney } from '@/src/types/flows';
 
 type Agenda = {
   business: { id: string; name: string; timezone: string };
@@ -68,21 +69,9 @@ function ProviderWorkspace() {
         <Text className="text-xl font-semibold text-ink">Daily agenda</Text>{!agenda.data?.bookings.length ? <Text className="text-body">No appointments for this day.</Text> : agenda.data.bookings.map((booking) => <View key={booking.id} className="gap-3 rounded-card border border-line bg-surface p-5"><Text className="font-bold text-brand">{time(booking.startsAt)} – {time(booking.endsAt)}</Text><Text className="text-lg font-semibold text-ink">{booking.service.name}</Text><Text className="text-sm text-body">{booking.staff.displayName} · {booking.customer.phone ?? booking.customer.email ?? 'Customer'}</Text><View className="flex-row gap-2"><View className="flex-1"><ActionButton secondary label={booking.customer.phone ? 'Call' : 'Call (no phone number)'} disabled={!booking.customer.phone} onPress={() => void Linking.openURL(`tel:${booking.customer.phone}`).catch(() => setFeedback('Could not open the phone app.'))}/></View><View className="flex-1"><ActionButton secondary label={booking.customer.phone ? 'WhatsApp' : 'WhatsApp (no phone number)'} disabled={!booking.customer.phone} onPress={() => void Linking.openURL(`https://wa.me/${booking.customer.phone!.replace(/\D/g, '')}`).catch(() => setFeedback('Could not open WhatsApp.'))}/></View></View></View>)}
         {agenda.data?.blocks.map((item) => <View key={item.id} className="gap-2 rounded-control border border-line bg-slate-100 p-4"><Text className="font-semibold text-body">{time(item.startsAt)} – {time(item.endsAt)} · {item.reason || 'Blocked time'}</Text><Text className="text-sm text-muted">{item.staff.displayName}</Text><ActionButton secondary label="Remove blocked time" onPress={() => void removeBlock(item.id)}/></View>)}
       </>}
-    </> : tab === 'Service Catalog' ? <ServiceCatalog key={business.id} businessId={business.id} staff={agenda.data?.staff ?? []}/> : <WorkingHours key={business.id} businessId={business.id}/>}
+    </> : tab === 'Service Catalog' ? <ServiceCatalog key={business.id} businessId={business.id}/> : <WorkingHours key={business.id} businessId={business.id}/>}
     <Link href={{ pathname: '/provider/[businessId]', params: { businessId: business.id } }} className="text-center font-semibold text-brand">Advanced business settings</Link>
   </ScrollView>;
-}
-function ServiceCatalog({ businessId, staff }: { businessId: string; staff: Agenda['staff'] }) {
-  const services = useQuery({ queryKey: ['provider', businessId, 'services'], queryFn: () => apiRequest<{ services: Service[] }>(`/api/provider/services?businessId=${businessId}`) });
-  const [name, setName] = useState(''), [duration, setDuration] = useState('30'), [price, setPrice] = useState(''), [currency, setCurrency] = useState('USD');
-  const [selectedStaff, setSelectedStaff] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false), [message, setMessage] = useState('');
-  async function save() {
-    setBusy(true); setMessage('');
-    try { await apiRequest(`/api/provider/services?businessId=${businessId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, durationMinutes: Number(duration), ...(price ? { priceMinor: Math.round(Number(price) * 100), currency } : {}), staffIds: selectedStaff }) }); setName(''); setPrice(''); await services.refetch(); setMessage('Service added.'); }
-    catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save service.'); } finally { setBusy(false); }
-  }
-  return <View className="gap-4"><Text className="text-xl font-semibold text-ink">Service Catalog</Text>{services.data?.services.map((service) => <View key={service.id} className="flex-row justify-between gap-4 rounded-control border border-line bg-surface p-4"><Text className="flex-1 font-semibold text-ink">{service.name} · {service.durationMinutes} min</Text><Text className="text-body">{formatMoney(service.priceMinor, service.currency)}</Text></View>)}{services.isError ? <Text accessibilityRole="alert">{services.error.message}</Text> : null}<View className="gap-3 rounded-card border border-line bg-surface p-5"><Text className="font-semibold text-ink">Add service</Text><TextInput accessibilityLabel="Service name" placeholder="Service name" value={name} onChangeText={setName} className={field}/><TextInput accessibilityLabel="Service duration in minutes" value={duration} onChangeText={setDuration} keyboardType="number-pad" className={field}/><TextInput accessibilityLabel="Service price" value={price} onChangeText={setPrice} keyboardType="decimal-pad" placeholder="Price (optional)" className={field}/><TextInput accessibilityLabel="Service currency" value={currency} onChangeText={setCurrency} autoCapitalize="characters" className={field}/><Text className="text-sm text-body">Team members who provide this service</Text><View className="flex-row flex-wrap gap-2">{staff.map((item) => <Pressable key={item.id} accessibilityRole="checkbox" accessibilityState={{ checked: selectedStaff.includes(item.id) }} onPress={() => setSelectedStaff((selected) => selected.includes(item.id) ? selected.filter((id) => id !== item.id) : [...selected, item.id])} className="rounded-control border border-line px-3 py-2"><Text className="text-brand">{item.displayName}{selectedStaff.includes(item.id) ? ' ✓' : ''}</Text></Pressable>)}</View>{!staff.length ? <Text className="text-sm text-muted">Add a team member in Advanced business settings first.</Text> : null}<ActionButton label="Add service" onPress={() => void save()} busy={busy} disabled={!name.trim() || !selectedStaff.length}/>{message ? <Text accessibilityRole="alert" className="text-body">{message}</Text> : null}</View></View>;
 }
 type Rules = { weekly: { weekday: number; startLocal: string; endLocal: string }[]; overrides: { date: string; isOpen: boolean; startLocal: string | null; endLocal: string | null }[] };
 function WorkingHours({ businessId }: { businessId: string }) {

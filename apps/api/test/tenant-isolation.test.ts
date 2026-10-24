@@ -102,7 +102,9 @@ test('tenant repositories and both HTTP surfaces enforce scope, ownership and cu
       assert.equal((await prisma.service.findUniqueOrThrow({ where: { id: serviceB!.id } })).name, 'Private service');
       // Body/header tenant selectors never override the authorized URL context.
       const created = await app.inject({ method: 'POST', url: `${base(a!.id)}/services`, headers: { ...headers(0), 'x-business-id': b!.id }, payload: { businessId: b!.id, name: 'Scoped create', durationMinutes: 15 } });
-      assert.equal(created.statusCode, 201); assert.equal(created.json().businessId, a!.id);
+      assert.equal(created.statusCode, 400); // Unknown scope fields are now rejected by the shared contract.
+      const headerOnly = await app.inject({ method: 'POST', url: `${base(a!.id)}/services`, headers: { ...headers(0), 'x-business-id': b!.id }, payload: { name: 'Scoped create', durationMinutes: 15 } });
+      assert.equal(headerOnly.statusCode, 201); assert.equal(headerOnly.json().businessId, a!.id);
       assert.equal((await app.inject({ method: 'POST', url: `/api/provider/services?businessId=${a!.id}`, headers: headers(0), payload: { name: 'Foreign staff', durationMinutes: 15, staffIds: [staffB!.id] } })).statusCode, 404);
       assert.equal(await prisma.service.count({ where: { businessId: a!.id, name: 'Foreign staff' } }), 0);
     });

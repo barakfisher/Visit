@@ -290,6 +290,10 @@ model Booking {
   occupiedFrom    DateTime
   occupiedUntil   DateTime
   status          BookingStatus @default(HELD)
+  serviceName     String        @default("")
+  serviceDurationMinutes Int    @default(0)
+  servicePriceMinor Int?
+  serviceCurrency String?
   idempotencyKey  String
   holdExpiresAt   DateTime?
   createdAt       DateTime      @default(now())

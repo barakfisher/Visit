@@ -157,6 +157,9 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
         const conflicts = await tx.booking.findMany({ where: { businessId: business.id, staffId: input.staffId, status: { in: activeStatuses }, occupiedFrom: { lt: occupied.endsAt }, occupiedUntil: { gt: occupied.startsAt } }, select: { occupiedFrom: true, occupiedUntil: true } });
         if (!assertCapacity(occupied, conflicts.map((item) => ({ startsAt: item.occupiedFrom, endsAt: item.occupiedUntil })), staffLink.staff.parallelCapacity)) throw conflict('That time was just booked. Choose another time.');
         if (await tx.timeBlock.count({ where: { businessId: business.id, staffId: input.staffId, startsAt: { lt: occupied.endsAt }, endsAt: { gt: occupied.startsAt } } })) throw conflict('This provider has blocked this time. Choose another time.');
+        await tx.$queryRaw`SELECT id FROM "Service" WHERE id = ${service.id} AND "businessId" = ${business.id} FOR SHARE`;
+        const currentService = await tx.service.findFirst({ where: { id: service.id, businessId: business.id, active: true } });
+        if (!currentService || currentService.updatedAt.getTime() !== service.updatedAt.getTime()) throw conflict('This service changed. Review the service and select a time again.');
         return tx.booking.create({ data: { businessId: business.id, customerId: identity.id, staffId: input.staffId, serviceId: service.id, startsAt, endsAt, occupiedFrom: occupied.startsAt, occupiedUntil: occupied.endsAt, idempotencyKey: input.idempotencyKey, status: BookingStatus.HELD, holdExpiresAt } });
       });
       reply.code(201);
@@ -193,7 +196,7 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
     const params = z.object({ bookingId: z.string().min(1) }).safeParse(request.params);
     const body = z.object({ staffId: z.string().min(1), startsAt: z.string().datetime({ offset: true }).optional(), localDate: z.string().date().optional(), localTime: z.string().regex(/^\d{2}:\d{2}$/).optional(), utcOffset: z.string().optional() }).safeParse(request.body);
     if (!params.success || !body.success || (!body.data.startsAt && (!body.data.localDate || !body.data.localTime)) || (body.data.startsAt && (body.data.localDate || body.data.localTime || body.data.utcOffset))) throw new AppError(400, 'VALIDATION_ERROR', 'Choose a provider and a valid appointment time.');
-    const existing = await prisma.booking.findFirst({ where: { id: params.data.bookingId, customerId: identity.id, status: BookingStatus.CONFIRMED }, include: { business: { include: { bookingPolicy: true } }, service: true } });
+    const existing = await prisma.booking.findFirst({ where: { id: params.data.bookingId, customerId: identity.id, status: BookingStatus.CONFIRMED }, include: { business: { include: { bookingPolicy: true } } } });
     if (!existing) throw notFound();
     const policy = existing.business.bookingPolicy;
     if (!policy) throw conflict('This business has not finished setting its booking policy.');
@@ -208,9 +211,9 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
     if (startsAt.getTime() < now.getTime() + policy.minimumNoticeMinutes * 60_000 || Temporal.PlainDate.compare(startDateInZone, maximumLocalDate) > 0) throw conflict('The requested time is outside this business’s booking window.');
     const staffService = await prisma.staffService.findUnique({ where: { businessId_staffId_serviceId: { businessId: existing.businessId, staffId: body.data.staffId, serviceId: existing.serviceId } }, include: { staff: true } });
     if (!staffService?.staff.active) throw notFound();
-    const endsAt = new Date(startsAt.getTime() + existing.service.durationMinutes * 60_000);
+    const endsAt = new Date(startsAt.getTime() + existing.serviceDurationMinutes * 60_000);
     await assertWorkingHours(existing.businessId, existing.business.timezone, body.data.staffId, startsAt, endsAt);
-    const occupied = occupiedInterval(startsAt, existing.service.durationMinutes, policy.bufferBeforeMinutes, policy.bufferAfterMinutes);
+    const occupied = occupiedInterval(startsAt, existing.serviceDurationMinutes, policy.bufferBeforeMinutes, policy.bufferAfterMinutes);
     const slotLock = await acquireLocks(existing.businessId, staffService.staff.id, occupied);
     if (!slotLock.acquired) throw conflict('That time is being booked. Choose another time or retry shortly.');
     try {

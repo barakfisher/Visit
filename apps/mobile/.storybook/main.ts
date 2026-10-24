@@ -15,7 +15,9 @@ const config: StorybookConfig = {
   docs: { autodocs: 'tag' },
   async viteFinal(config) {
     return mergeConfig(config, {
-      resolve: { alias: [{ find: /^react-native$/, replacement: 'react-native-web' }, { find: '@', replacement: fileURLToPath(new URL('..', import.meta.url)) }] },
+      // Isolated stories never inherit production credentials or the development API.
+      define: { 'process.env.EXPO_PUBLIC_API_URL': JSON.stringify('https://storybook.invalid') },
+      resolve: { extensions: ['.web.tsx', '.web.ts', '.web.js', '.tsx', '.ts', '.jsx', '.js', '.json'], alias: [{ find: /^react-native$/, replacement: 'react-native-web' }, { find: '@', replacement: fileURLToPath(new URL('..', import.meta.url)) }] },
     });
   },
 };
