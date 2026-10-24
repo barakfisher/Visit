@@ -5,7 +5,7 @@ import { prisma } from '../db/client.js';
 import { env } from '../env.js';
 import { AppError, unauthenticated } from '../http/errors.js';
 import { ensureRedisReady, redis } from '../infra/redis.js';
-import { authenticate, clearSessionCookie, issueSessionToken, newOpaqueToken, sessionExpiry, tokenDigest } from '../security/sessions.js';
+import { authenticate, clearSessionCookie, issueSessionToken, newOpaqueToken, sessionExpiry, tokenDigest, readSessionToken, rotateSession, revokeSessionFamily } from '../security/sessions.js';
 import { PlatformRole } from '../generated/prisma/client.js';
 
 const emailSchema = z.string().trim().email().max(254).transform((email) => email.toLowerCase());
@@ -116,33 +116,15 @@ export async function registerAuthRoutes(app: FastifyInstance) {
   });
 
   app.post('/v1/auth/refresh', async (request, reply) => {
-    const rawToken = request.headers.authorization?.startsWith('Bearer ')
-      ? request.headers.authorization.slice(7)
-      : request.headers.cookie?.split(';').map((value) => value.trim()).find((value) => value.startsWith('visit_session='))?.slice('visit_session='.length);
+    const rawToken = readSessionToken(request);
     if (!rawToken) throw unauthenticated();
-    const digest = tokenDigest(decodeURIComponent(rawToken));
-    const existing = await prisma.session.findUnique({ where: { tokenHash: digest }, include: { identity: { select: { id: true, email: true, platformRole: true } } } });
-    if (!existing) throw unauthenticated();
-    if (existing.revokedAt) {
-      await prisma.session.updateMany({ where: { identityId: existing.identityId, revokedAt: null }, data: { revokedAt: new Date() } });
-      throw unauthenticated();
-    }
-    if (existing.expiresAt <= new Date()) throw unauthenticated();
-
-    const replacement = newOpaqueToken();
-    const replacementRow = await prisma.$transaction(async (tx) => {
-      const consumed = await tx.session.updateMany({ where: { id: existing.id, revokedAt: null, expiresAt: { gt: new Date() } }, data: { revokedAt: new Date() } });
-      if (consumed.count !== 1) throw unauthenticated();
-      const session = await tx.session.create({ data: { identityId: existing.identityId, tokenHash: tokenDigest(replacement), expiresAt: sessionExpiry() } });
-      await tx.session.update({ where: { id: existing.id }, data: { replacedById: session.id } });
-      return session;
-    });
-    return { ...issueSessionToken(reply, request, replacement), expiresAt: replacementRow.expiresAt.toISOString(), identity: existing.identity };
+    const { session, identity, token } = await rotateSession(rawToken);
+    return { ...issueSessionToken(reply, request, token, session.refreshExpiresAt), expiresAt: session.expiresAt.toISOString(), identity };
   });
 
   app.post('/v1/auth/logout', async (request, reply) => {
     const session = await authenticate(request);
-    await prisma.session.updateMany({ where: { id: session.sessionId, revokedAt: null }, data: { revokedAt: new Date() } });
+    await revokeSessionFamily(session);
     clearSessionCookie(reply);
     return { loggedOut: true };
   });

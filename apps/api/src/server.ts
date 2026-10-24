@@ -11,13 +11,15 @@ import { registerFlowAuth } from "./routes/flow-auth.js";
 import { registerScreenFlows } from "./routes/screen-flows.js";
 import { ZodError } from "zod";
 import { env } from "./env.js";
+import { registerRequestSecurity } from "./security/request-security.js";
 
-const app = Fastify({ logger: { redact: ["req.headers.authorization", "req.headers.cookie"] } });
+const trustedProxies = env.TRUSTED_PROXY_CIDRS.split(",").map(value => value.trim()).filter(Boolean);
+const app = Fastify({ trustProxy: trustedProxies.length ? trustedProxies : false, logger: { redact: ["req.headers.authorization", "req.headers.cookie"] } });
 const pool = new Pool({ connectionString: env.DATABASE_URL, max: 5, connectionTimeoutMillis: 3000, query_timeout: 3000 });
 pool.on("error", () => app.log.warn("Database health connection lost"));
 
 await app.register(cors, {
-  origin: env.WEB_APP_URL,
+  origin: new URL(env.WEB_APP_URL).origin,
   credentials: true,
   methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
 });
@@ -28,6 +30,7 @@ app.addHook("onSend", async (_request, reply, payload) => {
   return payload;
 });
 
+registerRequestSecurity(app, env.WEB_APP_URL);
 await registerAuthRoutes(app);
 await registerProviderRoutes(app);
 await registerBookingRoutes(app);

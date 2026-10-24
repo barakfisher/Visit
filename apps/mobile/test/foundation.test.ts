@@ -37,7 +37,7 @@ test('concurrent unauthorized requests share one refresh and replay once', async
     if (String(url).endsWith('/v1/auth/refresh')) { refreshes++; await new Promise(resolve => setTimeout(resolve, 5)); return json({ sessionToken: 'rotated' }); }
     return new Headers(init?.headers).get('Authorization') === 'Bearer rotated' ? json({ ok: true }) : json({}, 401);
   });
-  assert.deepEqual(await Promise.all([f.request('/v1/me'), f.request('/v1/me')]), [{ ok: true }, { ok: true }]);
+  assert.deepEqual(await Promise.all([f.request('/v1/me'), f.request('/api/auth/me')]), [{ ok: true }, { ok: true }]);
   assert.equal(refreshes, 1); assert.equal(f.state().token, 'rotated');
 });
 test('refresh outage preserves session and reports outage instead of unauthorized', async () => {

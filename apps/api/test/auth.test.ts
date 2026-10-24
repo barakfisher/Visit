@@ -75,7 +75,7 @@ test('session refresh rotates credentials, expires stale sessions, detects repla
   const identity = await prisma.identity.create({ data: { email, emailVerifiedAt: new Date() } });
   const makeSession = async (expiresAt = sessionExpiry()) => {
     const token = newOpaqueToken();
-    const row = await prisma.session.create({ data: { identityId: identity.id, tokenHash: tokenDigest(token), expiresAt } });
+    const row = await prisma.session.create({ data: { identityId: identity.id, tokenHash: tokenDigest(token), expiresAt, refreshExpiresAt: expiresAt } });
     return { token, row };
   };
   const expired = await makeSession(new Date(Date.now() - 1000));

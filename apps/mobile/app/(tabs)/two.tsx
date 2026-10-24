@@ -5,6 +5,8 @@ import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react
 import { AppText as Text } from '@/components/AppText';
 import { LanguageSettings } from '@/components/LanguageSettings';
 import { useAppLocale } from '@/src/i18n/LocaleContext';
+import { ActionButton } from '@/components/ActionButton';
+import { signOut } from '@/src/lib/auth';
 import { apiRequest } from '@/src/lib/api';
 import { useSessionStore } from '@/src/state/session';
 
@@ -20,6 +22,14 @@ export default function AccountScreen() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState('');
+  async function logout() {
+    setSigningOut(true); setSignOutError('');
+    try { await signOut(); }
+    catch { setSignOutError(t('account.signOutFailed')); }
+    finally { setSigningOut(false); }
+  }
   const managed = account.data?.memberships.filter((item) => item.status === 'ACTIVE' && item.business.approvalStatus === 'APPROVED' && ['OWNER', 'MANAGER'].includes(item.role)) ?? [];
 
   async function submit() {
@@ -34,6 +44,8 @@ export default function AccountScreen() {
   return <ScrollView className="flex-1 bg-canvas" contentContainerClassName="mx-auto w-full max-w-2xl gap-5 px-5 py-8 md:px-8">
     <View className="gap-2"><Text className="text-sm font-semibold uppercase tracking-widest text-brand">Visit</Text><Text accessibilityRole="header" className="text-3xl font-bold text-ink">{t('nav.account')}</Text><Text className="leading-6 text-body">{identityId ? t('account.intro') : t('account.guestIntro')}</Text></View>
     <LanguageSettings />
+    {identityId ? <ActionButton secondary label={t('account.signOut')} busy={signingOut} onPress={() => void logout()} /> : null}
+    {signOutError ? <Text accessibilityRole="alert" className="text-danger">{signOutError}</Text> : null}
     {!identityId ? <View className="gap-3 rounded-card border border-line bg-surface p-card"><Text className="font-semibold text-ink">{t('account.title')}</Text><Text className="leading-6 text-body">{t('account.guestHelp')}</Text><Link href="/auth/login" className="self-start rounded-control bg-brand px-5 py-4 font-semibold text-white">{t('common.signIn')}</Link></View> : account.isLoading ? <View className="flex-row items-center gap-2"><ActivityIndicator color="#0f766e"/><Text className="text-body">{t('account.loading')}</Text></View> : account.isError ? <View className="gap-3 rounded-card border border-line bg-surface p-card"><Text accessibilityRole="alert" className="text-warning">{t('account.failure')}</Text><Pressable onPress={() => void account.refetch()} className="self-start rounded-control border border-line px-4 py-3"><Text className="font-semibold text-brand">{t('common.retry')}</Text></Pressable></View> : <>
       {managed.length ? <View className="gap-3 rounded-card border border-line bg-surface p-card"><Text className="font-semibold text-ink">{t('account.workspace')}</Text><Text className="text-sm leading-5 text-body">{t('account.approved')}</Text>{managed.map((item) => <Link key={item.business.id} href={{ pathname: '/provider/dashboard', params: { businessId: item.business.id } }} className="rounded-control border border-line px-4 py-4"><Text className="font-semibold text-brand">{t('account.switchProvider')} · {item.business.name}</Text><Text className="mt-1 text-sm text-body">{t('account.manage')} · {item.role === 'OWNER' ? t('account.owner') : t('account.manager')}</Text></Link>)}</View> : null}
       {account.data?.providerApplications.length ? <View className="gap-2 rounded-card border border-line bg-surface p-card"><Text className="font-semibold text-ink">{t('account.applicationStatus')}</Text>{account.data.providerApplications.map((item) => <Text key={item.id} className="text-sm leading-5 text-body">{item.business.name} · {item.status === 'PENDING' ? t('account.pending') : item.status === 'APPROVED' ? t('account.applicationApproved') : t('account.rejected')}</Text>)}</View> : null}

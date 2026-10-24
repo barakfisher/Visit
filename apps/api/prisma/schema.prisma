@@ -146,6 +146,9 @@ model EmailChallenge {
 }
 
 model Session {
+  refreshExpiresAt DateTime  @default(dbgenerated("(CURRENT_TIMESTAMP + '30 days'::interval)"))
+  familyId         String    @default(dbgenerated("(gen_random_uuid())::text"))
+  authenticatedAt  DateTime  @default(now())
   id               String    @id @default(cuid())
   identityId       String
   tokenHash        String    @unique
@@ -156,6 +159,7 @@ model Session {
   identity         Identity  @relation(fields: [identityId], references: [id], onDelete: Cascade)
 
   @@index([identityId, expiresAt])
+  @@index([familyId])
 }
 
 model Staff {

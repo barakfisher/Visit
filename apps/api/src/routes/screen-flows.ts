@@ -13,7 +13,7 @@ import { listCustomerBookings } from '../repositories/bookings.js';
 
 // Compatibility boundary: reuse the existing validated, tenant-scoped v1 handlers.
 async function invoke(app: FastifyInstance, request: FastifyRequest, method: HTTPMethods, url: string, payload?: unknown) {
-  const response = await app.inject({ method, url, headers: { ...(request.headers.authorization ? { authorization: request.headers.authorization } : {}), ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}), 'x-visit-client': request.headers['x-visit-client'] as string ?? 'web' }, ...(payload !== undefined ? { payload: payload as Record<string, unknown> } : {}) });
+  const response = await app.inject({ method, url, headers: { ...(request.headers.origin ? { origin: request.headers.origin } : {}), ...(request.headers['sec-fetch-site'] ? { 'sec-fetch-site': request.headers['sec-fetch-site'] } : {}), ...(request.headers.authorization ? { authorization: request.headers.authorization } : {}), ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}), 'x-visit-client': request.headers['x-visit-client'] as string ?? 'web' }, ...(payload !== undefined ? { payload: payload as Record<string, unknown> } : {}) });
   const body = response.json();
   if (response.statusCode >= 400) throw new AppError(response.statusCode, body.error?.code ?? 'REQUEST_FAILED', body.error?.message ?? 'Request failed.', body.error?.fields);
   return body;

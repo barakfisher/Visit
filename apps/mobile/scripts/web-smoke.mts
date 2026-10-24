@@ -119,6 +119,15 @@ try {
     await consumer.addInitScript(() => { if (!localStorage.getItem('visit.locale.v1.guest')) localStorage.setItem('visit.locale.v1.guest', 'en'); });
     const page = await consumer.newPage(); capture = page; page.on('pageerror', (error) => pageErrors.push(error.message));
     await otpLogin(page, identities[0]!.phone!);
+    const originalCookie = (await consumer.cookies()).find(cookie => cookie.name === 'visit_session')!;
+    await prisma.session.update({ where: { tokenHash: createHash('sha256').update(originalCookie.value).digest('hex') }, data: { expiresAt: new Date(Date.now() - 1000) } });
+    const rotatedResponse = page.waitForResponse(response => response.url().endsWith('/v1/auth/refresh') && response.status() === 200);
+    await page.goto(`${webUrl}/two`); await rotatedResponse;
+    await page.getByRole('button', { name: 'Sign out', exact: true }).waitFor();
+    assert.notEqual((await consumer.cookies()).find(cookie => cookie.name === 'visit_session')!.value, originalCookie.value);
+    assert.equal(await page.evaluate(() => localStorage.getItem('visit.session-token')), null);
+    console.log('PASS: expired access refreshes through the HttpOnly cookie without ordinary token storage.');
+    await page.goto(`${webUrl}/discover`);
     await page.getByLabel('Search businesses').fill(`Visit QA North ${run.slice(0, 6)}`);
     await page.locator(`a[href="/booking/${businessIds[0]}"]`).click();
     await page.getByRole('heading', { name: 'Available appointments' }).waitFor();
@@ -233,6 +242,21 @@ try {
     await freshPage.getByRole('heading', { name: 'חשבון', exact: true }).waitFor();
     assert.equal(await freshPage.locator('html').getAttribute('dir'), 'rtl');
     console.log('PASS: authenticated language preference persists on the server and restores with fresh browser storage.');
+
+    const rejectedLogout = await emailContext.request.post(`${apiUrl}/v1/auth/logout`, { headers: { Origin: 'https://attacker.example' } });
+    assert.equal(rejectedLogout.status(), 403);
+    assert.equal((await emailContext.request.get(`${apiUrl}/v1/me`)).status(), 200);
+    await freshPage.route('**/v1/auth/logout', route => route.abort());
+    await freshPage.getByRole('button', { name: 'יציאה מהחשבון', exact: true }).click();
+    await freshPage.getByRole('alert').filter({ hasText: 'לא ניתן לצאת מהחשבון' }).waitFor();
+    assert.equal((await freshDevice.request.get(`${apiUrl}/v1/me`)).status(), 200);
+    await freshPage.unroute('**/v1/auth/logout');
+    await freshPage.getByRole('button', { name: 'יציאה מהחשבון', exact: true }).click();
+    await freshPage.waitForURL('**/auth/login');
+    assert.equal((await freshDevice.cookies()).some(cookie => cookie.name === 'visit_session'), false);
+    assert.equal((await emailContext.request.get(`${apiUrl}/v1/me`)).status(), 401);
+    assert.equal((await owner.request.get(`${apiUrl}/v1/me`)).status(), 200);
+    console.log('PASS: cross-origin logout is denied, outage preserves session, successful logout clears cookie and revokes only its login family.');
 
     assert.deepEqual(pageErrors, []);
     console.log('PASS: reschedule, cancellation, and no browser runtime exceptions.');
