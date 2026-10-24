@@ -11,10 +11,11 @@ import { registerFlowAuth } from "./routes/flow-auth.js";
 import { registerScreenFlows } from "./routes/screen-flows.js";
 import { ZodError } from "zod";
 import { env } from "./env.js";
+import { safeRequestLog, safeErrorLog } from "./security/logging.js";
 import { registerRequestSecurity } from "./security/request-security.js";
 
 const trustedProxies = env.TRUSTED_PROXY_CIDRS.split(",").map(value => value.trim()).filter(Boolean);
-const app = Fastify({ trustProxy: trustedProxies.length ? trustedProxies : false, logger: { redact: ["req.headers.authorization", "req.headers.cookie"] } });
+const app = Fastify({ trustProxy: trustedProxies.length ? trustedProxies : false, logger: { serializers: { req: safeRequestLog }, redact: ["req.headers.authorization", "req.headers.cookie"] } });
 const pool = new Pool({ connectionString: env.DATABASE_URL, max: 5, connectionTimeoutMillis: 3000, query_timeout: 3000 });
 pool.on("error", () => app.log.warn("Database health connection lost"));
 
@@ -64,13 +65,13 @@ app.get("/health/ready", async (_request, reply) => {
   return { status: ready ? "ready" : "not_ready", database, redis: redisState };
 });
 
-app.setErrorHandler((error, _request, reply) => {
+app.setErrorHandler((error, request, reply) => {
   if (error instanceof ZodError) { reply.code(400).send({ error: { code: "VALIDATION_ERROR", message: "Review the submitted fields." } }); return; }
   if (error instanceof AppError) {
     reply.code(error.statusCode).send({ error: { code: error.code, message: error.message, ...(error.fields ? { fields: error.fields } : {}) } });
     return;
   }
-  app.log.error({ err: error }, "request failed");
+  request.log.error(safeErrorLog(error), "request failed");
   reply.code(500).send({ error: { code: "INTERNAL_ERROR", message: "An unexpected error occurred" } });
 });
 

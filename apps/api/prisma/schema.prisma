@@ -44,6 +44,7 @@ enum ChallengePurpose {
 }
 
 model Identity {
+  phoneVerifiedAt DateTime?
   id                    String             @id @default(cuid())
   email                 String?            @unique
   emailVerifiedAt       DateTime?
@@ -146,6 +147,7 @@ model EmailChallenge {
 }
 
 model Session {
+  authenticationProofHash String? @unique
   refreshExpiresAt DateTime  @default(dbgenerated("(CURRENT_TIMESTAMP + '30 days'::interval)"))
   familyId         String    @default(dbgenerated("(gen_random_uuid())::text"))
   authenticatedAt  DateTime  @default(now())

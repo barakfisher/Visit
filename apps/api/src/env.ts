@@ -32,7 +32,7 @@ const schema = z.object({
     if (!['http:', 'https:'].includes(appUrl.protocol) || appUrl.username || appUrl.password || appUrl.pathname !== '/' || appUrl.search || appUrl.hash || (value.NODE_ENV === 'production' && appUrl.protocol !== 'https:')) context.addIssue({ code: 'custom', path: ['WEB_APP_URL'], message: 'Use a web origin, with HTTPS in production.' });
   } catch { context.addIssue({ code: 'custom', path: ['WEB_APP_URL'], message: 'Use a valid web origin.' }); }
   if (value.NODE_ENV === "production" && value.SMS_DELIVERY_MODE === "local-inbox") context.addIssue({ code: "custom", path: ["SMS_DELIVERY_MODE"], message: "Local SMS inbox is development only." });
-  if (value.SMS_DELIVERY_MODE === "twilio" && (!value.TWILIO_ACCOUNT_SID || !value.TWILIO_AUTH_TOKEN || !value.TWILIO_VERIFY_SERVICE_SID)) context.addIssue({ code: "custom", path: ["SMS_DELIVERY_MODE"], message: "Twilio Verify credentials are required." });
+  if (value.SMS_DELIVERY_MODE === "twilio" && (!/^AC[0-9a-fA-F]{32}$/.test(value.TWILIO_ACCOUNT_SID ?? '') || (value.TWILIO_AUTH_TOKEN?.length ?? 0) < 32 || !/^VA[0-9a-fA-F]{32}$/.test(value.TWILIO_VERIFY_SERVICE_SID ?? ''))) context.addIssue({ code: "custom", path: ["SMS_DELIVERY_MODE"], message: "Twilio Verify credentials are required." });
   if (value.NODE_ENV === "production" && value.EMAIL_DELIVERY_MODE !== "resend") {
     context.addIssue({ code: "custom", path: ["EMAIL_DELIVERY_MODE"], message: "Production requires configured email delivery." });
   }
