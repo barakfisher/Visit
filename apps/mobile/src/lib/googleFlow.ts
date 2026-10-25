@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { clearInitialURL } from 'expo-linking';
 import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
@@ -50,11 +50,12 @@ export async function beginGoogleSignIn({ intent = 'login', returnTo }: GoogleSt
   finally { pending = false; }
 }
 export function useGoogleReceipt() {
+  const hasParams = Object.keys(useLocalSearchParams()).length > 0;
   const value = useSyncExternalStore(listener => { listeners.add(listener); return () => { listeners.delete(listener); }; }, () => receipt, () => null);
   useEffect(() => {
-    router.setParams({ '#': undefined, grant: undefined, state: undefined, status: undefined });
     clearInitialURL();
+    if (hasParams) router.replace('/auth/google');
     if (!pending && !receipt) publish({ status: 'invalid' }); // Process death never reconstructs a verifier from a URL.
-  }, []);
+  }, [hasParams]);
   return { receipt: value, clear: () => publish({ status: 'invalid' }) };
 }
