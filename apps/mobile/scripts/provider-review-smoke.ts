@@ -38,6 +38,23 @@ export async function providerReviewSmoke({ browser, webUrl, apiUrl, prisma, run
     assert.equal((await prisma.business.findUniqueOrThrow({ where: { id: business.id } })).publishedAt, null);
     assert.equal(await prisma.membership.count({ where: { businessId: business.id, identityId: applicant.person.id, status: 'ACTIVE' } }), 1);
     await applicant.page.screenshot({ path: 'test-results/provider-review-approved-en-mobile.png', fullPage: true });
+    const base = `${apiUrl}/v1/provider/businesses/${business.id}`;
+    const headers = { Origin: webUrl };
+    assert.equal((await applicant.context.request.patch(base, { headers, data: { location: 'Jerusalem', category: 'Wellness' } })).status(), 200);
+    const service = await (await applicant.context.request.post(`${base}/services`, { headers, data: { name: 'Pilot consultation', durationMinutes: 30, priceMinor: 10000, currency: 'ILS' } })).json();
+    assert.equal((await applicant.context.request.post(`${base}/staff`, { headers, data: { displayName: 'Pilot expert', serviceIds: [service.id] } })).status(), 201);
+    assert.equal((await applicant.context.request.put(`${base}/availability-rules`, { headers, data: { weekly: Array.from({ length: 7 }, (_, weekday) => ({ weekday, intervals: [{ startLocal: '09:00', endLocal: '17:00' }] })), overrides: [] } })).status(), 200);
+    assert.equal((await applicant.context.request.put(`${base}/booking-policy`, { headers, data: { minimumNoticeMinutes: 0, maximumAdvanceDays: 30, bufferBeforeMinutes: 0, bufferAfterMinutes: 0, cancellationCutoffMinutes: 0, rescheduleCutoffMinutes: 0 } })).status(), 200);
+    assert.equal((await applicant.context.request.get(`${apiUrl}/api/providers/${business.id}`)).status(), 404);
+    await applicant.page.goto(`${webUrl}/provider/dashboard?businessId=${business.id}`);
+    await applicant.page.getByRole('button', { name: 'Publish business', exact: true }).click();
+    await applicant.page.getByText('Published — ready for bookings', { exact: true }).waitFor();
+    assert.equal((await applicant.context.request.get(`${apiUrl}/api/providers/${business.id}`)).status(), 200);
+    await applicant.page.screenshot({ path: 'test-results/provider-published-en-mobile.png', fullPage: true });
+    await applicant.page.getByRole('button', { name: 'Unpublish business', exact: true }).click();
+    await applicant.page.getByText('Not published', { exact: true }).waitFor();
+    assert.equal((await applicant.context.request.get(`${apiUrl}/api/providers/${business.id}`)).status(), 404);
+    console.log('PASS: business setup -> readiness -> publish -> direct public detail -> unpublish through the provider UI.');
     assert.deepEqual(errors, []);
     console.log('PASS: unified business application, admin-only reasoned review, applicant refresh/fallback, intended membership and unpublished state.');
   } finally { await Promise.all(contexts.map(c => c.close())); }

@@ -11,7 +11,7 @@ after(async () => { await Promise.allSettled([redis.quit(), prisma.$disconnect()
 
 test('two overlapping booking requests cannot consume capacity one twice', async () => {
   const suffix = randomUUID();
-  const business = await prisma.business.create({ data: { name: `Concurrent ${suffix}`, slug: `concurrent-${suffix}`, timezone: 'UTC', approvalStatus: 'APPROVED' } });
+  const business = await prisma.business.create({ data: { publishedAt: new Date(), location: 'Synthetic fixture', name: `Concurrent ${suffix}`, slug: `concurrent-${suffix}`, timezone: 'UTC', approvalStatus: 'APPROVED' } });
   const customerA = await prisma.identity.create({ data: { email: `customer-a-${suffix}@example.test`, emailVerifiedAt: new Date() } });
   const customerB = await prisma.identity.create({ data: { email: `customer-b-${suffix}@example.test`, emailVerifiedAt: new Date() } });
   const tokens = [randomUUID(), randomUUID()];

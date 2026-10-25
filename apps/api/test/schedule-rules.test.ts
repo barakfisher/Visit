@@ -65,7 +65,7 @@ test('New York and Jerusalem clock changes reject invalid overrides and require 
 test('schedule repositories validate consistently and changes preserve existing appointments', async t => {
   const suffix = randomUUID();
   const identity = await prisma.identity.create({ data: { email: `schedule-${suffix}@example.test` } });
-  const businesses = await Promise.all(['a', 'b'].map(name => prisma.business.create({ data: { name, slug: `schedule-${name}-${suffix}`, timezone: 'UTC', approvalStatus: 'APPROVED' } })));
+  const businesses = await Promise.all(['a', 'b'].map(name => prisma.business.create({ data: { publishedAt: new Date(), location: 'Synthetic fixture', name, slug: `schedule-${name}-${suffix}`, timezone: 'UTC', approvalStatus: 'APPROVED' } })));
   for (const business of businesses) await prisma.membership.create({ data: { businessId: business.id, identityId: identity.id, role: 'OWNER', status: 'ACTIVE' } });
   const business = businesses[0]!;
   const context = await requireBusinessMembership(identity.id, business.id);
@@ -103,6 +103,7 @@ test('schedule repositories validate consistently and changes preserve existing 
       await saveBusinessPolicy(context, { ...DEFAULT_BOOKING_POLICY, minimumNoticeMinutes: 0 });
       await saveBusinessAvailability(context, { weekly: [], overrides: [{ date, isOpen: true, startLocal: '09:00', endLocal: '17:00' }] });
       await saveStaffAvailability(context, staff.id, { weekly: [], overrides: [] });
+      await prisma.business.update({ where: { id: business.id }, data: { publishedAt: new Date() } }); // Synthetic fixture completes setup before public reads.
       const before = await app.inject({ method: 'GET', url: `/v1/businesses/${business.id}/availability?serviceId=${service.id}&date=${date}` });
       assert.equal(before.statusCode, 200); assert.ok(before.json().slots.length > 0);
       const create = (hour: string, status: 'CONFIRMED' | 'HELD') => prisma.booking.create({ data: { businessId: business.id, customerId: identity.id, staffId: staff.id, serviceId: service.id, idempotencyKey: randomUUID(), startsAt: new Date(`${date}T${hour}:00:00Z`), endsAt: new Date(`${date}T${hour}:30:00Z`), occupiedFrom: new Date(`${date}T${hour}:00:00Z`), occupiedUntil: new Date(`${date}T${hour}:30:00Z`), status, ...(status === 'HELD' ? { holdExpiresAt: new Date(Date.now() + 60000) } : {}) } });

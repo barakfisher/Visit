@@ -1,3 +1,4 @@
+import { publicationReadiness, setPublication, withBusinessConfiguration } from '../repositories/publication.js';
 import { reviewProviderApplication } from '../repositories/provider-review.js';
 import { PILOT_TIMEZONE } from '@visit/contracts';
 import type { FastifyInstance } from 'fastify';
@@ -27,6 +28,26 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
     const { identity } = await authenticate(request);
     const context = await requireBusinessMembership(identity.id, params.data.businessId);
     return getBusinessSettings(context);
+  });
+
+  app.get('/v1/provider/businesses/:businessId/publication', async request => {
+    const { businessId } = businessIdParams.parse(request.params);
+    const { identity } = await authenticate(request);
+    await requireBusinessMembership(identity.id, businessId, ['OWNER', 'MANAGER']);
+    return prisma.$transaction(tx => publicationReadiness(tx, businessId), { isolationLevel: 'RepeatableRead', timeout: 15000 });
+  });
+  app.put('/v1/provider/businesses/:businessId/publication', async request => {
+    const { businessId } = businessIdParams.parse(request.params);
+    const { published } = z.strictObject({ published: z.boolean() }).parse(request.body);
+    const { identity } = await authenticate(request);
+    return setPublication(await requireBusinessMembership(identity.id, businessId, ['OWNER', 'MANAGER']), published);
+  });
+  app.patch('/v1/provider/businesses/:businessId', async request => {
+    const { businessId } = businessIdParams.parse(request.params);
+    const input = z.strictObject({ name: z.string().trim().min(2).max(120).optional(), location: z.string().trim().min(2).max(200).optional(), category: z.string().trim().min(2).max(80).optional() }).refine(value => Object.keys(value).length > 0).parse(request.body);
+    const { identity } = await authenticate(request);
+    const context = await requireBusinessMembership(identity.id, businessId, ['OWNER', 'MANAGER']);
+    return withBusinessConfiguration(context, tx => tx.business.update({ where: { id: businessId }, data: { ...(input.name !== undefined ? { name: input.name } : {}), ...(input.location !== undefined ? { location: input.location } : {}), ...(input.category !== undefined ? { category: input.category } : {}) }, select: { id: true, name: true, location: true, category: true } }));
   });
 
   app.post('/v1/provider-applications', async (request, reply) => {

@@ -80,7 +80,7 @@ try {
   await apiServer.listen({ host: '127.0.0.1', port: 3001 });
   assert.equal((await fetch(`${apiUrl}/health/ready`)).status, 200);
   for (const name of ['North', 'South']) {
-    const business = await prisma.business.create({ data: { name: `Visit QA ${name} ${run.slice(0, 6)}`, slug: `qa-${name.toLowerCase()}-${run}`, timezone: 'UTC', location: name === 'North' ? 'Jerusalem' : 'Tel Aviv', category: 'Wellness', approvalStatus: 'APPROVED' } });
+    const business = await prisma.business.create({ data: { publishedAt: new Date(), name: `Visit QA ${name} ${run.slice(0, 6)}`, slug: `qa-${name.toLowerCase()}-${run}`, timezone: 'UTC', location: name === 'North' ? 'Jerusalem' : 'Tel Aviv', category: 'Wellness', approvalStatus: 'APPROVED' } });
     businessIds.push(business.id);
     const service = await prisma.service.create({ data: { businessId: business.id, name: name === 'North' ? 'QA consultation' : 'South consultation', durationMinutes: 30, priceMinor: 6500, currency: 'USD' } });
     const staff = await prisma.staff.create({ data: { businessId: business.id, displayName: name === 'North' ? 'Alex North' : 'Sam South', parallelCapacity: 1 } });
@@ -153,9 +153,8 @@ try {
     assert.notEqual((await consumer.cookies()).find(cookie => cookie.name === 'visit_session')!.value, originalCookie.value);
     assert.equal(await page.evaluate(() => localStorage.getItem('visit.session-token')), null);
     console.log('PASS: expired access refreshes through the HttpOnly cookie without ordinary token storage.');
-    await page.goto(`${webUrl}/discover`);
-    await page.getByLabel('Search businesses').fill(`Visit QA North ${run.slice(0, 6)}`);
-    await page.locator(`a[href="/booking/${businessIds[0]}"]`).click();
+    // Organic direct booking; the global directory has been retired.
+    await page.goto(`${webUrl}/booking/${businessIds[0]}?serviceId=${service.id}&date=${date}`);
     await page.getByRole('heading', { name: 'Available appointments' }).waitFor();
     await page.getByRole('button', { name: /QA consultation/ }).click();
     const dateResponse = page.waitForResponse((response) => response.url().includes('/availability?') && response.url().includes(`date=${date}`));
@@ -267,7 +266,7 @@ try {
     await card.getByText('QA revised service', { exact: true }).waitFor();
     await card.getByRole('button', { name: 'Archive', exact: true }).click();
     await card.getByRole('button', { name: 'Restore', exact: true }).waitFor();
-    assert.equal((await (await fetch(`${apiUrl}/v1/businesses/${businessIds[0]}/services`)).json() as { services: { id: string }[] }).services.some(item => item.id === newService.id), false);
+    assert.equal((await fetch(`${apiUrl}/v1/businesses/${businessIds[0]}/services`)).status, 404); // Incomplete active catalog suspended publication.
     await card.getByRole('button', { name: 'Restore', exact: true }).click();
     await card.getByRole('button', { name: 'Archive', exact: true }).waitFor();
     await card.getByRole('button', { name: 'Delete or archive', exact: true }).click();
@@ -305,6 +304,9 @@ try {
     assert.equal(await providerPage.getByLabel('מחיר', { exact: true }).evaluate(node => getComputedStyle(node).direction), 'ltr');
     await providerPage.screenshot({ path: path.join(diagnostics, 'service-catalog-he-mobile.png'), fullPage: true });
     await providerPage.goto(`${webUrl}/two`); await providerPage.getByTestId('language-en').click();
+    // Generic UTC engine fixture is explicitly restored after its catalog is complete.
+    // Real pilot publishing is exercised above through readiness + the provider UI.
+    await prisma.business.update({ where: { id: businessIds[0]! }, data: { publishedAt: new Date() } });
     console.log('PASS: service create/edit/archive/restore/delete, exact prices, failed draft recovery, immutable agenda details and Hebrew mobile editor.');
 
 
@@ -339,7 +341,7 @@ try {
     await page.getByRole('button', { name: /14:00 · Alex North/ }).click();
     await page.getByRole('button', { name: 'Confirm reschedule' }).click();
     await page.getByRole('heading', { name: 'You’re all set' }).waitFor();
-    await page.goto(`${webUrl}/discover`);
+    await page.goto(`${webUrl}/appointments`);
     const currentBooking = page.locator(`[data-testid="active-booking-${hold.holdId}"]:visible`);
     await currentBooking.waitFor();
     await currentBooking.scrollIntoViewIfNeeded();
@@ -418,7 +420,7 @@ try {
     nextFall.setUTCDate(1 + (7 - nextFall.getUTCDay()) % 7);
     if (zone === 'Asia/Jerusalem') { nextFall.setUTCMonth(9, 31); nextFall.setUTCDate(31 - nextFall.getUTCDay()); }
     const foldDate = nextFall.toISOString().slice(0, 10);
-    const foldBusiness = await prisma.business.create({ data: { name: 'Synthetic DST studio', slug: `qa-fold-${zone.replace('/', '-').toLowerCase()}-${run}`, timezone: zone, approvalStatus: 'APPROVED' } });
+    const foldBusiness = await prisma.business.create({ data: { publishedAt: new Date(), location: 'Synthetic fixture', name: 'Synthetic DST studio', slug: `qa-fold-${zone.replace('/', '-').toLowerCase()}-${run}`, timezone: zone, approvalStatus: 'APPROVED' } });
     businessIds.push(foldBusiness.id);
     const foldService = await prisma.service.create({ data: { businessId: foldBusiness.id, name: 'DST consultation', durationMinutes: 30 } });
     const foldStaff = await prisma.staff.create({ data: { businessId: foldBusiness.id, displayName: 'Fold specialist' } });
@@ -437,7 +439,7 @@ try {
     await providerPage.getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).click();
     await providerPage.getByRole('heading', { name: 'You’re all set' }).waitFor();
     assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: foldHold.holdId } })).startsAt.toISOString(), expectedInstant);
-    await providerPage.getByText(/01:30.*second occurrence/).waitFor();
+    await providerPage.locator('[data-testid="booking-confirmation"]:visible').getByText(/01:30.*second occurrence/).waitFor();
     assert.equal(await providerPage.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone), 'America/Los_Angeles');
     if (zone === 'Asia/Jerusalem') await providerPage.getByText(/Synthetic DST studio · Times are in local Israeli time/).waitFor();
     console.log(`PASS: ${zone} fold labels and confirmation preserve the second exact instant on a traveling device.`);

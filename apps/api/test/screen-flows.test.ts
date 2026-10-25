@@ -19,7 +19,7 @@ test('screen flows enforce OTP single use, tenant access, Redis holds, confirmat
   app.setErrorHandler((error, _request, reply) => { const status = error instanceof AppError ? error.statusCode : error instanceof ZodError ? 400 : 500; reply.code(status).send({ error: { message: error.message, code: error instanceof AppError ? error.code : 'ERROR' } }); });
   await registerBookingRoutes(app); await registerProviderRoutes(app); await registerFlowAuth(app); await registerScreenFlows(app);
   const suffix = randomUUID();
-  const business = await prisma.business.create({ data: { name: 'Flow Test', slug: `flow-${suffix}`, timezone: 'UTC', approvalStatus: 'APPROVED', location: 'Jerusalem', category: 'Wellness' } });
+  const business = await prisma.business.create({ data: { publishedAt: new Date(), name: 'Flow Test', slug: `flow-${suffix}`, timezone: 'UTC', approvalStatus: 'APPROVED', location: 'Jerusalem', category: 'Wellness' } });
   const people = await Promise.all(['owner', 'a', 'b'].map((name) => prisma.identity.create({ data: { email: `${name}-${suffix}@example.test` } })));
   const tokens = people.map(() => randomUUID());
   const headers = (index: number) => ({ authorization: `Bearer ${tokens[index]}`, 'x-visit-client': 'native' });
@@ -43,7 +43,7 @@ test('screen flows enforce OTP single use, tenant access, Redis holds, confirmat
     const date = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
     const input = { providerId: business.id, serviceId: service.id, staffId: staff.id, startsAt: `${date}T09:00:00Z` };
     const attempts = await Promise.all([1, 2].map((index) => app.inject({ method: 'POST', url: '/api/bookings/lock-slot', headers: headers(index), payload: { ...input, idempotencyKey: randomUUID() } })));
-    assert.deepEqual(attempts.map((response) => response.statusCode).sort(), [201, 409]);
+    assert.deepEqual(attempts.map((response) => response.statusCode).sort(), [201, 409], JSON.stringify(attempts.map(r => ({ status: r.statusCode, error: r.statusCode >= 400 ? r.json().error : undefined }))));
     const winner = attempts.findIndex((response) => response.statusCode === 201) + 1;
     const hold = attempts[winner - 1]!.json(); bookingIds.push(hold.holdId);
     assert.ok(await redis.get(`visit:hold:${hold.holdId}`));
@@ -55,17 +55,18 @@ test('screen flows enforce OTP single use, tenant access, Redis holds, confirmat
     assert.equal((await app.inject({ url: `/api/provider/agenda?businessId=${business.id}&date=${date}`, headers: headers(1) })).statusCode, 403);
     const block = { businessId: business.id, staffId: staff.id, date, startLocal: '10:00', endLocal: '10:30' };
     assert.equal((await app.inject({ method: 'POST', url: '/api/provider/block-time', headers: headers(0), payload: { ...block, startLocal: '09:00' } })).statusCode, 409);
-    assert.equal((await app.inject({ method: 'POST', url: '/api/provider/block-time', headers: headers(0), payload: block })).statusCode, 201);
+    const savedBlock = await app.inject({ method: 'POST', url: '/api/provider/block-time', headers: headers(0), payload: block });
+    assert.equal(savedBlock.statusCode, 201, savedBlock.body);
     const availability = await app.inject({ url: `/api/providers/${business.id}/availability?serviceId=${service.id}&date=${date}` });
     assert.equal(availability.statusCode, 200);
     assert.equal(availability.json().slots.find((slot: { localTime: string }) => slot.localTime === '10:00').available, false);
     assert.equal((await app.inject({ method: 'POST', url: '/api/bookings/lock-slot', headers: headers(1), payload: { ...input, startsAt: `${date}T10:00:00Z`, idempotencyKey: randomUUID() } })).statusCode, 409);
     const expiring = await app.inject({ method: 'POST', url: '/api/bookings/lock-slot', headers: headers(1), payload: { ...input, startsAt: `${date}T11:00:00Z`, idempotencyKey: randomUUID() } });
-    assert.equal(expiring.statusCode, 201); const expiredId = expiring.json().holdId; bookingIds.push(expiredId);
+    assert.equal(expiring.statusCode, 201, expiring.body); const expiredId = expiring.json().holdId; bookingIds.push(expiredId);
     await redis.del(`visit:hold:${expiredId}`);
     assert.equal((await app.inject({ method: 'POST', url: '/api/bookings/confirm', headers: headers(1), payload: { holdId: expiredId } })).statusCode, 409);
     const addedService = await app.inject({ method: 'POST', url: `/api/provider/services?businessId=${business.id}`, headers: headers(0), payload: { name: 'Follow-up', durationMinutes: 15, priceMinor: 1500, currency: 'USD', staffIds: [staff.id] } });
-    assert.equal(addedService.statusCode, 201);
+    assert.equal(addedService.statusCode, 201, addedService.body);
     assert.equal(await prisma.staffService.count({ where: { businessId: business.id, staffId: staff.id, serviceId: addedService.json().id } }), 1);
     const closedDate = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
     const hoursSaved = await app.inject({ method: 'PUT', url: `/api/provider/working-hours?businessId=${business.id}`, headers: headers(0), payload: { weekly: Array.from({ length: 7 }, (_, weekday) => ({ weekday, intervals: [{ startLocal: '09:00', endLocal: '17:00' }] })), overrides: [{ date: closedDate, isOpen: false }] } });
@@ -73,15 +74,16 @@ test('screen flows enforce OTP single use, tenant access, Redis holds, confirmat
     const closedAvailability = await app.inject({ url: `/api/providers/${business.id}/availability?serviceId=${service.id}&date=${closedDate}` });
     assert.deepEqual(closedAvailability.json().slots, []);
     const phone = `+1555${String(Date.now()).slice(-7)}`;
-    assert.equal((await app.inject({ method: 'POST', url: '/api/auth/otp/send', payload: { phone } })).statusCode, 202);
+    assert.equal((await app.inject({ method: 'POST', url: '/api/auth/otp/send', remoteAddress: `2001:db8:${suffix.slice(0, 4)}:${suffix.slice(4, 8)}::1`, payload: { phone } })).statusCode, 202);
     const code = (await app.inject({ url: `/__dev/otp?phone=${encodeURIComponent(phone)}` })).json().code;
     assert.match(code, /^\d{6}$/);
-    const auth = await app.inject({ method: 'POST', url: '/api/auth/otp/verify', headers: { 'x-visit-client': 'native' }, payload: { phone, code } });
+    const auth = await app.inject({ method: 'POST', url: '/api/auth/otp/verify', remoteAddress: `2001:db8:${suffix.slice(0, 4)}:${suffix.slice(4, 8)}::1`, headers: { 'x-visit-client': 'native' }, payload: { phone, code } });
     assert.equal(auth.statusCode, 200); assert.equal(auth.json().profile.is_provider, false); phoneIdentity = auth.json().profile.id;
     assert.ok(auth.json().sessionToken);
-    assert.equal((await app.inject({ method: 'POST', url: '/api/auth/otp/verify', payload: { phone, code } })).statusCode, 401);
+    assert.equal((await app.inject({ method: 'POST', url: '/api/auth/otp/verify', remoteAddress: `2001:db8:${suffix.slice(0, 4)}:${suffix.slice(4, 8)}::1`, payload: { phone, code } })).statusCode, 401);
     const directory = await app.inject({ url: '/api/providers?search=Jerusalem&category=Wellness' });
-    assert.ok(directory.json().providers.some((provider: { id: string }) => provider.id === business.id));
+    assert.equal(directory.statusCode, 404); // Global enumeration is retired.
+    assert.equal((await app.inject({ url: '/v1/businesses' })).statusCode, 404);
   } finally {
     bookingIds = (await prisma.booking.findMany({ where: { businessId: business.id }, select: { id: true } })).map((booking) => booking.id);
     if (bookingIds.length) await redis.del(...bookingIds.map((id) => `visit:hold:${id}`));

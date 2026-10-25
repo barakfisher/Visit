@@ -24,12 +24,12 @@ test('service contract parses exact decimal minor units and rejects invalid payl
 test('service CRUD and booking snapshots stay scoped and preserve history on both HTTP surfaces', async t => {
   const run = randomUUID(), token = randomUUID();
   const app = Fastify();
-  app.setErrorHandler((error, _req, reply) => reply.code(error instanceof AppError ? error.statusCode : error instanceof ZodError ? 400 : 500).send({ error: { code: error instanceof AppError ? error.code : 'VALIDATION_ERROR', ...(error instanceof AppError ? { fields: error.fields } : {}) } }));
+  app.setErrorHandler((error, _req, reply) => reply.code(error instanceof AppError ? error.statusCode : error instanceof ZodError ? 400 : 500).send({ error: { code: error instanceof AppError ? error.code : 'VALIDATION_ERROR', ...(error instanceof AppError ? { fields: error.fields } : { diagnostic: error.message }) } }));
   await registerProviderRoutes(app); await registerScreenFlows(app);
   let changeBeforeBooking: (() => Promise<void>) | undefined;
   await registerBookingRoutes(app, { acquireLocks: async () => { await changeBeforeBooking?.(); return { acquired: true, release: async () => {} }; } });
   const owner = await prisma.identity.create({ data: { email: `services-${run}@example.test` } });
-  const business = await prisma.business.create({ data: { name: 'Catalog test', slug: `services-${run}`, timezone: 'UTC', approvalStatus: 'APPROVED' } });
+  const business = await prisma.business.create({ data: { publishedAt: new Date(), location: 'Synthetic fixture', name: 'Catalog test', slug: `services-${run}`, timezone: 'UTC', approvalStatus: 'APPROVED' } });
   const staff = await prisma.staff.create({ data: { businessId: business.id, displayName: 'Expert' } });
   const headers = { authorization: `Bearer ${token}`, 'x-visit-client': 'native' };
   const base = `/v1/provider/businesses/${business.id}/services`;
@@ -63,7 +63,8 @@ test('service CRUD and booking snapshots stay scoped and preserve history on bot
     await t.test('held snapshots survive catalog name, duration, price and currency edits through confirmation', async () => {
       const update = await app.inject({ method: 'PATCH', url: `${base}/${service.id}`, headers, payload: { name: 'Renamed service', durationMinutes: 60, priceMinor: 5000, currency: 'USD' } });
       assert.equal(update.statusCode, 200, update.body);
-      assert.equal((await app.inject({ method: 'POST', url: `/v1/bookings/${bookingId}/confirm`, headers, payload: {} })).statusCode, 200);
+      const confirmed = await app.inject({ method: 'POST', url: `/v1/bookings/${bookingId}/confirm`, headers, payload: {} });
+      assert.equal(confirmed.statusCode, 200, confirmed.body);
       const consumer = await app.inject({ url: '/v1/me/bookings', headers });
       assert.deepEqual(consumer.json().bookings[0].service, { id: service.id, ...valid });
       const provider = await app.inject({ url: `/api/provider/agenda?businessId=${business.id}&date=${date}`, headers });
@@ -96,9 +97,10 @@ test('service CRUD and booking snapshots stay scoped and preserve history on bot
       await prisma.booking.update({ where: { id: bookingId }, data: { status: 'CANCELLED' } });
       const response = await app.inject({ method: 'DELETE', url: `${base}/${service.id}`, headers });
       assert.equal(response.statusCode, 200); assert.equal(response.json().archived, true);
-      assert.equal((await app.inject({ url: `/v1/businesses/${business.id}/services` })).json().services.length, 0);
+      assert.equal((await app.inject({ url: `/v1/businesses/${business.id}/services` })).statusCode, 404); // No active catalog suspends publication.
       assert.equal((await app.inject({ url: '/v1/me/bookings', headers })).json().bookings[0].service.name, valid.name);
       assert.equal((await app.inject({ method: 'PATCH', url: `${base}/${service.id}`, headers, payload: { active: true } })).statusCode, 200);
+      await prisma.business.update({ where: { id: business.id }, data: { publishedAt: new Date() } }); // Generic UTC fixture explicitly republishes after restoration.
       assert.equal((await app.inject({ url: `/v1/businesses/${business.id}/services` })).json().services.length, 1);
     });
     await t.test('unreferenced services are deleted and database writes cannot bypass price validation', async () => {
