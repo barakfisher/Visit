@@ -1,3 +1,4 @@
+import { createEmailLoginService, createLocalEmailDelivery } from '../src/security/email-login.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test, { after } from 'node:test';
@@ -20,7 +21,8 @@ test('passwordless email authentication is single use and keeps session tokens o
     if (error instanceof AppError) return reply.code(error.statusCode).send({ error: { code: error.code } });
     return reply.code(500).send({ error: { code: 'INTERNAL_ERROR' } });
   });
-  await registerAuthRoutes(app);
+  const emailLogin = createEmailLoginService({ delivery: createLocalEmailDelivery(), namespace: `test:auth:${randomUUID()}` });
+  await registerAuthRoutes(app, { emailLogin });
 
   try {
     const requested = await app.inject({ method: 'POST', url: '/v1/auth/email-challenges', headers: { 'x-forwarded-for': testIp }, payload: { email } });
@@ -28,9 +30,9 @@ test('passwordless email authentication is single use and keeps session tokens o
     assert.equal(requested.json().accepted, true);
     assert.equal(requested.body.includes('token'), false);
 
-    const inbox = await app.inject({ method: 'GET', url: `/__dev/mailbox?email=${encodeURIComponent(email)}` });
-    assert.equal(inbox.statusCode, 200);
-    const { token } = inbox.json<{ token: string }>();
+    // Obtain the delivered proof through the injected local transport. The HTTP
+    // development mailbox intentionally stays closed under NODE_ENV=test.
+    const { token } = await emailLogin.localMessage(email);
 
     const verified = await app.inject({ method: 'POST', url: '/v1/auth/email-challenges/verify', headers: { 'x-forwarded-for': testIp }, payload: { token } });
     assert.equal(verified.statusCode, 200);
