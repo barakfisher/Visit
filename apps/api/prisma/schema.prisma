@@ -44,6 +44,10 @@ enum ChallengePurpose {
 }
 
 model Identity {
+  securityVersion Int @default(0)
+  contactChallenges AccountContactChallenge[]
+  securityEvents IdentitySecurityEvent[]
+  securityNotifications SecurityNotification[]
   phoneVerifiedAt DateTime?
   id                    String             @id @default(cuid())
   email                 String?            @unique
@@ -149,6 +153,7 @@ model EmailChallenge {
 }
 
 model Session {
+  contactChallenges AccountContactChallenge[]
   authenticationProofHash String? @unique
   refreshExpiresAt DateTime  @default(dbgenerated("(CURRENT_TIMESTAMP + '30 days'::interval)"))
   familyId         String    @default(dbgenerated("(gen_random_uuid())::text"))
@@ -164,6 +169,7 @@ model Session {
 
   @@index([identityId, expiresAt])
   @@index([familyId])
+  @@unique([id, identityId])
 }
 
 model Staff {
@@ -331,4 +337,57 @@ model GoogleAuthProof {
   createdAt DateTime @default(now())
   identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
   @@index([identityId])
+}
+
+
+model AccountContactChallenge {
+  id String @id @default(cuid())
+  handleHash String @unique
+  identityId String
+  sessionId String
+  securityVersion Int
+  channel String
+  destination String
+  codeHash String?
+  attempts Int @default(0)
+  expiresAt DateTime @db.Timestamptz
+  deliveredAt DateTime? @db.Timestamptz
+  consumedAt DateTime? @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  session Session @relation(fields: [sessionId, identityId], references: [id, identityId], onDelete: Cascade)
+  @@index([identityId, consumedAt])
+  @@index([expiresAt])
+}
+
+model IdentitySecurityEvent {
+  id String @id @default(cuid())
+  identityId String
+  action String
+  method String
+  createdAt DateTime @default(now()) @db.Timestamptz
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  notifications SecurityNotification[]
+  @@unique([id, identityId])
+  @@index([identityId, createdAt])
+}
+
+model SecurityNotification {
+  scope String @default("live")
+  id String @id @default(cuid())
+  identityId String
+  eventId String
+  channel String
+  destination String?
+  status String @default("QUEUED")
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now()) @db.Timestamptz
+  leaseUntil DateTime? @db.Timestamptz
+  acceptedAt DateTime? @db.Timestamptz
+  provider String?
+  createdAt DateTime @default(now()) @db.Timestamptz
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  event IdentitySecurityEvent @relation(fields: [eventId, identityId], references: [id, identityId], onDelete: Cascade)
+  @@index([scope, status, nextAttemptAt])
+  @@index([identityId, createdAt])
 }

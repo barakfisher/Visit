@@ -167,3 +167,17 @@ test('production rejects development delivery and malformed Twilio credentials w
     assert.doesNotMatch(result.stderr, /invalid-private-value|fake-private-provider-key/);
   }
 });
+
+
+test('contact invalidation prevents an in-flight provider send from restoring an obsolete OTP', async () => {
+  let announce!: () => void, finish!: () => void;
+  const started = new Promise<void>(resolve => { announce = resolve; });
+  const provider = { send: async () => { announce(); await new Promise<void>(resolve => { finish = resolve; }); return { sid: `VE${'b'.repeat(32)}`, createdAt: Date.now() }; }, check: async () => true };
+  const f = fixture('twilio', provider), number = phone();
+  const sending = f.service.send(number, randomUUID());
+  // Attach rejection before the externally controlled send completes.
+  const rejected = assert.rejects(sending, denied(503));
+  await started; await f.service.invalidate(number); finish(); await rejected;
+  assert.equal(await redis.get(f.keys(number).challenge), null);
+  await assert.rejects(f.service.verify(number, '123456', randomUUID()), denied(401));
+});

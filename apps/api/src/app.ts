@@ -1,3 +1,4 @@
+import { registerAccountMethods } from './routes/account-methods.js';
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { Pool } from "pg";
@@ -13,7 +14,7 @@ import { env } from "./env.js";
 import { safeRequestLog, safeErrorLog } from "./security/logging.js";
 import { registerRequestSecurity } from "./security/request-security.js";
 
-export async function createApp({ google }: { google?: NonNullable<Parameters<typeof registerFlowAuth>[1]>['google'] } = {}) {
+export async function createApp({ google, account }: { google?: NonNullable<Parameters<typeof registerFlowAuth>[1]>['google']; account?: NonNullable<Parameters<typeof registerAccountMethods>[1]>['account'] } = {}) {
   const trustedProxies = env.TRUSTED_PROXY_CIDRS.split(",").map(value => value.trim()).filter(Boolean);
   const app = Fastify({ trustProxy: trustedProxies.length ? trustedProxies : false, logger: { serializers: { req: safeRequestLog }, redact: ["req.headers.authorization", "req.headers.cookie"] } });
   const pool = new Pool({ connectionString: env.DATABASE_URL, max: 5, connectionTimeoutMillis: 3000, query_timeout: 3000 });
@@ -35,6 +36,7 @@ export async function createApp({ google }: { google?: NonNullable<Parameters<ty
   await registerAuthRoutes(app);
   await registerProviderRoutes(app);
   await registerBookingRoutes(app);
+  await registerAccountMethods(app, account ? { account } : {});
   await registerFlowAuth(app, google ? { google } : {});
   await registerScreenFlows(app);
 

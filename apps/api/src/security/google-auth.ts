@@ -1,3 +1,4 @@
+import { finishAccountSecurityChange, lockIdentitySecurity, previousSecurityChannels } from './account-security.js';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { OAuth2Client } from 'google-auth-library';
 import { z } from 'zod';
@@ -151,6 +152,9 @@ export function createGoogleAuthService({ config, provider, namespace = 'visit:g
           await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`email:${proof.email}`}, 0))::text`;
           if (await tx.googleAuthProof.findUnique({ where: { hash } })) throw invalid();
           const linked = await tx.externalIdentity.findUnique({ where: { provider_subject: { provider: 'google', subject: proof.subject } } });
+          const knownIdentityId = proof.intent === 'link' ? proof.identityId : linked?.identityId;
+          if (knownIdentityId) await lockIdentitySecurity(tx, knownIdentityId);
+          let linkSession: import('../generated/prisma/client.js').Session | undefined;
           let identityId: string;
           if (proof.intent === 'link') {
             const family = await tx.session.findUnique({ where: { id: proof.sessionId! }, select: { familyId: true } });
@@ -160,18 +164,25 @@ export function createGoogleAuthService({ config, provider, namespace = 'visit:g
             await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${family.familyId}, 0))::text`;
             const session = await tx.session.findFirst({ where: { id: proof.sessionId!, identityId: proof.identityId!, revokedAt: null, expiresAt: { gt: new Date(now()) }, authenticatedAt: { gte: new Date(now() - 300000), lte: new Date(now()) } } });
             if (!session) throw new AppError(401, 'REAUTH_REQUIRED', 'Sign in again before linking Google.');
-            if (linked) throw conflict('This Google account is already linked.');
+            linkSession = session;
+            if (linked) throw conflict('This sign-in method cannot be used.');
             const owner = await tx.identity.findUnique({ where: { email: proof.email } });
-            if (owner && owner.id !== proof.identityId) throw conflict('Sign in to the existing account for this address before linking.');
+            if (owner && owner.id !== proof.identityId) throw conflict('This sign-in method cannot be used.');
             identityId = proof.identityId!;
           } else if (linked) identityId = linked.identityId;
           else {
             if (await tx.identity.findUnique({ where: { email: proof.email } })) throw new AppError(409, 'LINK_REQUIRED', 'Sign in to your existing account, then explicitly link Google in account settings.');
             identityId = (await tx.identity.create({ data: { email: proof.email, emailVerifiedAt: new Date(now()) } })).id;
           }
+          if (!knownIdentityId) await lockIdentitySecurity(tx, identityId);
+          const before = await tx.identity.findUniqueOrThrow({ where: { id: identityId } });
+          const channels = proof.intent === 'link' ? await previousSecurityChannels(tx, before) : [];
           if (!linked) await tx.externalIdentity.create({ data: { identityId, provider: 'google', subject: proof.subject, email: proof.email } });
           await tx.googleAuthProof.create({ data: { hash, identityId, intent: proof.intent } });
-          if (proof.intent === 'link') return { identityId, linked: true as const };
+          if (proof.intent === 'link') {
+            await finishAccountSecurityChange(tx, { identity: before, session: linkSession!, channels, notificationScope: namespace === 'visit:google' ? 'live' : namespace, action: 'LINKED', method: 'google', rotate: false }, new Date(now()));
+            return { identityId, linked: true as const };
+          }
           await tx.session.create({ data: { identityId, tokenHash: tokenDigest(token), authenticationProofHash: hash, expiresAt: sessionExpiry(new Date(now())) } });
           return { identityId, sessionToken: token };
         }, { maxWait: 5000, timeout: 5000 });

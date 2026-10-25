@@ -14,7 +14,7 @@ const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 type Challenge = { id: string; sid: string; mode: string; expiresAt: number; attempts: number; digest?: string };
 const acquire = `if redis.call('EXISTS', KEYS[1]) == 1 then return 0 end if ARGV[2] == 'send' and redis.call('EXISTS', KEYS[2]) == 1 then return 0 end redis.call('SET', KEYS[1], ARGV[1], 'PX', 30000) if ARGV[2] == 'send' then redis.call('SET', KEYS[2], '1', 'EX', 30) end return 1`;
 const release = `if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end return 0`;
-const save = `if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end redis.call('SET', KEYS[2], ARGV[2], 'PX', ARGV[3]) if ARGV[4] ~= '' then redis.call('SET', KEYS[3], ARGV[4], 'PX', ARGV[3]) else redis.call('DEL', KEYS[3]) end return 1`;
+const save = `if redis.call('GET', KEYS[1]) ~= ARGV[1] or (redis.call('GET', KEYS[4]) or '0') ~= ARGV[5] then return 0 end redis.call('SET', KEYS[2], ARGV[2], 'PX', ARGV[3]) if ARGV[4] ~= '' then redis.call('SET', KEYS[3], ARGV[4], 'PX', ARGV[3]) else redis.call('DEL', KEYS[3]) end return 1`;
 const attempt = `if redis.call('GET', KEYS[1]) ~= ARGV[1] then return '' end local raw = redis.call('GET', KEYS[2]) if not raw then return '' end local item = cjson.decode(raw) if item.expiresAt <= tonumber(ARGV[2]) or item.attempts >= 5 then return '' end item.attempts = item.attempts + 1 redis.call('SET', KEYS[2], cjson.encode(item), 'KEEPTTL') return cjson.encode(item)`;
 const consume = `if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end local raw = redis.call('GET', KEYS[2]) if not raw then return 0 end local item = cjson.decode(raw) if item.id ~= ARGV[2] or item.expiresAt <= tonumber(ARGV[3]) then return 0 end if redis.call('SET', KEYS[4], '1', 'NX', 'EX', 1200) == false then return 0 end redis.call('DEL', KEYS[2], KEYS[3]) return 1`;
 
@@ -25,7 +25,7 @@ export function createOtpService({ mode, secret, provider, namespace = 'visit:ot
   const digest = (phone: string, id: string, code: string) => createHmac('sha256', secret).update(`${phone}:${id}:${code}`).digest('hex');
   const keys = (phone: string) => {
     const id = hash(phone);
-    return { operation: `${namespace}:operation:${id}`, cooldown: `${namespace}:cooldown:${id}`, challenge: `${namespace}:challenge:${id}`, inbox: `${namespace}:inbox:${id}` };
+    return { operation: `${namespace}:operation:${id}`, cooldown: `${namespace}:cooldown:${id}`, challenge: `${namespace}:challenge:${id}`, inbox: `${namespace}:inbox:${id}`, generation: `${namespace}:generation:${id}` };
   };
   async function rate(key: string, maximum: number, seconds: number) {
     const count = await redis.eval("local n = redis.call('INCR', KEYS[1]); if n == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end return n", 1, `${namespace}:limit:${key}`, seconds);
@@ -47,9 +47,22 @@ export function createOtpService({ mode, secret, provider, namespace = 'visit:ot
   }
   return {
     mode,
+    async invalidate(phoneInput: string) {
+      const key = keys(phoneSchema.parse(phoneInput));
+      try { await ready(); await redis.eval("redis.call('INCR', KEYS[1]); redis.call('EXPIRE', KEYS[1], 1200); return redis.call('DEL', KEYS[2], KEYS[3])", 3, key.generation, key.challenge, key.inbox); }
+      catch { throw unavailable(); }
+    },
+    async localCode(phoneInput: string) {
+      if (mode !== 'local-inbox') throw invalid();
+      const key = keys(phoneSchema.parse(phoneInput)); await ready();
+      const raw = await redis.get(key.challenge);
+      if (!raw || JSON.parse(raw).expiresAt <= now() || JSON.parse(raw).attempts >= 5) throw invalid();
+      const code = await redis.get(key.inbox); if (!code) throw invalid(); return code;
+    },
     async send(phoneInput: string, ip: string) {
       const phone = phoneSchema.parse(phoneInput);
       return operation(phone, ip, 'send', async (owner, key) => {
+        const generation = await redis.get(key.generation) ?? '0';
         const id = randomUUID();
         const code = mode === 'local-inbox' ? String(randomInt(0, 1000000)).padStart(6, '0') : '';
         let sid: string = id;
@@ -68,7 +81,7 @@ export function createOtpService({ mode, secret, provider, namespace = 'visit:ot
         const remaining = expiresAt - now();
         if (remaining <= 0) throw invalid();
         const challenge: Challenge = { id, sid, mode, expiresAt, attempts, ...(code ? { digest: digest(phone, id, code) } : {}) };
-        if (await redis.eval(save, 3, key.operation, key.challenge, key.inbox, owner, JSON.stringify(challenge), remaining, code) !== 1) throw unavailable();
+        if (await redis.eval(save, 4, key.operation, key.challenge, key.inbox, key.generation, owner, JSON.stringify(challenge), remaining, code, generation) !== 1) throw unavailable();
         return { accepted: true, expiresInSeconds: Math.floor(remaining / 1000), resendAfterSeconds: 30 };
       });
     },

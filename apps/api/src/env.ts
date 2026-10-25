@@ -23,13 +23,14 @@ const schema = z.object({
   SMS_DELIVERY_MODE: z.enum(["disabled", "local-inbox", "twilio"]).default("disabled"),
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
+  TWILIO_MESSAGING_SERVICE_SID: z.preprocess(value => value === '' ? undefined : value, z.string().regex(/^MG[0-9a-fA-F]{32}$/).optional()),
   TWILIO_VERIFY_SERVICE_SID: z.string().optional(),
   GOOGLE_CLIENT_IDS: z.string().optional(), // Legacy ID-token configuration is intentionally ignored.
   GOOGLE_CLIENT_ID: z.preprocess(value => value === '' ? undefined : value, z.string().min(1).optional()),
   GOOGLE_CLIENT_SECRET: z.preprocess(value => value === '' ? undefined : value, z.string().min(8).optional()),
   GOOGLE_CALLBACK_URL: z.preprocess(value => value === '' ? undefined : value, z.string().url().optional()),
   GOOGLE_NATIVE_RETURN_URL: z.preprocess(value => value === '' ? undefined : value, z.string().url().optional()),
-  PLATFORM_ADMIN_EMAILS: z.string().default(""),
+  PLATFORM_ADMIN_EMAILS: z.string().default(""), // Legacy bootstrap hint; public authentication never grants ADMIN.
 }).superRefine((value, context) => {
   try {
     const appUrl = new URL(value.WEB_APP_URL);
@@ -52,6 +53,7 @@ const schema = z.object({
       if (!googleValues.every(Boolean) || (!claimed && !development) || target.username || target.password || target.search || target.hash) context.addIssue({ code: 'custom', path: ['GOOGLE_NATIVE_RETURN_URL'], message: 'Configure a claimed HTTPS app link (fixed Visit scheme is development only).' });
     } catch { context.addIssue({ code: 'custom', path: ['GOOGLE_NATIVE_RETURN_URL'], message: 'Use a valid native callback URL.' }); }
   }
+  if (value.TWILIO_MESSAGING_SERVICE_SID && (!/^AC[0-9a-fA-F]{32}$/.test(value.TWILIO_ACCOUNT_SID ?? '') || (value.TWILIO_AUTH_TOKEN?.length ?? 0) < 32)) context.addIssue({ code: "custom", path: ["TWILIO_MESSAGING_SERVICE_SID"], message: "Twilio Messaging credentials are required." });
   if (value.NODE_ENV === "production" && value.SMS_DELIVERY_MODE === "local-inbox") context.addIssue({ code: "custom", path: ["SMS_DELIVERY_MODE"], message: "Local SMS inbox is development only." });
   if (value.SMS_DELIVERY_MODE === "twilio" && (!/^AC[0-9a-fA-F]{32}$/.test(value.TWILIO_ACCOUNT_SID ?? '') || (value.TWILIO_AUTH_TOKEN?.length ?? 0) < 32 || !/^VA[0-9a-fA-F]{32}$/.test(value.TWILIO_VERIFY_SERVICE_SID ?? ''))) context.addIssue({ code: "custom", path: ["SMS_DELIVERY_MODE"], message: "Twilio Verify credentials are required." });
   if (value.NODE_ENV === "production" && value.EMAIL_DELIVERY_MODE !== "resend") {

@@ -4,12 +4,9 @@ import { ScrollView, View } from 'react-native';
 import { ActionButton } from '@/components/ActionButton';
 import { AppText as Text } from '@/components/AppText';
 import { apiRequest, ApiError } from '@/src/lib/api';
-import { completeSignIn } from '@/src/lib/auth';
+import { completeSignIn, refreshAccountAfterChange } from '@/src/lib/auth';
 import { useGoogleReceipt } from '@/src/lib/googleFlow';
-import { readSessionToken } from '@/src/lib/sessionToken';
-import { useAuthStore } from '@/src/state/auth';
 import { useAppLocale } from '@/src/i18n/LocaleContext';
-import type { AuthProfile } from '@/src/types/flows';
 
 type Preview = { email: string; intent: 'login' | 'link' };
 type Result = { identity: { id: string }; sessionToken?: string; linked?: boolean };
@@ -44,9 +41,7 @@ export default function GoogleCallbackScreen() {
       }
       if (!result) return;
       if (result.linked) {
-        const { profile } = await apiRequest<{ profile: AuthProfile }>('/api/auth/me');
-        if (profile.id !== result.identity.id) throw new ApiError('The account changed.', 'SESSION_CHANGED', 409);
-        useAuthStore.getState().setAuth(await readSessionToken(), profile);
+        await refreshAccountAfterChange(result);
         router.replace('/(tabs)/two');
       } else await completeSignIn(result.sessionToken, returnTo, result.identity.id);
     } catch (reason) { setError(failure(reason)); }

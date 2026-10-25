@@ -1,3 +1,4 @@
+import { lockIdentitySecurity } from '../security/account-security.js';
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -38,7 +39,11 @@ export async function registerFlowAuth(app: FastifyInstance, { otp = otpService,
     let identity;
     try {
       identity = await prisma.$transaction(async tx => {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`phone:${verifiedPhone}`}, 0))::text`;
+        const existing = await tx.identity.findUnique({ where: { phone: verifiedPhone }, select: { id: true } });
+        if (existing) await lockIdentitySecurity(tx, existing.id);
         const person = await tx.identity.upsert({ where: { phone: verifiedPhone }, create: { phone: verifiedPhone, phoneVerifiedAt: new Date() }, update: { phoneVerifiedAt: new Date() } });
+        if (!existing) await lockIdentitySecurity(tx, person.id);
         await tx.session.create({ data: { identityId: person.id, tokenHash: tokenDigest(token), authenticationProofHash: proofHash, expiresAt: sessionExpiry() } });
         return person;
       });

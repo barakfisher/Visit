@@ -7,6 +7,9 @@ VIS-4 implementation contract and audit, 2026-10-24. Business IDs are selectors.
 | Table | Classification | Authorization and relationship boundary |
 | --- | --- | --- |
 | Identity | Global | Own verified identity only; privileged admin review exposes only required applicant fields. A person may span businesses. Language preference is personal, not tenant-owned. |
+| AccountContactChallenge | Global, identity-owned | Exact identity/session/security-version ownership; composite session FK; expiring hashed handle/HMAC proof with bounded attempts. No tenant authority. |
+| IdentitySecurityEvent | Global, identity-owned | Own security settings history only; immutable allowlisted actions/methods, no raw contacts or credentials. Parent identity deletion is the explicit audit-retention exception. |
+| SecurityNotification | Global, identity-owned | Private leased delivery outbox, composite event/identity FK; API projects status only. Recipient snapshot erased after provider acceptance or seven days. Test scopes cannot dispatch through live workers. |
 | GoogleAuthProof | Global, identity-owned | One-time Google authentication/link proof digest, created transactionally for its resolved identity. Not a tenant capability; no public query route. |
 | ExternalIdentity | Global | Stable provider subject belongs to one global identity; never grant a business role from provider claims. |
 | EmailChallenge | Global | Expiring verified-ownership challenge; no business membership granted by challenge creation. |

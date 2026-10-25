@@ -100,3 +100,20 @@ test('identity, tenant switch and logout clear all private query prefixes and mu
   queryClient.setQueryData(['private'], 'private'); store.getState().clear();
   assert.equal(queryClient.getQueryCache().getAll().length, 0); assert.equal(store.getState().profile, null);
 });
+
+
+test('security context reset rejects a switched identity and discards stale private caches while preserving a valid workspace', () => {
+  const store = useSessionStore;
+  store.getState().clear();
+  const profile = { id: 'security-owner', email: 'before@example.test', phone: null, is_provider: true, businesses: [{ id: 'security-business', name: 'Business', timezone: 'UTC' }] };
+  store.getState().setAuth(null, profile); store.getState().selectBusiness('security-business');
+  queryClient.setQueryData(['account-methods', profile.id], { private: 'before' });
+  const version = store.getState().contextVersion;
+  assert.throws(() => store.getState().resetAuthContext('wrong', { ...profile, id: 'other' }));
+  store.getState().resetAuthContext('replacement', { ...profile, email: 'after@example.test' });
+  assert.equal(store.getState().activeBusinessId, 'security-business');
+  assert.equal(store.getState().contextVersion, version + 1);
+  assert.equal(queryClient.getQueryCache().getAll().length, 0);
+  assert.equal(store.getState().profile?.email, 'after@example.test');
+  store.getState().clear();
+});

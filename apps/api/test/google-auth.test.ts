@@ -135,6 +135,21 @@ test('Google broker uses owned one-time state/grants and explicit transactional 
       assert.equal(await prisma.externalIdentity.count({ where: { identityId: workspace.identity.id } }), 0);
 
     });
+    await t.test('adding a Google method audits the change, invalidates pending contact proof and revokes other login families', async () => {
+      const a = await actor(email('security-audit'));
+      await prisma.identity.update({ where: { id: a.identity.id }, data: { emailVerifiedAt: new Date() } });
+      const other = await prisma.session.create({ data: { identityId: a.identity.id, tokenHash: tokenDigest(newOpaqueToken()), expiresAt: new Date(Date.now() + 600000) } });
+      const pending = await prisma.accountContactChallenge.create({ data: { handleHash: tokenDigest(newOpaqueToken()), identityId: a.identity.id, sessionId: a.context.sessionId, securityVersion: 0, channel: 'email', destination: email('pending-contact'), expiresAt: new Date(Date.now() + 600000) } });
+      const link = await proof(`security-audit-${run}`, a.identity.email!, { actor: a.context });
+      await google.finish({ grant: link.grant, consent: true }, link.binding, randomUUID(), a.context);
+      assert.ok((await prisma.session.findUniqueOrThrow({ where: { id: other.id } })).revokedAt);
+      assert.equal((await prisma.session.findUniqueOrThrow({ where: { id: a.context.sessionId } })).revokedAt, null);
+      assert.ok((await prisma.accountContactChallenge.findUniqueOrThrow({ where: { id: pending.id } })).consumedAt);
+      assert.equal((await prisma.identity.findUniqueOrThrow({ where: { id: a.identity.id } })).securityVersion, 1);
+      const event = await prisma.identitySecurityEvent.findFirstOrThrow({ where: { identityId: a.identity.id }, include: { notifications: true } });
+      assert.equal(event.action, 'LINKED'); assert.equal(event.method, 'google');
+      assert.equal(event.notifications[0]!.destination, a.identity.email); assert.equal(event.notifications[0]!.scope, namespace);
+    });
     await t.test('native handoff needs the initiating app verifier, and never returns a session in its URL', async () => {
       const result = await proof(`native-${run}`, email('native'), { native: true });
       assert.equal(result.target.protocol, 'visit:'); assert.equal(result.target.host, 'auth'); assert.equal(result.target.pathname, '/google');

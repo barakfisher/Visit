@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../db/client.js';
 import { redis, ensureRedisReady } from '../infra/redis.js';
+import { lockIdentitySecurity } from './account-security.js';
 import { AppError, unauthenticated } from '../http/errors.js';
 import { env } from '../env.js';
 import { newOpaqueToken, sessionExpiry, tokenDigest } from './sessions.js';
@@ -87,6 +88,7 @@ export function createEmailLoginService({ delivery, webOrigin = env.WEB_APP_URL,
         const challenge = await tx.emailChallenge.findUnique({ where: { tokenHash: tokenDigest(token) } });
         if (!challenge || challenge.purpose !== 'EMAIL_LOGIN' || challenge.consumedAt || !challenge.deliveredAt || challenge.expiresAt <= current) throw unauthenticated();
         await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`email:${challenge.email}`}, 0))::text`;
+        if (challenge.identityId) await lockIdentitySecurity(tx, challenge.identityId);
         const consumed = await tx.emailChallenge.updateMany({ where: { id: challenge.id, consumedAt: null, deliveredAt: { not: null }, expiresAt: { gt: current } }, data: { consumedAt: current } });
         if (consumed.count !== 1) throw unauthenticated();
         let person;
@@ -96,9 +98,11 @@ export function createEmailLoginService({ delivery, webOrigin = env.WEB_APP_URL,
           person = await tx.identity.findUniqueOrThrow({ where: { id: challenge.identityId } });
         } else {
           if (await tx.identity.findUnique({ where: { email: challenge.email }, select: { id: true } })) throw unauthenticated();
-          const admins = env.PLATFORM_ADMIN_EMAILS.split(',').map(value => value.trim().toLowerCase());
-          person = await tx.identity.create({ data: { email: challenge.email, emailVerifiedAt: current, platformRole: admins.includes(challenge.email) ? 'ADMIN' : 'USER' } });
+          // A released contact must never transfer administrative authority to a new identity.
+          // Bootstrap/admin promotion is an explicit operator workflow, never public sign-up.
+          person = await tx.identity.create({ data: { email: challenge.email, emailVerifiedAt: current } });
         }
+        if (!challenge.identityId) await lockIdentitySecurity(tx, person.id);
         await tx.session.create({ data: { identityId: person.id, tokenHash: tokenDigest(rawSessionToken), expiresAt: sessionExpiry(current), authenticationProofHash: hash(`email:${challenge.id}`) } });
         return { id: person.id, email: person.email, platformRole: person.platformRole };
       }).catch((error: unknown) => {

@@ -23,6 +23,7 @@ const date = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
 let apiServer: Awaited<ReturnType<typeof import('../../api/src/app.js').createApp>> | undefined, webProcess: ChildProcess | undefined;
 const googleClaims = new Map<string, Record<string, unknown>>();
 const googleNamespace = `test:google-web:${run}`;
+const accountNamespace = `test:account-web:${run}`;
 const businessIds: string[] = [], identityIds: string[] = [];
 const contexts: BrowserContext[] = [];
 let capture: Page | undefined;
@@ -70,7 +71,11 @@ try {
   const { createGoogleAuthService } = await import('../../api/src/security/google-auth.js');
   const google = createGoogleAuthService({ namespace: googleNamespace, config: { clientId: 'web-test-client', clientSecret: 'web-test-secret', callbackUrl: `${apiUrl}/api/auth/google/callback`, webOrigin: webUrl }, provider: { exchange: async ({ code }) => { const claims = googleClaims.get(code); googleClaims.delete(code); if (!claims) throw new Error('Invalid synthetic code'); return claims; } } });
   // Production routes/services, with only the external Google provider boundary substituted.
-  apiServer = await createApp({ google });
+  const { createAccountMethodsService } = await import('../../api/src/security/account-methods.js');
+  const { createLocalAccountDelivery } = await import('../../api/src/security/account-delivery.js');
+  const { createOtpService } = await import('../../api/src/security/phone-otp.js');
+  const account = createAccountMethodsService({ namespace: accountNamespace, delivery: createLocalAccountDelivery(), otp: createOtpService({ mode: 'local-inbox', namespace: `${accountNamespace}:otp`, secret: 'web-test-only-account-otp-secret' }) });
+  apiServer = await createApp({ google, account });
   await apiServer.listen({ host: '127.0.0.1', port: 3001 });
   assert.equal((await fetch(`${apiUrl}/health/ready`)).status, 200);
   for (const name of ['North', 'South']) {
@@ -398,6 +403,7 @@ try {
   finally { await Promise.all(contexts.map((context) => context.close())); await browser.close(); }
 } finally {
   webProcess?.kill('SIGTERM'); await apiServer?.close();
+  const accountKeys: string[] = []; for await (const batch of redis.scanStream({ match: `${accountNamespace}:*` })) accountKeys.push(...batch); if (accountKeys.length) await redis.del(...accountKeys);
   const googleKeys: string[] = []; for await (const batch of redis.scanStream({ match: `${googleNamespace}:*` })) googleKeys.push(...batch); if (googleKeys.length) await redis.del(...googleKeys);
   const holds = await prisma.booking.findMany({ where: { businessId: { in: businessIds } }, select: { id: true } });
   if (holds.length) await redis.del(...holds.map((hold) => `visit:hold:${hold.id}`));

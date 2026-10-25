@@ -6,6 +6,7 @@ type SessionState = {
   contextVersion: number;
   token: string | null;
   profile: AuthProfile | null;
+  resetAuthContext: (token: string | null, profile: AuthProfile) => void;
   setAuth: (token: string | null, profile: AuthProfile) => void;
   identityId: string | null;
   activeBusinessId: string | null;
@@ -23,6 +24,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const removedBusiness = Boolean(get().activeBusinessId && !profile.businesses.some((business) => business.id === get().activeBusinessId));
     if (changedIdentity || removedBusiness) queryClient.clear();
     set({ token, profile, identityId: profile.id, ...(changedIdentity || removedBusiness ? { activeBusinessId: null, contextVersion: get().contextVersion + 1 } : {}) });
+  },
+  resetAuthContext: (token, profile) => {
+    const previous = get();
+    if (previous.identityId && previous.identityId !== profile.id) throw new Error('The signed-in account changed.');
+    queryClient.clear();
+    set({ token, profile, identityId: profile.id, contextVersion: previous.contextVersion + 1, activeBusinessId: profile.businesses.some(business => business.id === previous.activeBusinessId) ? previous.activeBusinessId : null });
   },
   identityId: null,
   activeBusinessId: null,
