@@ -98,6 +98,8 @@ try {
   try {
     const { authUiSmoke } = await import('./auth-ui-smoke.js');
     await authUiSmoke({ browser, webUrl, apiUrl, run, identityIds });
+    const { providerReviewSmoke } = await import('./provider-review-smoke.js');
+    await providerReviewSmoke({ browser, webUrl, apiUrl, prisma, run, identityIds, businessIds });
     const { googleSmoke } = await import('./google-smoke.js');
     await googleSmoke({ browser, webUrl, apiUrl, claims: googleClaims, run, prisma, identityIds });
     const localization = await browser.newContext({ viewport: { width: 390, height: 844 } }); contexts.push(localization);
