@@ -75,8 +75,9 @@ A continuous adjacent union is normalized first, so an internal redundant bounda
 at a clock change does not incorrectly close an otherwise valid continuous window.
 Overnight hours remain outside the current same-day schedule contract.
 
-The booking UI groups repeated local times by staff and displays `UTC+/-offset` on
-both occurrences so the user can distinguish them. Selection keys always use
+The booking UI groups repeated local times by staff and displays localized first/second
+occurrence labels; exact offsets remain in API data. VIS-47 supplies the Israeli-time
+pilot setup/display policy; see `pilot-time-policy.md`. Selection keys always use
 staff plus absolute start. Locale does not affect eligibility or stored instants.
 
 ## Advisory results and production integration

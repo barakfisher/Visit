@@ -1,8 +1,7 @@
+import { localDate } from './appointmentTime';
 import type { ProviderDetail } from '../types/flows';
 import type { CalendarDay } from '@/components/HorizontalCalendarBar';
-export function todayInTimezone(timezone: string) {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-}
+export const todayInTimezone = localDate;
 export function makeCalendarDays(provider: ProviderDetail, count = 30): CalendarDay[] {
   const start = todayInTimezone(provider.timezone);
   return Array.from({ length: Math.min(count, (provider.bookingPolicy?.maximumAdvanceDays ?? 30) + 1) }, (_, index) => {
@@ -17,9 +16,12 @@ export function makeCalendarDays(provider: ProviderDetail, count = 30): Calendar
 type CalendarBooking = { id: string; startsAt: string; endsAt: string; business: { name: string; timezone: string }; service: { name: string }; staff: { displayName: string } };
 const escapeCalendarText = (value: string) => value.replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
 const calendarStamp = (value: string) => new Date(value).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+export function bookingCalendarBody(booking: CalendarBooking, now = new Date()) {
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Visit//Appointments//EN', 'CALSCALE:GREGORIAN', `X-WR-TIMEZONE:${escapeCalendarText(booking.business.timezone)}`, 'BEGIN:VEVENT', `UID:${booking.id}@visit.app`, `DTSTAMP:${calendarStamp(now.toISOString())}`, `DTSTART:${calendarStamp(booking.startsAt)}`, `DTEND:${calendarStamp(booking.endsAt)}`, `SUMMARY:${escapeCalendarText(`${booking.service.name} at ${booking.business.name}`)}`, `DESCRIPTION:${escapeCalendarText(`With ${booking.staff.displayName}`)}`, 'END:VEVENT', 'END:VCALENDAR', ''].join('\r\n');
+}
 export async function exportBookingCalendar(booking: CalendarBooking) {
   const { Platform } = await import('react-native');
-  const body = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Visit//Appointments//EN', 'CALSCALE:GREGORIAN', `X-WR-TIMEZONE:${escapeCalendarText(booking.business.timezone)}`, 'BEGIN:VEVENT', `UID:${booking.id}@visit.app`, `DTSTAMP:${calendarStamp(new Date().toISOString())}`, `DTSTART:${calendarStamp(booking.startsAt)}`, `DTEND:${calendarStamp(booking.endsAt)}`, `SUMMARY:${escapeCalendarText(`${booking.service.name} at ${booking.business.name}`)}`, `DESCRIPTION:${escapeCalendarText(`With ${booking.staff.displayName}`)}`, 'END:VEVENT', 'END:VCALENDAR', ''].join('\r\n');
+  const body = bookingCalendarBody(booking);
   const filename = `visit-${booking.id}.ics`;
   if (Platform.OS === 'web') {
     const url = URL.createObjectURL(new Blob([body], { type: 'text/calendar;charset=utf-8' }));

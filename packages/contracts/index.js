@@ -48,3 +48,6 @@ export function safeAuthReturnTo(value) {
     return `${url.pathname}${url.search}`;
   } catch { return undefined; }
 }
+
+// Pilot onboarding policy. Existing business zones/booking instants are never relabelled.
+export const PILOT_TIMEZONE = 'Asia/Jerusalem';

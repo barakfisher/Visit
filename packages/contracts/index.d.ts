@@ -4,3 +4,4 @@ export type ServiceInput = { name: string; description?: string | null; duration
 export function validateService(input: unknown, partial?: boolean): Record<string, string>;
 export function parseServicePrice(text: string): number | null | undefined;
 export function safeAuthReturnTo(value: unknown): string | undefined;
+export declare const PILOT_TIMEZONE: 'Asia/Jerusalem';

@@ -1,3 +1,6 @@
+import { PILOT_TIMEZONE } from '@visit/contracts';
+import { appointmentTime, timePolicyNote } from '@/src/lib/appointmentTime';
+import { useAppLocale } from '@/src/i18n/LocaleContext';
 import { ServiceCatalog } from '@/components/ServiceCatalog';
 import { useState } from 'react';
 import { Link, useLocalSearchParams } from 'expo-router';
@@ -25,6 +28,7 @@ export default function ProviderDashboard() {
 }
 
 function ProviderWorkspace() {
+  const { locale } = useAppLocale();
   const { businessId: requestedBusinessId } = useLocalSearchParams<{ businessId?: string }>();
   const profile = useAuthStore((state) => state.profile);
   const activeBusinessId = useAuthStore((state) => state.activeBusinessId);
@@ -40,7 +44,7 @@ function ProviderWorkspace() {
   const [feedback, setFeedback] = useState('');
   const [busy, setBusy] = useState(false);
   const client = useQueryClient();
-  const day = date || todayInTimezone(business?.timezone ?? 'UTC');
+  const day = date || todayInTimezone(business?.timezone ?? PILOT_TIMEZONE);
   const agenda = useQuery({ queryKey: ['provider', business?.id, 'agenda', day], queryFn: () => apiRequest<Agenda>(`/api/provider/agenda?${new URLSearchParams({ businessId: business!.id, date: day })}`), enabled: Boolean(business), refetchInterval: 10000 });
   async function block() {
     if (!business) return;
@@ -53,14 +57,14 @@ function ProviderWorkspace() {
     try { await apiRequest(`/api/provider/block-time/${id}?businessId=${business!.id}`, { method: 'DELETE' }); await agenda.refetch(); }
     catch (error) { setFeedback(error instanceof Error ? error.message : 'Could not remove break.'); }
   }
-  const time = (instant: string) => new Intl.DateTimeFormat(undefined, { timeStyle: 'short', timeZone: business?.timezone ?? 'UTC' }).format(new Date(instant));
+  const time = (instant: string) => appointmentTime(instant, business?.timezone ?? PILOT_TIMEZONE, locale);
   if (!business) return <View className="flex-1 gap-4 bg-canvas p-6"><Text accessibilityRole="header" className="text-2xl font-bold text-ink">Provider dashboard</Text><Text className="text-body">An approved provider account is required to manage a business.</Text><Link href={profile ? '/(tabs)/two' : '/auth/login'} className="font-semibold text-brand">{profile ? 'View account and approval status' : 'Sign in'}</Link></View>;
   return <ScrollView contentContainerClassName="mx-auto w-full max-w-3xl gap-5 px-5 py-6 pb-10" className="flex-1 bg-canvas">
     <View className="gap-2"><Text className="text-xs font-semibold uppercase tracking-widest text-brand">Provider workspace</Text><Text accessibilityRole="header" className="text-3xl font-bold text-ink">{business.name}</Text><Link href="/discover" className="font-semibold text-brand">Switch to customer view</Link></View>
     {profile!.businesses.length > 1 ? <View className="flex-row flex-wrap gap-2">{profile!.businesses.map((item) => <Pressable key={item.id} accessibilityRole="button" accessibilityState={{ selected: item.id === business.id }} onPress={() => { selectBusiness(item.id); setStaffId(''); setFeedback(''); }} className={`rounded-control border px-4 py-3 ${item.id === business.id ? 'border-brand bg-brand-soft' : 'border-line bg-surface'}`}><Text className="font-semibold text-brand">{item.name}</Text></Pressable>)}</View> : null}
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">{['Agenda View', 'Service Catalog', 'Working Hours'].map((name) => <Pressable key={name} accessibilityRole="tab" accessibilityState={{ selected: tab === name }} onPress={() => setTab(name)} className={`rounded-control px-4 py-3 ${tab === name ? 'bg-brand' : 'bg-surface'}`}><Text className={`font-semibold ${tab === name ? 'text-white' : 'text-body'}`}>{name}</Text></Pressable>)}</ScrollView>
     {tab === 'Agenda View' ? <>
-      <TextInput accessibilityLabel="Agenda date" placeholder="YYYY-MM-DD" value={day} onChangeText={setDate} className={field}/><Text className="text-sm text-muted">All times in {business.timezone}</Text>
+      <TextInput accessibilityLabel="Agenda date" placeholder="YYYY-MM-DD" value={day} onChangeText={setDate} className={field}/><Text className="text-sm text-muted">{timePolicyNote(business.timezone, locale)}</Text>
       <View className="flex-row flex-wrap gap-3"><View className="min-w-40 flex-1 gap-2 rounded-card bg-brand p-5"><Text className="text-sm text-teal-50">Appointments</Text><Text className="text-3xl font-bold text-white">{agenda.data?.summary.appointments ?? '—'}</Text></View><View className="min-w-40 flex-1 gap-2 rounded-card border border-line bg-surface p-5"><Text className="text-sm text-muted">Expected revenue</Text><Text className="text-xl font-bold text-ink">{agenda.data ? Object.entries(agenda.data.summary.revenue).map(([currency, amount]) => formatMoney(amount, currency)).join(' · ') || 'No priced appointments' : '—'}</Text></View></View>
       <ActionButton secondary label={blockOpen ? 'Close break form' : 'Block time / add a break'} onPress={() => setBlockOpen(!blockOpen)}/>
       {blockOpen ? <View className="gap-3 rounded-card border border-line bg-surface p-5"><Text className="font-semibold text-ink">Block time on {day}</Text><View className="flex-row flex-wrap gap-2">{agenda.data?.staff.map((staff) => <Pressable key={staff.id} accessibilityRole="button" accessibilityState={{ selected: staff.id === (staffId || agenda.data?.staff[0]?.id) }} onPress={() => setStaffId(staff.id)} className="rounded-control border border-line px-3 py-2"><Text className="text-brand">{staff.displayName}{staff.id === (staffId || agenda.data?.staff[0]?.id) ? ' ✓' : ''}</Text></Pressable>)}</View><TextInput accessibilityLabel="Break start time" value={from} onChangeText={setFrom} placeholder="HH:mm" className={field}/><TextInput accessibilityLabel="Break end time" value={to} onChangeText={setTo} placeholder="HH:mm" className={field}/><TextInput accessibilityLabel="Break reason" value={reason} onChangeText={setReason} className={field}/><ActionButton label="Save blocked time" busy={busy} disabled={!agenda.data?.staff.length} onPress={() => void block()}/></View> : null}

@@ -1,8 +1,8 @@
 ## Approved step-by-step todo list — 2026-10-25
 
 - [x] 1a. VIS-13 — login/provider entry and safe ordinary Home routing. Done by product-owner decision; actual native acceptance remains the VIS-2/VIS-43 pilot gate.
-- [ ] 1b. VIS-47 — Israeli-time policy and safe rollout (active).
-- [ ] 2. VIS-32 → VIS-34 — admin approval, then publication/readiness.
+- [x] 1b. VIS-47 — Israeli-time policy and safe rollout; automated evidence in pilot-time-policy.md.
+- [ ] 2. VIS-32 → VIS-34 — admin approval, then publication/readiness (next).
 - [ ] 3. VIS-45 — shared links/QR and identity-owned My Providers.
 - [ ] 4. VIS-46 — Home and hamburger menu.
 - [ ] 5. VIS-35 + VIS-27 — setup/sharing and role/mode integration; VIS-33 invitations is a prerequisite for final mode flow.
