@@ -1,4 +1,14 @@
 export const en = {
+  'google.title': 'Confirm Google sign-in',
+  'google.confirmHelp': 'Continue to Visit using this verified Google account.',
+  'google.linkHelp': 'Add this Google account as a sign-in method for your current Visit account. Your account details stay the same.',
+  'google.confirm': 'Confirm & continue', 'google.link': 'Link this Google account',
+  'google.resume': 'Continue to my account',
+  'google.cancelled': 'Google sign-in was cancelled. You can start again or use another sign-in method.',
+  'google.failure': 'Google sign-in could not be completed. Check your connection and retry, or start again.',
+  'google.linkRequired': 'An account already uses this email. Sign in using your existing method first. Linking Google in account settings will be available soon.',
+  'google.reauth': 'Sign in again before linking Google, then restart from your account settings.',
+
   "catalog.title": "Service Catalog",
   "catalog.add": "Add service",
   "catalog.edit": "Edit service",
@@ -86,6 +96,16 @@ export const en = {
 export type MessageKey = keyof typeof en;
 export type Locale = 'he' | 'en';
 export const he: Record<MessageKey, string> = {
+  'google.title': 'אישור כניסה עם Google',
+  'google.confirmHelp': 'המשיכו ל־Visit עם חשבון Google המאומת הזה.',
+  'google.linkHelp': 'הוסיפו את חשבון Google הזה כאמצעי כניסה לחשבון Visit הנוכחי. פרטי החשבון יישארו כפי שהם.',
+  'google.confirm': 'אישור והמשך', 'google.link': 'קישור חשבון Google זה',
+  'google.resume': 'המשך לחשבון שלי',
+  'google.cancelled': 'הכניסה עם Google בוטלה. אפשר להתחיל מחדש או לבחור אמצעי כניסה אחר.',
+  'google.failure': 'לא ניתן להשלים את הכניסה עם Google. בדקו את החיבור ונסו שוב, או התחילו מחדש.',
+  'google.linkRequired': 'כבר קיים חשבון עם כתובת זו. היכנסו קודם עם אמצעי הכניסה הקיים. קישור Google בהגדרות החשבון יהיה זמין בקרוב.',
+  'google.reauth': 'יש להיכנס שוב לפני קישור Google, ואז להתחיל מחדש בהגדרות החשבון.',
+
   "catalog.title": "קטלוג שירותים",
   "catalog.add": "הוספת שירות",
   "catalog.edit": "עריכת שירות",

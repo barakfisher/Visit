@@ -2,7 +2,7 @@
 
 ## Protocol decision before implementation
 
-The prior GIS ID-token and native GoogleSignin ID-token paths are being retired.
+The prior GIS ID-token and native GoogleSignin ID-token paths are retired.
 No Google email match (including Gmail or Workspace) may silently attach a provider
 to an existing identity. Google subject, not email, is the external identity key.
 
@@ -95,9 +95,47 @@ GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and exact GOOGLE_CALLBACK_URL; a native
 return additionally requires GOOGLE_NATIVE_RETURN_URL. Empty placeholders keep the
 feature disabled. No real Google requests or client registration were performed.
 
-**Client migration is still pending**: replace GIS/native ID-token buttons with
-broker launch/callback handling, keep native app-verifier/state in memory, scrub
-handoff fragments, preview the verified address and confirm login/link explicitly.
-Wire profile recovery to the returned proven identity ID. Until that work and its
-browser tests are complete, VIS-15 must remain In Progress. Native/live consent
-verification remains VIS-43 even after adapter and bundle tests pass.
+## Client implementation and local evidence
+
+Both platforms now launch the code broker. Web performs full-page navigation;
+there is no GIS script or ID-token-only button. The callback validates its exact
+endpoint and unique fragment grammar, keeps the received grant only in memory,
+and replaces the Router route as well as browser history. A setParams-only scrub
+can allow the original React Navigation path to restore a hard-navigation fragment;
+the browser test caught this and now asserts the final URL has no query or fragment.
+Preview verifies proof ownership without signing in. Explicit confirmation caches
+the issued result before loading the profile, verifies the proven identity ID, and
+retries profile recovery without redeeming a consumed proof again. Linking retains
+the authenticated identity/session and requires final consent. All copy is Hebrew /
+English; account-menu method management remains VIS-37.
+
+Native uses `expo-crypto` asynchronous secure random bytes (not the development
+fallback of synchronous getRandomBytes), S256, independent state, and
+`expo-web-browser` openAuthSessionAsync. The verifier lives only in the awaiting
+transaction/received proof; it never appears in Router params, browser storage or a
+redirect. A callback must match the exact build-configured endpoint and state and
+return before the ten-minute transaction deadline. Process death loses the verifier
+and requires restarting. Expo owns the native Linking listener; no competing listener
+redeems callbacks. Bundle import validation is not a device authentication run.
+
+Set `EXPO_PUBLIC_GOOGLE_NATIVE_RETURN_URL` to exactly the API's
+`GOOGLE_NATIVE_RETURN_URL` for production native builds. app.config.js adds iOS
+associated domains and Android verified intent filters for HTTPS `/auth/google`.
+This does **not** host or verify Apple/Android association files: configure those
+with the real app identity/domain in VIS-43 before a native pilot. Expo SDK 58's
+`preferUniversalLinks: true` uses iOS 17.4+ HTTPS callbacks; older iOS is disabled,
+rather than silently falling back to an unclaimed HTTPS scheme. An unconfigured
+production build and Expo Go keep Google disabled. Development builds can use the
+fixed `visit://auth/google` scheme only with matching development server config.
+The removed native GoogleSignin dependency/config plugin and public web/iOS client
+ID variables are no longer needed. Keep all client secrets server-side.
+
+Local tests use the real API factory with an injected external Google adapter,
+real PostgreSQL/Redis and browser cookies. Google authorization navigation is
+intercepted before network access and redirected through the real server callback.
+They cover login, explicit linking after existing-method authentication, no email
+merge, cancellation/invalid claims, malformed callbacks and URL scrubbing, profile
+outage/mismatched-identity recovery with exactly one redemption. Backend tests also
+verify generated-RSA signatures and native proof/state ownership. Native exports
+check iOS/Android imports only. No real Google requests or external messages were
+sent; live consent and installed-link evidence remain VIS-43.

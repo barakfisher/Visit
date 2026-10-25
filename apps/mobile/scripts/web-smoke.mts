@@ -20,7 +20,9 @@ const { redis } = await import('../../api/src/infra/redis.js');
 const { chromium } = await import('playwright');
 const run = randomUUID();
 const date = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-let apiProcess: ChildProcess | undefined, webProcess: ChildProcess | undefined;
+let apiServer: Awaited<ReturnType<typeof import('../../api/src/app.js').createApp>> | undefined, webProcess: ChildProcess | undefined;
+const googleClaims = new Map<string, Record<string, unknown>>();
+const googleNamespace = `test:google-web:${run}`;
 const businessIds: string[] = [], identityIds: string[] = [];
 const contexts: BrowserContext[] = [];
 let capture: Page | undefined;
@@ -64,8 +66,13 @@ try {
   // Only the local test IP's OTP counters are reset; fixture phone numbers are unique.
   const ipHash = createHash('sha256').update('127.0.0.1').digest('hex');
   await redis.del(`visit:otp:limit:ip:${ipHash}`, `visit:otp:limit:verify-ip:${ipHash}`, `visit:email:limit:ip:${ipHash}`, `visit:email:limit:verify:${ipHash}`);
-  apiProcess = spawn(process.execPath, ['--import', 'tsx', 'src/server.ts'], { cwd: path.join(repoRoot, 'apps/api'), env: process.env, stdio: 'ignore' });
-  await ready(`${apiUrl}/health/ready`, apiProcess, 'API');
+  const { createApp } = await import('../../api/src/app.js');
+  const { createGoogleAuthService } = await import('../../api/src/security/google-auth.js');
+  const google = createGoogleAuthService({ namespace: googleNamespace, config: { clientId: 'web-test-client', clientSecret: 'web-test-secret', callbackUrl: `${apiUrl}/api/auth/google/callback`, webOrigin: webUrl }, provider: { exchange: async ({ code }) => { const claims = googleClaims.get(code); googleClaims.delete(code); if (!claims) throw new Error('Invalid synthetic code'); return claims; } } });
+  // Production routes/services, with only the external Google provider boundary substituted.
+  apiServer = await createApp({ google });
+  await apiServer.listen({ host: '127.0.0.1', port: 3001 });
+  assert.equal((await fetch(`${apiUrl}/health/ready`)).status, 200);
   for (const name of ['North', 'South']) {
     const business = await prisma.business.create({ data: { name: `Visit QA ${name} ${run.slice(0, 6)}`, slug: `qa-${name.toLowerCase()}-${run}`, timezone: 'UTC', location: name === 'North' ? 'Jerusalem' : 'Tel Aviv', category: 'Wellness', approvalStatus: 'APPROVED' } });
     businessIds.push(business.id);
@@ -83,6 +90,8 @@ try {
   await ready(webUrl, webProcess, 'Web');
   const browser = await chromium.launch({ headless: true });
   try {
+    const { googleSmoke } = await import('./google-smoke.js');
+    await googleSmoke({ browser, webUrl, apiUrl, claims: googleClaims, run, prisma, identityIds });
     const localization = await browser.newContext({ viewport: { width: 390, height: 844 } }); contexts.push(localization);
     const localePage = await localization.newPage(); capture = localePage;
     localePage.on('pageerror', error => pageErrors.push(error.message));
@@ -388,7 +397,8 @@ try {
   } catch (error) { if (capture) { console.error((await capture.locator('body').innerText()).slice(0, 3500)); await capture.screenshot({ path: path.join(diagnostics, 'web-smoke-failure.png'), fullPage: true }).catch(() => {}); } throw error; }
   finally { await Promise.all(contexts.map((context) => context.close())); await browser.close(); }
 } finally {
-  webProcess?.kill('SIGTERM'); apiProcess?.kill('SIGTERM');
+  webProcess?.kill('SIGTERM'); await apiServer?.close();
+  const googleKeys: string[] = []; for await (const batch of redis.scanStream({ match: `${googleNamespace}:*` })) googleKeys.push(...batch); if (googleKeys.length) await redis.del(...googleKeys);
   const holds = await prisma.booking.findMany({ where: { businessId: { in: businessIds } }, select: { id: true } });
   if (holds.length) await redis.del(...holds.map((hold) => `visit:hold:${hold.id}`));
   for (const id of businessIds) { const keys: string[] = []; for await (const batch of redis.scanStream({ match: `visit:reservation:${id}:*` })) keys.push(...batch); if (keys.length) await redis.del(...keys); }
