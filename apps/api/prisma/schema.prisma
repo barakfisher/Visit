@@ -69,6 +69,7 @@ model Identity {
 }
 
 model Business {
+  publishedAt DateTime?
   id                 String                 @id @default(cuid())
   name               String
   slug               String                 @unique
@@ -107,6 +108,9 @@ model Membership {
 }
 
 model ProviderApplication {
+  kind String @default("LEGACY")
+  reviewReason String?
+  notification ProviderReviewNotification?
   id            String                 @id @default(cuid())
   identityId    String
   businessId    String
@@ -390,4 +394,29 @@ model SecurityNotification {
   event IdentitySecurityEvent @relation(fields: [eventId, identityId], references: [id, identityId], onDelete: Cascade)
   @@index([scope, status, nextAttemptAt])
   @@index([identityId, createdAt])
+}
+
+model ProviderReviewNotification {
+  id String @id @default(cuid())
+  applicationId String @unique
+  application ProviderApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  scope String @default("live")
+  destination String?
+  locale String?
+  status String @default("QUEUED")
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now()) @db.Timestamptz
+  leaseUntil DateTime? @db.Timestamptz
+  acceptedAt DateTime? @db.Timestamptz
+  provider String?
+  createdAt DateTime @default(now()) @db.Timestamptz
+  @@index([scope, status, nextAttemptAt])
+}
+model AdminRoleAudit {
+  id String @id @default(cuid())
+  identityId String
+  operator String
+  reason String
+  previousRole String
+  createdAt DateTime @default(now()) @db.Timestamptz
 }

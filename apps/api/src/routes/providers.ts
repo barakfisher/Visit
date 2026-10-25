@@ -1,3 +1,4 @@
+import { reviewProviderApplication } from '../repositories/provider-review.js';
 import { PILOT_TIMEZONE } from '@visit/contracts';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -19,7 +20,7 @@ function mapUniqueConflict(error: unknown): never {
   throw error;
 }
 
-export async function registerProviderRoutes(app: FastifyInstance) {
+export async function registerProviderRoutes(app: FastifyInstance, { reviewScope = 'live' }: { reviewScope?: string } = {}) {
   app.get('/v1/provider/businesses/:businessId', async (request) => {
     const params = businessIdParams.safeParse(request.params);
     if (!params.success) throw notFound();
@@ -30,7 +31,7 @@ export async function registerProviderRoutes(app: FastifyInstance) {
 
   app.post('/v1/provider-applications', async (request, reply) => {
     const { identity } = await authenticate(request);
-    const parsed = z.object({
+    const parsed = z.strictObject({
       businessId: z.string().min(1).optional(),
       businessName: z.string().trim().min(2).max(120).optional(),
       slug: z.string().trim().toLowerCase().regex(slugPattern).max(80).optional(),
@@ -39,22 +40,14 @@ export async function registerProviderRoutes(app: FastifyInstance) {
     }).safeParse(request.body);
     if (!parsed.success) throw new AppError(400, 'VALIDATION_ERROR', 'Review the business details.', Object.fromEntries(parsed.error.issues.map((issue) => [String(issue.path[0] ?? 'form'), issue.message])));
     const input = parsed.data;
-    if (input.businessId && (input.businessName || input.slug || input.timezone)) throw new AppError(400, 'VALIDATION_ERROR', 'Choose an existing business or submit a new business request, not both.');
+    if (input.businessId) throw new AppError(400, 'INVITATION_REQUIRED', 'Joining an existing business requires a verified invitation or ownership review.');
     if (!input.businessId && (!input.businessName || !input.slug)) throw new AppError(400, 'VALIDATION_ERROR', 'A business name and URL name are required for a new business.');
 
     try {
       const application = await prisma.$transaction(async (tx) => {
-        let business;
-        if (input.businessId) {
-          business = await tx.business.findFirst({ where: { id: input.businessId, approvalStatus: BusinessApprovalStatus.APPROVED }, select: { id: true } });
-          if (!business) throw notFound();
-          const current = await tx.membership.findFirst({ where: { identityId: identity.id, businessId: business.id, role: MembershipRole.OWNER, status: MembershipStatus.ACTIVE } });
-          if (current) throw conflict('You already manage this business.');
-        } else {
-          business = await tx.business.create({ data: { name: input.businessName!, slug: input.slug!, timezone: PILOT_TIMEZONE, approvalStatus: BusinessApprovalStatus.PENDING }, select: { id: true } });
-        }
+        const business = await tx.business.create({ data: { name: input.businessName!, slug: input.slug!, timezone: PILOT_TIMEZONE, approvalStatus: BusinessApprovalStatus.PENDING }, select: { id: true } });
 
-        const created = await tx.providerApplication.create({ data: { identityId: identity.id, businessId: business.id, message: input.message ?? null } });
+        const created = await tx.providerApplication.create({ data: { kind: 'NEW_BUSINESS', identityId: identity.id, businessId: business.id, message: input.message ?? null } });
         await tx.membership.upsert({
           where: { identityId_businessId_role: { identityId: identity.id, businessId: business.id, role: MembershipRole.OWNER } },
           create: { identityId: identity.id, businessId: business.id, role: MembershipRole.OWNER, status: MembershipStatus.PENDING },
@@ -67,40 +60,30 @@ export async function registerProviderRoutes(app: FastifyInstance) {
     } catch (error) { mapUniqueConflict(error); }
   });
 
+  app.get('/v1/provider-applications', async request => {
+    const { identity } = await authenticate(request);
+    return { applications: await prisma.providerApplication.findMany({ where: { identityId: identity.id }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 100, select: { id: true, status: true, reviewReason: true, reviewedAt: true, createdAt: true, business: { select: { id: true, name: true } }, notification: { select: { status: true, provider: true } } } }) };
+  });
+
   app.get('/v1/admin/provider-applications', async (request) => {
     const { identity } = await authenticate(request);
     if (identity.platformRole !== PlatformRole.ADMIN) throw forbidden();
     const applications = await prisma.providerApplication.findMany({
       where: { status: BusinessApprovalStatus.PENDING },
-      include: { identity: { select: { id: true, email: true } }, business: { select: { id: true, name: true, slug: true, timezone: true, approvalStatus: true } } },
-      orderBy: { createdAt: 'asc' },
+      include: { identity: { select: { id: true, email: true, phone: true } }, business: { select: { id: true, name: true, slug: true, timezone: true, approvalStatus: true } } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 100,
     });
     return { applications };
   });
 
   app.post('/v1/admin/provider-applications/:applicationId/decision', async (request) => {
-    const { identity } = await authenticate(request);
+    const actor = await authenticate(request);
+    const { identity } = actor;
     if (identity.platformRole !== PlatformRole.ADMIN) throw forbidden();
     const params = z.object({ applicationId: z.string().min(1) }).safeParse(request.params);
-    const body = z.object({ decision: z.enum(['APPROVED', 'REJECTED']) }).safeParse(request.body);
-    if (!params.success || !body.success) throw new AppError(400, 'VALIDATION_ERROR', 'Choose approve or reject.');
-
-    return prisma.$transaction(async (tx) => {
-      const application = await tx.providerApplication.findUnique({ where: { id: params.data.applicationId } });
-      if (!application) throw notFound();
-      if (application.status !== BusinessApprovalStatus.PENDING) throw conflict('This provider request has already been reviewed.');
-      const now = new Date();
-      await tx.providerApplication.update({ where: { id: application.id }, data: { status: body.data.decision, reviewedAt: now, reviewedById: identity.id } });
-      const business = await tx.business.findUnique({ where: { id: application.businessId }, select: { approvalStatus: true } });
-      if (business?.approvalStatus === BusinessApprovalStatus.PENDING) {
-        await tx.business.update({ where: { id: application.businessId }, data: { approvalStatus: body.data.decision, reviewedAt: now, reviewedById: identity.id } });
-      }
-      await tx.membership.updateMany({
-        where: { identityId: application.identityId, businessId: application.businessId, role: MembershipRole.OWNER, status: MembershipStatus.PENDING },
-        data: { status: body.data.decision === 'APPROVED' ? MembershipStatus.ACTIVE : MembershipStatus.REVOKED },
-      });
-      return { id: application.id, status: body.data.decision };
-    });
+    const body = z.strictObject({ decision: z.enum(['APPROVED', 'REJECTED']), reason: z.string().trim().min(5).max(1000) }).safeParse(request.body);
+    if (!params.success || !body.success) throw new AppError(400, 'VALIDATION_ERROR', 'Choose approve or reject and provide a reason (5–1000 characters).');
+    return reviewProviderApplication(actor, params.data.applicationId, body.data.decision, body.data.reason, reviewScope);
   });
 
   app.get('/v1/businesses/:businessId/services', async (request) => {
