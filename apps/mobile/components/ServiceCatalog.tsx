@@ -1,5 +1,6 @@
+import { Control as Pressable } from './Control';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
+import { ActivityIndicator, TextInput, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { parseServicePrice, SERVICE_CURRENCIES, validateService, type ServiceInput } from '@visit/contracts';
 import { AppText } from './AppText';

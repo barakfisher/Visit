@@ -1,3 +1,4 @@
+import { ScreenContent } from '@/components/ScreenContent';
 import { useState } from 'react';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Link, useLocalSearchParams } from 'expo-router';
@@ -33,12 +34,12 @@ export default function LoginScreen() {
     } catch { setError(t('auth.failure')); }
     finally { setBusy(false); }
   }
-  return <KeyboardAvoidingView className="flex-1 bg-canvas" behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ScrollView keyboardShouldPersistTaps="handled" contentContainerClassName="flex-grow justify-center px-5 py-10"><View className="mx-auto w-full max-w-lg gap-6 rounded-card border border-line bg-surface p-6 md:p-8">
+  return <KeyboardAvoidingView className="flex-1 bg-canvas" behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ScrollView keyboardShouldPersistTaps="handled" contentContainerClassName="flex-grow justify-center px-5 py-10"><ScreenContent form className="gap-6 rounded-card border border-line bg-surface">
     <View className="gap-3"><View className="h-12 w-12 items-center justify-center rounded-control bg-brand"><Text className="text-2xl font-bold text-white">V</Text></View><Text className="text-sm font-semibold uppercase tracking-widest text-brand">Visit</Text><Text accessibilityRole="header" className="text-3xl font-bold text-ink">{t('auth.welcome')}</Text><Text className="leading-6 text-body">{t('auth.intro')}</Text></View>
     <GoogleSigninButton enabled={Platform.OS === 'web' ? capabilities.data?.google : capabilities.data?.googleNative} returnTo={returnTo} onError={setError} />
     <View className="flex-row items-center gap-4"><View className="h-px flex-1 bg-line"/><Text className="text-xs uppercase tracking-wider text-muted">{t('auth.phoneAlternative')}</Text><View className="h-px flex-1 bg-line"/></View>
     {sent ? <><Text className="text-body">{t('auth.codeSent', { phone: isolateLtr(phone) })}</Text><OTPInput value={code} onChange={setCode}/><ActionButton label={t('auth.verify')} onPress={() => void submit()} busy={busy} disabled={code.length !== 6}/><ActionButton secondary label={t('auth.changePhone')} onPress={() => { setSent(false); setCode(''); setError(''); }}/></> : <><PhoneInput value={phone} onChange={setPhone} disabled={!sms}/><ActionButton label={sms ? t('auth.sendCode') : t('auth.smsUnavailable')} onPress={() => void submit()} disabled={!sms || !/^\+[1-9]\d{7,14}$/.test(phone)} busy={busy}/></>}
     {error ? <Text accessibilityRole="alert" className="text-sm leading-5 text-danger">{error}</Text> : null}
-    {emailBuildRequired ? <ActionButton secondary disabled label={t('email.nativeBuild')} /> : <Link href={{ pathname: '/auth/email', params: returnTo ? { returnTo } : {} }} className="text-center font-semibold text-brand">{t('auth.email')}</Link>}
-  </View></ScrollView></KeyboardAvoidingView>;
+    {emailBuildRequired ? <ActionButton secondary disabled label={t('email.nativeBuild')} /> : <Link href={{ pathname: '/auth/email', params: returnTo ? { returnTo } : {} }} className="min-h-touch py-3 text-center font-semibold text-brand">{t('auth.email')}</Link>}
+  </ScreenContent></ScrollView></KeyboardAvoidingView>;
 }

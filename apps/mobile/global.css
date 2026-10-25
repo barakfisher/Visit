@@ -1,3 +1,13 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* RN Web resets outlines. Keep an offset, high contrast keyboard ring even
+   on controls without a border. Native focus is handled by shared controls. */
+:where(button, [role="button"], a, input, textarea, select, [tabindex]):focus-visible {
+  outline: 3px solid theme('colors.focus') !important;
+  outline-offset: 3px !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+}

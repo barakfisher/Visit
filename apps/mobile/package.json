@@ -60,7 +60,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test:foundation": "tsx --test test/*.test.ts"
+    "test:foundation": "tsx --test test/*.test.ts",
+    "test:design": "npm run build-storybook && tsx scripts/design-smoke.mts"
   },
   "private": true
 }
