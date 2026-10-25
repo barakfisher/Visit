@@ -8,6 +8,16 @@ export function isDatabaseCapacityError(error: unknown): boolean {
     ('meta' in error && JSON.stringify(error.meta).includes('VISIT_BOOKING_CAPACITY'));
 }
 
+// The pg adapter can surface a serialization/deadlock failure at COMMIT as a
+// DriverAdapterError, before Prisma wraps it as P2034. Match structured types;
+// a message substring is not sufficient grounds to replay a transaction.
+export function isTransactionConflict(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  if ('code' in error && error.code === 'P2034') return true;
+  return 'name' in error && error.name === 'DriverAdapterError' && 'cause' in error &&
+    !!error.cause && typeof error.cause === 'object' && 'kind' in error.cause && error.cause.kind === 'TransactionWriteConflict';
+}
+
 export async function retrySerializable<T>(operation: () => Promise<T>, attempts = 3): Promise<T> {
   if (!Number.isInteger(attempts) || attempts < 1 || attempts > 3) throw new RangeError('Transaction attempts must be between one and three.');
   for (let attempt = 0; attempt < attempts; attempt++) {
@@ -15,7 +25,7 @@ export async function retrySerializable<T>(operation: () => Promise<T>, attempts
     catch (error) {
       if (error && typeof error === 'object' && (('message' in error && String(error.message).includes('VISIT_BUSINESS_UNPUBLISHED')) || ('meta' in error && JSON.stringify(error.meta).includes('VISIT_BUSINESS_UNPUBLISHED')))) throw conflict('This business is not published for bookings.');
       if (isDatabaseCapacityError(error)) throw conflict('That time has no remaining capacity. Choose another time.');
-      if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'P2034') throw error;
+      if (!isTransactionConflict(error)) throw error;
       if (attempt === attempts - 1) throw conflict('Availability changed. Please retry.');
     }
   }

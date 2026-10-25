@@ -12,6 +12,7 @@ This is the executable security foundation for current routes and repositories, 
 | Cross-business composite FK constraints bypassing repositories | `tenant-isolation.test.ts` (staff/service links, schedules, overrides, time blocks, bookings) |
 | Overlap/capacity, full buffers, half-open boundaries, expired holds, raw concurrent writes, transaction rollback/crash, duplicate idempotency and Redis outage | `booking-guard.test.ts`, `redis-slot-lock.test.ts` |
 | Origin/CSRF, cookie/token boundaries and explicit proxy trust | `request-security.test.ts`; auth-specific suites remain in the complete API suite |
+| Canonical provider preview/save, identity-owned pagination/remove, unavailable snapshots and account-change protection | `saved-providers.test.ts`, `shared-providers-smoke.ts`, `auth-navigation.test.ts`; phone/email/Google browser return paths with local/fake delivery boundaries |
 | Workspace catalog/draft clearing, delayed old-workspace response rejection, no Cache Storage/service workers or private browser storage | exported `apps/mobile/scripts/web-smoke.mts`; context/query clearing and late transport response unit tests in `foundation.test.ts` |
 | Readiness vs liveness, Redis startup/outage/recovery, database outage/recovery, bad environment and failed migrations | `apps/api/scripts/infra-smoke.mjs` against a private Compose project |
 

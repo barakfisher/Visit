@@ -1,3 +1,4 @@
+import { publicBusinessWhere } from '../security/business-eligibility.js';
 import { Temporal } from '@js-temporal/polyfill';
 import { prisma } from '../db/client.js';
 import { conflict, notFound } from '../http/errors.js';
@@ -9,7 +10,7 @@ export async function getBusinessAvailability(context: PublicBusinessContext, se
   await validatePublicBusinessContext(context);
   return prisma.$transaction(async tx => {
     // Public eligibility is rechecked in the same snapshot as the candidate inputs.
-    const business = await tx.business.findFirst({ where: { id: context.businessId, approvalStatus: 'APPROVED', ...(context.ownedBookingId ? {} : { publishedAt: { not: null } }) }, include: { bookingPolicy: true } });
+    const business = await tx.business.findFirst({ where: { id: context.businessId, ...(context.ownedBookingId ? { approvalStatus: 'APPROVED', deletedAt: null } : publicBusinessWhere) }, include: { bookingPolicy: true } });
     if (!business) throw notFound();
     const ownedBooking = context.ownedBookingId ? await tx.booking.findFirst({ where: { id: context.ownedBookingId, customerId: context.customerId!, businessId: business.id, serviceId, status: 'CONFIRMED' }, select: { serviceDurationMinutes: true } }) : null;
     if (context.ownedBookingId && !ownedBooking) throw notFound();

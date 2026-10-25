@@ -8,11 +8,18 @@ import { AppError } from '../src/http/errors.js';
 import { tokenDigest } from '../src/security/sessions.js';
 import { registerBookingRoutes } from '../src/routes/bookings.js';
 import { createIntervalLocker } from '../src/scheduling/redis-slot-lock.js';
-import { isDatabaseCapacityError, retrySerializable, withBookingTransaction } from '../src/scheduling/booking-transaction.js';
+import { isDatabaseCapacityError, isTransactionConflict, retrySerializable, withBookingTransaction } from '../src/scheduling/booking-transaction.js';
 
 test('serialization retries are bounded and do not retry domain conflicts', async () => {
   let attempts = 0;
   assert.equal(await retrySerializable(async () => { if (++attempts < 3) throw { code: 'P2034' }; return 42; }), 42);
+  assert.equal(attempts, 3);
+  attempts = 0;
+  assert.equal(await retrySerializable(async () => { if (++attempts < 3) throw { name: 'DriverAdapterError', cause: { kind: 'TransactionWriteConflict' } }; return 43; }), 43);
+  assert.equal(attempts, 3);
+  for (const error of [{ message: 'TransactionWriteConflict' }, { name: 'DriverAdapterError', cause: { kind: 'ConnectionClosed' } }, { name: 'Error', cause: { kind: 'TransactionWriteConflict' } }]) assert.equal(isTransactionConflict(error), false);
+  attempts = 0;
+  await assert.rejects(retrySerializable(async () => { attempts++; throw { name: 'DriverAdapterError', cause: { kind: 'TransactionWriteConflict' } }; }), (error: unknown) => error instanceof AppError && error.statusCode === 409);
   assert.equal(attempts, 3);
   attempts = 0;
   await assert.rejects(retrySerializable(async () => { attempts++; throw { code: 'P2034' }; }), (error: unknown) => error instanceof AppError && error.statusCode === 409);

@@ -1,3 +1,4 @@
+import { useProviderActivation } from '@/src/lib/useProviderActivation';
 import { timePolicyNote } from '@/src/lib/appointmentTime';
 import { useAppLocale } from '@/src/i18n/LocaleContext';
 import { Link, router, useLocalSearchParams } from 'expo-router';
@@ -34,6 +35,7 @@ export default function BookingScreen() {
   const client = useQueryClient();
   const details = useQuery({ queryKey: ['provider', providerId, fromBookingId ?? 'public'], queryFn: () => apiRequest<{ provider: ProviderDetail }>(`/api/${fromBookingId ? `bookings/${fromBookingId}/provider` : `providers/${providerId}`}`) });
   const provider = details.data?.provider;
+  useProviderActivation(provider && !fromBookingId ? { businessId: provider.id } : undefined);
   const days = provider ? makeCalendarDays(provider) : [];
   const chosenService = serviceId || provider?.services[0]?.id || '';
   const chosenDate = date || days.find((day) => !day.disabled)?.id || days[0]?.id || '';

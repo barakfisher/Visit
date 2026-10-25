@@ -5,3 +5,5 @@ export function validateService(input: unknown, partial?: boolean): Record<strin
 export function parseServicePrice(text: string): number | null | undefined;
 export function safeAuthReturnTo(value: unknown): string | undefined;
 export declare const PILOT_TIMEZONE: 'Asia/Jerusalem';
+
+export declare function providerSharePath(slug: unknown): string | undefined;

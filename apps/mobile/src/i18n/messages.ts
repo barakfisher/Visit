@@ -1,4 +1,12 @@
 export const en = {
+  'providers.loadFailure': 'Could not load the provider link. Check your connection and retry.',
+  'providers.shared': 'Provider link',
+  'providers.saveHelp': 'This provider will be added to My Providers when you sign in. This does not book an appointment or subscribe you to marketing.',
+  'providers.signIn': 'Sign in and continue to booking',
+  'providers.saving': 'Adding this provider to your list…',
+  'providers.failure': 'Could not add this provider. Check your connection and retry.',
+  'providers.changed': 'Your account changed. Reopen the provider link to continue.',
+  'providers.unavailable': 'This provider link is invalid or the business is not currently accepting bookings.',
   'appointments.title': 'Your appointments',
   'appointments.all': 'View all appointments',
   'nav.home': 'Home',
@@ -230,6 +238,14 @@ export const en = {
 export type MessageKey = keyof typeof en;
 export type Locale = 'he' | 'en';
 export const he: Record<MessageKey, string> = {
+  'providers.loadFailure': 'לא ניתן לטעון את קישור נותן השירות. בדקו את החיבור ונסו שוב.',
+  'providers.shared': 'קישור לנותן שירות',
+  'providers.saveHelp': 'לאחר הכניסה נותן השירות יתווסף לרשימה שלכם. הפעולה אינה מזמינה תור ואינה מהווה הסכמה לדיוור שיווקי.',
+  'providers.signIn': 'כניסה והמשך להזמנת תור',
+  'providers.saving': 'נותן השירות מתווסף לרשימה שלכם…',
+  'providers.failure': 'לא ניתן להוסיף את נותן השירות. בדקו את החיבור ונסו שוב.',
+  'providers.changed': 'החשבון השתנה. יש לפתוח שוב את קישור נותן השירות כדי להמשיך.',
+  'providers.unavailable': 'הקישור אינו תקין או שהעסק אינו מקבל כעת הזמנות.',
   'appointments.title': 'התורים שלכם',
   'appointments.all': 'לכל התורים',
   'nav.home': 'דף הבית',

@@ -1,3 +1,4 @@
+import { publicBusinessWhere } from './business-eligibility.js';
 import { validateAuthenticatedSession, type AuthenticatedSession } from './sessions.js';
 import { conflict } from '../http/errors.js';
 import { MembershipRole, MembershipStatus } from '../generated/prisma/client.js';
@@ -41,7 +42,7 @@ export async function requireBusinessMembership(
 
 export async function requirePublicBusiness(businessId: string): Promise<PublicBusinessContext> {
   const business = await prisma.business.findFirst({
-    where: { id: businessId, approvalStatus: 'APPROVED', publishedAt: { not: null } },
+    where: { id: businessId, ...publicBusinessWhere },
     select: { id: true, timezone: true },
   });
   if (!business) throw notFound();
@@ -68,7 +69,7 @@ export async function validatePublicBusinessContext(context: PublicBusinessConte
 }
 
 async function validateOwnedReschedule(bookingId: string, customerId: string) {
-  const booking = await prisma.booking.findFirst({ where: { id: bookingId, customerId, status: 'CONFIRMED', business: { approvalStatus: 'APPROVED' } }, include: { business: { include: { bookingPolicy: true } } } });
+  const booking = await prisma.booking.findFirst({ where: { id: bookingId, customerId, status: 'CONFIRMED', business: { approvalStatus: 'APPROVED', deletedAt: null } }, include: { business: { include: { bookingPolicy: true } } } });
   if (!booking) throw notFound();
   if (!booking.business.bookingPolicy || booking.startsAt.getTime() < Date.now() + booking.business.bookingPolicy.rescheduleCutoffMinutes * 60000) throw conflict('The reschedule cutoff has passed.');
   return booking;

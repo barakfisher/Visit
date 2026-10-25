@@ -4,7 +4,7 @@
 - [x] 1b. VIS-47 — Israeli-time policy and safe rollout; automated evidence in pilot-time-policy.md.
 - [x] 2a. VIS-32 — admin application review and applicant notifications; evidence in provider-review.md.
 - [x] 2b. VIS-34 — publication/readiness; evidence in business-publication.md.
-- [ ] 3. VIS-45 — shared links/QR and identity-owned My Providers (next).
+- [x] 3. VIS-45 — shared-link/QR URL contract and identity-owned My Providers; evidence in shared-providers.md (155 API, 26 foundation, 47 Storybook tests and exported-web journey passing).
 - [ ] 4. VIS-46 — Home and hamburger menu.
 - [ ] 5. VIS-35 + VIS-27 — setup/sharing and role/mode integration; VIS-33 invitations is a prerequisite for final mode flow.
 - [ ] 6. VIS-36 → VIS-26 → VIS-24 → VIS-28 — contact requirements, final-consent reservation/commit, compact booking and persisted success.
