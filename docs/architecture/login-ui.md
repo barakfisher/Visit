@@ -21,7 +21,7 @@ After successful proof redemption, each method retains the issued result in memo
 - `npm run test:foundation --workspace @visit/mobile`: 22 tests including strict return-path parsing.
 - `npm run test-storybook --workspace @visit/mobile`: 47 stories, including six phone login states and accessibility checks.
 - `npm run test:web --workspace @visit/mobile`: real API factory/PostgreSQL/Redis with local SMS/email inbox and synthetic Google exchange. Covers ordinary Home routing, provider entry through phone/email/Google, email callback in a new tab, phone expiry/cooldown/server throttling, double activation, profile recovery, Google cancellation intent, plus existing booking/concurrency/tenant regressions.
-- Expo iOS/Android bundle export checks compilation only. Actual device boot, keyboard/autofill, callback handling and real Google/SMS/email delivery still require VIS-2/VIS-43 evidence. VIS-13 remains In Review until required native acceptance is recorded.
+- Expo iOS/Android bundle export checks compilation only. Actual device boot, keyboard/autofill, callback handling and real Google/SMS/email delivery still require VIS-2/VIS-43 evidence. Product owner marked VIS-13 Done for local implementation; required native acceptance remains in VIS-2/VIS-43 before pilot release.
 
 Run API and browser integration suites sequentially to avoid shared-database contention. An initial simultaneous run produced a 500 in an existing hold-expiry API assertion; all 128 passed on the isolated rerun. The initial failure cause is not established. This is not evidence of production stress stability (VIS-17).
 
