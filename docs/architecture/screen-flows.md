@@ -1,5 +1,19 @@
 # Screen flow implementation
 
+> Historical implementation reference: the runtime described below reflects the existing scaffold, including legacy discovery and selection-time holds. It is NOT the current product specification. See [pilot-product-journey.md](pilot-product-journey.md) for the approved 2026-10-25 target. No runtime code changed with this planning revision.
+
+## Current target journey
+
+Provider link/QR → same-account authentication when needed → idempotent identity-owned save → specific provider booking. Ordinary login → Home (upcoming appointment, My Providers, minimal drawer). No global search/directory, bottom tabs, global single-provider bypass or sticky Back to Visit.
+
+Booking → compact service dropdown (single service auto-selected) → calendar pop-up → preferred time and nearby available-only chronological slots → exact review/required verified contact → final explicit consent → owned bounded Redis reservation → authoritative PostgreSQL confirmation → success/details/calendar/Home/agenda.
+
+Browsing and review do not reserve capacity. Final attempt processing/expiry/retry must be idempotent and truthful. Asia/Jerusalem governs pilot schedules/display; UTC remains durable absolute storage and DST is honored. Keep Hebrew default/English layouts coherent; no repeated UTC labels on time cards.
+
+VIS-45/VIS-46 own onboarding/Home; VIS-24/VIS-26/VIS-28 own review/final reservation/success; VIS-35 adds provider sharing tools; VIS-47 owns Israeli-time rollout. VIS-48 NLP is deferred Phase 2. Actual native/device/live-delivery and operational pilot gates remain in force.
+
+## Historical runtime snapshot
+
 ## Routes and identity
 
 - `/auth/login`: Google and SMS OTP options, six-digit OTP autofill, and the existing passwordless email fallback at `/auth/email`.

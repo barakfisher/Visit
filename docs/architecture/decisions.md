@@ -1,5 +1,15 @@
 # Architecture and product decisions
 
+## Current pilot amendment — 2026-10-25
+
+[pilot-product-journey.md](pilot-product-journey.md) supersedes earlier discovery, initial routing, timezone rollout and selection-time-hold assumptions. One identity retains customer capability plus approved provider memberships. Provider URL/QR acquisition automatically saves to the authenticated identity's My Providers list; public link preview GET does not mutate lists or grant management rights. Ordinary login lands on Home with upcoming appointment, compact saved providers and a minimal hamburger menu. No global directory/search, counts-based bypass or bottom tabs.
+
+Pilot business schedules/display use Asia/Jerusalem, while durable booking instants remain UTC and DST-aware. Historical non-Israel businesses/fixtures need explicit migration review; no blanket relabeling or shifted appointments. Compact service dropdown/calendar/nearby available slots lead to exact appointment review and verified contacts, with no capacity hold until final explicit booking consent. Then use owner-bound Redis coordination plus authoritative idempotent PostgreSQL commit/recovery. Phase 2 free-text assistance is deferred and cannot mutate bookings or bypass deterministic checks.
+
+Implementation is tracked in VIS-13/24/26/27/28/29/34/35/45/46/47; VIS-22 is canceled and VIS-48 is deferred. Earlier completed foundations keep their commit/test evidence; the amendment does not certify the new product flow. Native VIS-2 → VIS-43 → VIS-25 and operational release gates are unchanged.
+
+## Historical baseline
+
 Status: VIS-1 baseline with production-plan decisions reconciled for VIS-9, 2026-10-24. Target contracts do not certify implementation completion.
 
 ## Confirmed with the product owner

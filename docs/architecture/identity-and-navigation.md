@@ -1,5 +1,19 @@
 # Identity, provider capability and navigation
 
+> Product revision, 2026-10-25: [pilot-product-journey.md](pilot-product-journey.md) is the current navigation contract. The original decision matrix below is historical VIS-9 evidence and is superseded where it mentions discovery, automatic provider-dashboard landing, or remembered mode overriding ordinary Home landing.
+
+## Current navigation authority
+
+- One identity retains customer capability; only active approved business memberships grant provider management. My Providers is a separate identity-owned saved list, never management authorization.
+- Ordinary login goes to Home for all identities. Explicit validated provider link/QR or booking intent resumes that provider after authenticated, idempotent save. Global /discover, directory search and global provider-count bypass are removed; old /discover redirects Home.
+- Login offers a small Register as a business / provider entry. An applicant authenticates before submitting, then sees pending/rejected application status without losing customer access.
+- Home: Your time, well spent (localized), upcoming confirmed appointment if any, then compact My Providers cards or a link/QR-oriented empty state. No Explore CTA or bottom tabs.
+- Drawer: Home, Account, Become a provider, Application status as applicable, approved-membership-only Switch to provider mode, Log out. Provider mode offers reverse switch and explicit allowed workspace selection. Hydration, revocation, account switching and logout must clear private state/pending link context.
+- Public sharing links/QR and saved lists never join staff/owner memberships; existing-business invitations remain VIS-33. Preview/prefetch GET requests do not mutate saved lists.
+- Implementation ownership: VIS-13 login entry, VIS-45 resolver/save/auth intent, VIS-46 Home/drawer, VIS-27 application/mode transitions. No implementation is claimed by this documentation update.
+
+## Historical original decision contract
+
 Decision contract for VIS-9, 2026-10-24. Approved scope comes from the product owner's production-backlog instructions. This document defines target behavior; implementation acceptance remains in VIS-13, VIS-23, VIS-27 and VIS-32–37.
 
 ## Identity and capabilities
