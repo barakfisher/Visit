@@ -1,10 +1,2 @@
-import { SymbolView } from 'expo-symbols';
-import { Tabs } from 'expo-router';
-import { useAppLocale } from '@/src/i18n/LocaleContext';
-export default function TabLayout() {
-  const { t } = useAppLocale();
-  return <Tabs screenOptions={{ tabBarActiveTintColor: '#0f766e', tabBarInactiveTintColor: '#64748b', tabBarStyle: { backgroundColor: '#fff' }, headerShown: false }}>
-    <Tabs.Screen name="index" options={{ title: t('nav.home'), tabBarIcon: ({ color }) => <SymbolView name={{ ios: 'house.fill', android: 'home', web: 'home' }} tintColor={color} size={25}/> }}/>
-    <Tabs.Screen name="two" options={{ title: t('nav.account'), tabBarIcon: ({ color }) => <SymbolView name={{ ios: 'person.crop.circle', android: 'account_circle', web: 'person' }} tintColor={color} size={25}/> }}/>
-  </Tabs>;
-}
+import { Stack } from 'expo-router';
+export default function HomeLayout() { return <Stack screenOptions={{ headerShown: false }} />; }

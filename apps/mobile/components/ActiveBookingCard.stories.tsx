@@ -15,6 +15,7 @@ export const Upcoming: Story = { args: { onReschedule: fn(), onCancel: fn() }, p
 } };
 
 export const SingleActiveBooking: Story = { args: { onReschedule: fn(), onCancel: fn() } };
+export const PendingHomeActions: Story = { args: { actionsPending: true }, play: async ({ canvas }) => { await expect(canvas.getByRole('button', { name: 'Reschedule (coming soon)' })).toBeDisabled(); await expect(canvas.getByRole('button', { name: 'Cancel (coming soon)' })).toBeDisabled(); } };
 
 const booking = { id: 'one', startsAt: '2026-11-02T10:30:00Z', service: { id: 'service', name: 'Consultation' }, business: { id: 'business', name: 'North Studio', timezone: 'UTC' }, staff: { displayName: 'Alex' } };
 export const MultipleBookings: Story = { args: { onReschedule: fn() }, render: (args) => <ActiveBookings bookings={[booking, { ...booking, id: 'two', service: { id: 'second', name: 'Follow-up visit' } }]} onReschedule={args.onReschedule}/>, play: async ({ canvas, args }) => { await userEvent.click(canvas.getAllByRole('button', { name: 'Reschedule' })[1]!); await expect(args.onReschedule).toHaveBeenCalledOnce(); } };

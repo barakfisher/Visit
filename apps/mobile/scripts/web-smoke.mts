@@ -104,6 +104,8 @@ try {
     await sharedProvidersSmoke({ browser, webUrl, apiUrl, prisma, run, identityIds, businessId: businessIds[0]! });
     const { googleSmoke } = await import('./google-smoke.js');
     await googleSmoke({ browser, webUrl, apiUrl, claims: googleClaims, run, prisma, identityIds, sharedBusinessId: businessIds[0]! });
+    const { homeNavigationSmoke } = await import('./home-navigation-smoke.js');
+    await homeNavigationSmoke({ browser, webUrl, apiUrl, prisma, run, identityIds, businessIds });
     const localization = await browser.newContext({ viewport: { width: 390, height: 844 } }); contexts.push(localization);
     const localePage = await localization.newPage(); capture = localePage;
     localePage.on('pageerror', error => pageErrors.push(error.message));
@@ -127,7 +129,7 @@ try {
     await localePage.getByRole('heading', { name: 'כניסה בדואר אלקטרוני', exact: true }).waitFor();
     assert.equal(await localePage.getByLabel('כתובת דואר אלקטרוני', { exact: true }).evaluate(node => getComputedStyle(node).direction), 'ltr');
     assert.equal(await localePage.getByRole('button', { name: 'שליחת קישור לכניסה', exact: true }).isDisabled(), true);
-    await localePage.goto(`${webUrl}/two`);
+    await localePage.goto(`${webUrl}/account`);
     await localePage.getByTestId('language-en').click();
     await localePage.getByRole('heading', { name: 'Account', exact: true }).waitFor();
     assert.equal(await localePage.locator('html').getAttribute('dir'), 'ltr');
@@ -150,7 +152,7 @@ try {
     const originalCookie = (await consumer.cookies()).find(cookie => cookie.name === 'visit_session')!;
     await prisma.session.update({ where: { tokenHash: createHash('sha256').update(originalCookie.value).digest('hex') }, data: { expiresAt: new Date(Date.now() - 1000) } });
     const rotatedResponse = page.waitForResponse(response => response.url().endsWith('/v1/auth/refresh') && response.status() === 200);
-    await page.goto(`${webUrl}/two`); await rotatedResponse;
+    await page.goto(`${webUrl}/account`); await rotatedResponse;
     await page.getByRole('button', { name: 'Sign out', exact: true }).waitFor();
     assert.notEqual((await consumer.cookies()).find(cookie => cookie.name === 'visit_session')!.value, originalCookie.value);
     assert.equal(await page.evaluate(() => localStorage.getItem('visit.session-token')), null);
@@ -298,14 +300,14 @@ try {
     await original.getByText('QA consultation', { exact: true }).waitFor();
     await providerPage.screenshot({ path: path.join(diagnostics, 'service-catalog-en-desktop.png'), fullPage: true });
     // The same editor works on the settings route and in Hebrew at mobile width.
-    await providerPage.goto(`${webUrl}/two`);
+    await providerPage.goto(`${webUrl}/account`);
     await providerPage.getByTestId('language-he').click();
     await providerPage.goto(`${webUrl}/provider/${businessIds[0]}`);
     await providerPage.setViewportSize({ width: 390, height: 844 });
     await providerPage.getByRole('heading', { name: 'קטלוג שירותים', exact: true }).waitFor();
     assert.equal(await providerPage.getByLabel('מחיר', { exact: true }).evaluate(node => getComputedStyle(node).direction), 'ltr');
     await providerPage.screenshot({ path: path.join(diagnostics, 'service-catalog-he-mobile.png'), fullPage: true });
-    await providerPage.goto(`${webUrl}/two`); await providerPage.getByTestId('language-en').click();
+    await providerPage.goto(`${webUrl}/account`); await providerPage.getByTestId('language-en').click();
     // Generic UTC engine fixture is explicitly restored after its catalog is complete.
     // Real pilot publishing is exercised above through readiness + the provider UI.
     await prisma.business.update({ where: { id: businessIds[0]! }, data: { publishedAt: new Date() } });
@@ -385,7 +387,7 @@ try {
     assert.equal(emailRequestUrls.some(url => url.includes(mail.token)), false);
     console.log('PASS: fragment link is scrubbed, opening does not authenticate, and profile outage recovery does not replay it.');
     console.log('PASS: email fallback completes authentication and routes Home.');
-    await emailPage.goto(`${webUrl}/two`);
+    await emailPage.goto(`${webUrl}/account`);
     // A document reload starts with guest locale controls until cookie-session
     // hydration finishes. Wait for the authenticated account, not guest storage.
     await emailPage.getByRole('heading', { name: 'Sign-in methods', exact: true }).waitFor();
@@ -400,7 +402,7 @@ try {
     await freshDevice.addCookies(cookieState);
     await freshDevice.addInitScript(() => localStorage.setItem('visit.locale.v1.guest', 'en'));
     const freshPage = await freshDevice.newPage();
-    await freshPage.goto(`${webUrl}/two`);
+    await freshPage.goto(`${webUrl}/account`);
     await freshPage.getByRole('heading', { name: 'חשבון', exact: true }).waitFor();
     assert.equal(await freshPage.locator('html').getAttribute('dir'), 'rtl');
     console.log('PASS: authenticated language preference persists on the server and restores with fresh browser storage.');

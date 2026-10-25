@@ -44,7 +44,7 @@ export default function GoogleCallbackScreen() {
       if (!result) return;
       if (result.linked) {
         await refreshAccountAfterChange(result);
-        router.replace('/(tabs)/two');
+        router.replace('/account');
       } else await completeSignIn(result.sessionToken, returnTo, result.identity.id);
     } catch (reason) { setError(failure(reason)); }
     finally { running.current = false; setBusy(false); }

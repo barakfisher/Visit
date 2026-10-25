@@ -31,6 +31,6 @@ export default function AdminApplications() {
     </View>)}
     {feedback ? <AppText accessibilityRole="alert">{feedback}</AppText> : null}
     <ActionButton secondary label={t('review.refresh')} disabled={busy} onPress={() => void queue.refetch()} />
-    <Link href="/(tabs)/two" className="min-h-touch py-3 font-semibold text-brand">{t('nav.account')}</Link>
+    <Link href="/account" className="min-h-touch py-3 font-semibold text-brand">{t('nav.account')}</Link>
   </ScreenContent></ScrollView>;
 }

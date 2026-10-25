@@ -77,7 +77,7 @@ export async function googleSmoke({ browser, webUrl, apiUrl, claims, run, prisma
 
     // Account settings use a distinct code proof and preserve its issued replacement on profile failure.
     await page.unroute(`${apiUrl}/api/auth/me`);
-    await page.goto(`${webUrl}/two`);
+    await page.goto(`${webUrl}/account`);
     await page.getByRole('heading', { name: 'Sign-in methods', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Request reviewed recovery (not available yet)', exact: true }).isDisabled().then(value => assert.equal(value, true));
     const oldDevice = await context(); await oldDevice.addCookies(await consumer.cookies());
@@ -122,14 +122,14 @@ export async function googleSmoke({ browser, webUrl, apiUrl, claims, run, prisma
     await conflict.request.post(`${apiUrl}/v1/auth/email-challenges`, { headers: { Origin: webUrl }, data: { email: existing.email, target: 'web' } });
     const local = await (await conflict.request.get(`${apiUrl}/__dev/mailbox?email=${encodeURIComponent(existing.email!)}`)).json();
     const verified = await conflict.request.post(`${apiUrl}/v1/auth/email-challenges/verify`, { headers: { Origin: webUrl }, data: { token: local.token } }); assert.equal(verified.status(), 200);
-    await conflictPage.goto(`${webUrl}/two`);
+    await conflictPage.goto(`${webUrl}/account`);
     await conflictPage.getByRole('heading', { name: 'Sign-in methods', exact: true }).waitFor();
     await conflictPage.getByRole('button', { name: 'Link a Google account', exact: true }).click();
     await conflictPage.getByRole('heading', { name: 'Confirm Google sign-in', exact: true }).waitFor();
     await conflictPage.getByRole('button', { name: 'Link this Google account', exact: true }).waitFor();
     assert.equal(await prisma.externalIdentity.count({ where: { identityId: existing.id } }), 0);
     await conflictPage.getByRole('button', { name: 'Link this Google account', exact: true }).click();
-    await conflictPage.waitForURL('**/two');
+    await conflictPage.waitForURL('**/account');
     assert.equal(await prisma.externalIdentity.count({ where: { identityId: existing.id, provider: 'google' } }), 1);
     assert.equal((await (await conflict.request.get(`${apiUrl}/api/auth/me`)).json()).profile.id, existing.id);
     console.log('PASS: Google email conflict does not merge; existing-method authentication and explicit linking preserve identity.');

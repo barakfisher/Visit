@@ -49,6 +49,8 @@ export async function registerSavedProviders(app: FastifyInstance) {
   });
   app.delete('/api/me/providers/:businessId', async request => {
     const { identity } = await authenticate(request);
+    const expected = request.headers['x-visit-expected-identity'];
+    if (expected !== undefined && expected !== identity.id) throw new AppError(409, 'SESSION_CHANGED', 'The signed-in account changed. Refresh your providers.');
     const { businessId } = z.strictObject({ businessId: id }).parse(request.params);
     await prisma.savedProvider.deleteMany({ where: { identityId: identity.id, businessId } });
     return { removed: true };

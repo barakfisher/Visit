@@ -1,0 +1,23 @@
+# Home and navigation (VIS-46)
+
+Ordinary sign-in always lands on Home for a unified identity. Home shows the localized “Your time, well spent” heading, the nearest upcoming confirmed appointment, a link to all owned appointments, and the identity's saved providers. Empty state explains asking a business for its Visit link or scanning its QR with the phone camera. It never lists global businesses, invents providers or redirects based on global business counts.
+
+## States and ownership
+
+Home distinguishes session bootstrap, failed session lookup, provider-list loading, a successfully empty list, unavailable saved businesses and network failure. Account controls also wait for bootstrap, preventing a cookie-authenticated reload from momentarily offering guest-only preference writes. Retry requests the actual server state. Providers are paginated using the VIS-45 API; removal invalidates that identity's list and clears its successful-activation marker. Removal also sends a compare-only expected-identity header, which the server rejects if the browser cookie changed to another account. It does not cancel or delete appointments. Private queries and drafts continue to clear on account/workspace/logout transitions; late transport responses fail their context-version check.
+
+The Home appointment summary is read-only at this milestone. Reschedule/cancel are visibly disabled and labeled coming soon until VIS-29/30 integration; the separate owned-appointments management route and existing backend actions are preserved. Home rechecks upcoming appointments periodically rather than freezing the next appointment at mount time.
+
+## Menu and routes
+
+The bottom tab navigator is replaced by an Expo Router Stack. The authenticated shell has one hamburger menu with Home, Account, appropriate application entry/status, approved provider-mode switch and sign out. The account screen is canonically `/account`; `/two` safely redirects for old bookmarks. `/discover` still redirects to Home and performs no directory query. Authentication pages retain their focused login UI.
+
+Capabilities come from the authenticated `/v1/me` projection, filtered to ACTIVE OWNER/MANAGER memberships in APPROVED businesses. Pending/rejected applications offer status and grant no management rights. Multiple approved memberships plus a pending application retain both valid options. With multiple businesses, mode switching requires an explicit business choice; it never guesses the first business. The profile must agree with the selected membership before navigation, and every backend provider endpoint still authorizes access. Customer-mode switching clears the selected workspace. Full revoked/invitation/provider route recovery is VIS-27, with VIS-33 as its prerequisite.
+
+The modal uses React Native's Modal with safe-area insets and a scrollable panel on the logical starting edge. React Native Web provides modal focus trapping, Escape dismissal and focus return to the hamburger. Drawer state is remounted on path or auth/workspace context changes. Hebrew/RTL is the default, with English/LTR throughout the new shell, Home and saved cards. Account security details and admin review remain accessible through Account; the ordinary drawer stays minimal.
+
+## Evidence and remaining gates
+
+`home-navigation-smoke.ts` covers bootstrap failure/retry, empty/saved/unavailable providers, preserved appointments on removal, disabled future Home actions, list failure/retry, logout failure/success, legacy redirects, role-sensitive menu options, explicit multi-business mode selection and reverse switching, keyboard focus containment/return, and Hebrew layout at compact/desktop widths. Pure capability tests cover customer, pending, rejected, approved, staff, suspended and multi-business records. SavedProviderCard stories cover available, unavailable, removing and long-name states; ActiveBookingCard has a disabled Home-actions story.
+
+Final local checks passed: 155 API tests (`NODE_ENV=test`), 27 foundation tests, the complete exported-web browser suite and 52 Storybook tests; root typecheck/lint and iOS/Android JavaScript exports also passed. Actual VoiceOver/TalkBack, hardware-back and installed app interactions remain native VIS-2/VIS-43 gates. JavaScript exports and browser tests are not device evidence. Existing provider workspace forms are localized and refined in their own setup/mode tasks; this issue does not assert that every legacy provider editor is complete. Commit/PR evidence is recorded in Linear.
