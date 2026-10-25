@@ -1,0 +1,97 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import jsQR from 'jsqr';
+import type { Page, BrowserContext } from 'playwright';
+export async function configureBusinessSmoke({ page, context, webUrl, apiUrl, businessId }: { page: Page; context: BrowserContext; webUrl: string; apiUrl: string; businessId: string }) {
+  const base = `${apiUrl}/v1/provider/businesses/${businessId}`;
+  await page.goto(`${webUrl}/provider/${businessId}`);
+  await page.getByRole('heading', { name: 'Set up your business', exact: true }).waitFor();
+  await page.getByRole('textbox', { name: 'Location', exact: true }).fill('Jerusalem');
+  await page.getByRole('textbox', { name: 'Category', exact: true }).fill('Wellness');
+  await page.getByRole('textbox', { name: 'About your business', exact: true }).fill('A real setup flow with saved public details.');
+  await page.getByRole('textbox', { name: 'Public business phone', exact: true }).fill('+972501234567');
+  await page.getByRole('textbox', { name: 'Public business email', exact: true }).fill('public-studio@example.test');
+  let failProfile = true;
+  await page.route(base, route => route.request().method() === 'PATCH' && failProfile ? route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":{"code":"UNAVAILABLE"}}' }) : route.continue());
+  await page.getByRole('button', { name: 'Save business details', exact: true }).click();
+  await page.getByRole('alert').filter({ hasText: 'Could not save.' }).waitFor();
+  assert.equal(await page.getByRole('textbox', { name: 'Location', exact: true }).inputValue(), 'Jerusalem');
+  failProfile = false;
+  const profileSaved = page.waitForResponse(r => r.url() === base && r.request().method() === 'PATCH');
+  await page.getByRole('button', { name: 'Save business details', exact: true }).click(); assert.equal((await profileSaved).status(), 200);
+  await page.getByTestId('setup-section-services').click();
+  const form = page.getByTestId('service-form');
+  await form.getByRole('textbox', { name: 'Service name', exact: true }).fill('Pilot consultation');
+  await form.getByRole('textbox', { name: 'Duration in minutes', exact: true }).fill('30');
+  await form.getByRole('textbox', { name: 'Price', exact: true }).fill('100');
+  await form.getByRole('button', { name: 'ILS', exact: true }).click();
+  const serviceCreated = page.waitForResponse(r => r.url() === `${base}/services` && r.request().method() === 'POST');
+  await form.getByRole('button', { name: 'Add service', exact: true }).click(); const response = await serviceCreated; assert.equal(response.status(), 201); const serviceId = (await response.json()).id;
+  await page.getByTestId('setup-section-staff').click();
+  await page.getByRole('textbox', { name: 'Staff display name', exact: true }).fill('Pilot expert');
+  await page.getByRole('textbox', { name: 'Simultaneous appointments', exact: true }).fill('2');
+  await page.getByRole('checkbox', { name: 'Select service: Pilot consultation', exact: true }).click();
+  let lostAcknowledgement = true, firstStaffId = '';
+  await page.route(`${base}/staff`, async route => {
+    if (route.request().method() === 'POST' && lostAcknowledgement) { lostAcknowledgement = false; const created = await route.fetch(); assert.equal(created.status(), 201); firstStaffId = (await created.json()).id; await route.abort(); } else await route.continue();
+  });
+  await page.getByRole('button', { name: 'Add staff member', exact: true }).click(); await page.getByRole('alert').filter({ hasText: 'Could not save.' }).waitFor();
+  const staffCreated = page.waitForResponse(r => r.url() === `${base}/staff` && r.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Add staff member', exact: true }).click(); const staffResponse = await staffCreated; assert.equal(staffResponse.status(), 201); const staffId = (await staffResponse.json()).id; assert.equal(staffId, firstStaffId);
+  const staff = page.getByTestId(`setup-staff-${staffId}`); await staff.waitFor();
+  await staff.getByRole('button', { name: 'Edit staff member: Pilot expert', exact: true }).click();
+  await staff.getByRole('textbox', { name: 'Staff display name', exact: true }).fill('Pilot expert edited');
+  const staffSaved = page.waitForResponse(r => r.url() === `${base}/staff/${staffId}` && r.request().method() === 'PATCH');
+  await staff.getByRole('button', { name: 'Save staff member', exact: true }).click(); assert.equal((await staffSaved).status(), 200);
+  await staff.getByRole('button', { name: 'Edit staff hours: Pilot expert edited', exact: true }).click();
+  await staff.getByRole('button', { name: 'Add date exception', exact: true }).click();
+  const closedDate = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
+  await staff.getByRole('textbox', { name: 'Exception date 1 (YYYY-MM-DD)', exact: true }).fill(closedDate);
+  const staffHours = page.waitForResponse(r => r.url() === `${base}/staff/${staffId}/availability-rules` && r.request().method() === 'PUT');
+  await staff.getByRole('button', { name: 'Save working hours', exact: true }).click(); assert.equal((await staffHours).status(), 200);
+  await page.getByTestId('setup-section-hours').click();
+  for (const day of ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']) await page.getByRole('button', { name: `Add hours: ${day}`, exact: true }).click();
+  const hoursSaved = page.waitForResponse(r => r.url() === `${base}/availability-rules` && r.request().method() === 'PUT');
+  await page.getByRole('button', { name: 'Save working hours', exact: true }).click(); assert.equal((await hoursSaved).status(), 200);
+  await page.getByTestId('setup-section-policy').click();
+  await page.getByRole('textbox', { name: 'Minimum notice (minutes)', exact: true }).fill('0');
+  await page.getByRole('textbox', { name: 'Maximum advance (days)', exact: true }).fill('30');
+  const policySaved = page.waitForResponse(r => r.url() === `${base}/booking-policy` && r.request().method() === 'PUT');
+  await page.getByRole('button', { name: 'Save booking policy', exact: true }).click(); assert.equal((await policySaved).status(), 200);
+  await page.getByTestId('setup-section-sharing').click();
+  assert.equal(await page.getByRole('button', { name: 'Copy booking link', exact: true }).isDisabled(), true);
+  await page.reload(); await page.getByTestId('setup-section-profile').click();
+  assert.equal(await page.getByRole('textbox', { name: 'Public business email', exact: true }).inputValue(), 'public-studio@example.test');
+  assert.equal(await page.getByRole('textbox', { name: 'Business timezone', exact: true }).inputValue(), 'Asia/Jerusalem');
+  assert.equal((await (await context.request.get(`${base}/staff`)).json()).staff.length, 1);
+  return { serviceId, staffId, closedDate };
+}
+export async function sharingBusinessSmoke({ page, context, webUrl, apiUrl, businessId, slug }: { page: Page; context: BrowserContext; webUrl: string; apiUrl: string; businessId: string; slug: string }) {
+  await page.getByTestId('setup-section-sharing').click();
+  const url = `${webUrl}/p/${slug}`;
+  await page.getByTestId('provider-sharing-url').waitFor(); assert.equal(await page.getByTestId('provider-sharing-url').textContent(), url);
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: webUrl });
+  await page.getByRole('button', { name: 'Copy booking link', exact: true }).click(); await page.getByText('Booking link copied.', { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), url);
+  const downloading = page.waitForEvent('download'); await page.getByRole('button', { name: 'Download / share QR code', exact: true }).click();
+  const download = await downloading, file = await download.path(); assert.ok(file); const svg = await readFile(file, 'utf8');
+  const size = Number(svg.match(/viewBox="0 0 (\d+) /)?.[1]), path = svg.match(/<path d="([^"]+)"/)?.[1]; assert.ok(size && path);
+  const scale = 8, width = size * scale, pixels = new Uint8ClampedArray(width * width * 4); pixels.fill(255);
+  for (const m of path.matchAll(/M(\d+),(\d+)h1v1h-1z/g)) for (let y = 0; y < scale; y++) for (let x = 0; x < scale; x++) { const i = ((Number(m[2]) * scale + y) * width + Number(m[1]) * scale + x) * 4; pixels[i] = pixels[i + 1] = pixels[i + 2] = 0; }
+  assert.equal(jsQR(pixels, width, width)?.data, url);
+  await page.screenshot({ path: 'test-results/provider-sharing-en-mobile.png', fullPage: true });
+  assert.equal((await context.request.get(`${apiUrl}/api/provider-links/${slug}`)).status(), 200);
+  const browser = context.browser(); assert.ok(browser);
+  const fresh = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  try {
+    await fresh.addCookies(await context.cookies());
+    const review = await fresh.newPage(); await review.goto(`${webUrl}/provider/${businessId}`);
+    await review.getByRole('heading', { name: 'הגדרת העסק שלכם', exact: true }).waitFor();
+    assert.equal(await review.getByRole('textbox', { name: 'דואר אלקטרוני ציבורי של העסק', exact: true }).inputValue(), 'public-studio@example.test');
+    assert.equal(await review.getByRole('textbox', { name: 'טלפון ציבורי של העסק', exact: true }).evaluate(el => getComputedStyle(el).direction), 'ltr');
+    await review.getByTestId('setup-section-sharing').click(); await review.getByTestId('provider-sharing-qr').waitFor();
+    await review.screenshot({ path: 'test-results/business-setup-he-desktop.png', fullPage: true });
+    await review.setViewportSize({ width: 390, height: 844 }); await review.screenshot({ path: 'test-results/business-setup-he-mobile.png', fullPage: true });
+  } finally { await fresh.close(); }
+  console.log('PASS: clean approved business configures profile/catalog/staff/weekly hours/exceptions/policy through UI, survives a lost creation acknowledgement without duplicates, publishes and exports an independently decoded canonical QR.');
+}

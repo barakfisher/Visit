@@ -1,4 +1,8 @@
+import { setupEn, setupHe } from './setupMessages';
+import { dashboardEn, dashboardHe } from './dashboardMessages';
 export const en = {
+  ...setupEn,
+  ...dashboardEn,
   'home.title': 'Your time, well spent.',
   'home.intro': 'Your next appointment and the businesses you visit.',
   'home.providers': 'My Providers',
@@ -254,8 +258,7 @@ export const en = {
   'account.timezoneHint': 'Pilot businesses use local Israeli time, including daylight-saving changes.',
   'account.submit': 'Submit for approval', 'account.submitted': 'Your application was submitted and is pending review.',
   'account.submitFailed': 'The request could not be submitted. Please try again.',
-  'setup.title': 'Set up your business', 'setup.publish': 'Publish business', 'setup.draft': 'Draft',
-  'setup.approved': 'Approved', 'setup.published': 'Ready for bookings',
+  'setup.publish': 'Publish business', 'setup.draft': 'Draft', 'setup.published': 'Ready for bookings',
   'approval.title': 'Provider applications', 'approval.approve': 'Approve', 'approval.reject': 'Reject', 'approval.reason': 'Decision reason',
   'contact.title': 'Complete your contact details', 'contact.name': 'Full name', 'contact.verifyPhone': 'Verify phone number',
   'booking.confirm': 'Confirm appointment', 'booking.cancel': 'Cancel appointment',
@@ -265,6 +268,8 @@ export const en = {
 export type MessageKey = keyof typeof en;
 export type Locale = 'he' | 'en';
 export const he: Record<MessageKey, string> = {
+  ...setupHe,
+  ...dashboardHe,
   'home.title': 'הזמן שלכם, מנוצל היטב.',
   'home.intro': 'התור הבא שלכם והעסקים שאתם מבקרים בהם.',
   'home.providers': 'נותני השירות שלי',
@@ -520,8 +525,7 @@ export const he: Record<MessageKey, string> = {
   'account.timezoneHint': 'עסקים בפיילוט משתמשים בשעון ישראל המקומי, כולל המעבר בין שעון קיץ לחורף.',
   'account.submit': 'שליחה לאישור', 'account.submitted': 'הבקשה נשלחה וממתינה לבדיקה.',
   'account.submitFailed': 'לא ניתן לשלוח את הבקשה. נסו שוב.',
-  'setup.title': 'הגדרת העסק', 'setup.publish': 'פרסום העסק', 'setup.draft': 'טיוטה',
-  'setup.approved': 'מאושר', 'setup.published': 'פתוח להזמנת תורים',
+  'setup.publish': 'פרסום העסק', 'setup.draft': 'טיוטה', 'setup.published': 'פתוח להזמנת תורים',
   'approval.title': 'בקשות לניהול עסק', 'approval.approve': 'אישור', 'approval.reject': 'דחייה', 'approval.reason': 'נימוק להחלטה',
   'contact.title': 'השלמת פרטי הקשר', 'contact.name': 'שם מלא', 'contact.verifyPhone': 'אימות מספר טלפון',
   'booking.confirm': 'אישור התור', 'booking.cancel': 'ביטול התור',
