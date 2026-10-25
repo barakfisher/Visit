@@ -37,13 +37,20 @@ test('providers receive no tenant access until approval; approved members remain
   let businessId: string | undefined;
   let secondBusinessId: string | undefined;
   try {
+    for (const timezone of ['UTC', 'America/New_York', 'Asia/Tel_Aviv', 'invalid']) {
+      const rejected = await app.inject({ method: 'POST', url: '/v1/provider-applications', headers: { cookie: userCookie }, payload: { businessName: 'Wrong zone', slug, timezone } });
+      assert.equal(rejected.statusCode, 400);
+      assert.equal(await prisma.business.count({ where: { slug } }), 0);
+    }
     const submitted = await app.inject({
       method: 'POST', url: '/v1/provider-applications', headers: { cookie: userCookie },
-      payload: { businessName: 'Test Clinic', slug, timezone: 'Asia/Jerusalem' },
+      payload: { businessName: 'Test Clinic', slug } // Pilot zone defaults server-side, independent of device.,
     });
     assert.equal(submitted.statusCode, 201, submitted.body);
     assert.equal(submitted.json().status, BusinessApprovalStatus.PENDING);
     businessId = (await prisma.business.findUniqueOrThrow({ where: { slug }, select: { id: true } })).id;
+
+    assert.equal((await prisma.business.findUniqueOrThrow({ where: { id: businessId } })).timezone, 'Asia/Jerusalem');
 
     const deniedBeforeApproval = await app.inject({ method: 'GET', url: `/v1/provider/businesses/${businessId}/services`, headers: { cookie: userCookie } });
     assert.equal(deniedBeforeApproval.statusCode, 403);

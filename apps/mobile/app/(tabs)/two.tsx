@@ -1,3 +1,4 @@
+import { PILOT_TIMEZONE } from '@visit/contracts';
 import { AccountMethods } from '@/components/auth/AccountMethods';
 import { useState } from 'react';
 import { Link } from 'expo-router';
@@ -19,7 +20,7 @@ export default function AccountScreen() {
   const account = useQuery({ queryKey: ['me', identityId], queryFn: () => apiRequest<{ memberships: { role: string; status: string; business: { id: string; name: string; approvalStatus: string } }[]; providerApplications: { id: string; status: string; business: { name: string } }[] }>('/v1/me'), enabled: Boolean(identityId) });
   const [businessName, setBusinessName] = useState('');
   const [slug, setSlug] = useState('');
-  const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+  const timezone = PILOT_TIMEZONE;
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -56,7 +57,7 @@ export default function AccountScreen() {
       <View className="gap-4 rounded-card border border-line bg-surface p-card">
         <TextInput accessibilityLabel={t('account.businessName')} placeholder={t('account.businessName')} value={businessName} onChangeText={setBusinessName} className="rounded-control border border-line px-4 py-4 text-ink" />
         <TextInput accessibilityLabel={t('account.slug')} style={{ writingDirection: 'ltr', textAlign: 'left' }} autoCapitalize="none" placeholder="business-url-name" value={slug} onChangeText={(value) => setSlug(value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} className="rounded-control border border-line px-4 py-4 text-ink" />
-        <TextInput accessibilityLabel={t('account.timezone')} style={{ writingDirection: 'ltr', textAlign: 'left' }} autoCapitalize="none" placeholder="Asia/Jerusalem" value={timezone} onChangeText={setTimezone} className="rounded-control border border-line px-4 py-4 text-ink" />
+        <TextInput accessibilityLabel={t('account.timezone')} style={{ writingDirection: 'ltr', textAlign: 'left' }} autoCapitalize="none" placeholder="Asia/Jerusalem" value={timezone} editable={false} className="rounded-control border border-line px-4 py-4 text-ink" />
         <Text className="text-sm leading-5 text-body">{t('account.timezoneHint')}</Text>
         <Pressable disabled={busy || !businessName || !slug || !timezone} onPress={submit} accessibilityRole="button" className="items-center rounded-control bg-brand px-5 py-4 disabled:opacity-50">{busy ? <ActivityIndicator color="white" /> : <Text className="font-semibold text-white">{t('account.submit')}</Text>}</Pressable>
       </View>

@@ -1,3 +1,4 @@
+import { PILOT_TIMEZONE } from '@visit/contracts';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { BusinessApprovalStatus, MembershipRole, MembershipStatus, PlatformRole } from '../generated/prisma/client.js';
@@ -12,10 +13,6 @@ import { getBusinessSettings, getBusinessPolicy, saveBusinessPolicy, getBusiness
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const businessIdParams = z.object({ businessId: z.string().min(1) });
 const serviceParams = z.object({ businessId: z.string().min(1), serviceId: z.string().min(1) });
-
-function validTimezone(value: string) {
-  try { new Intl.DateTimeFormat('en-US', { timeZone: value }); return true; } catch { return false; }
-}
 
 function mapUniqueConflict(error: unknown): never {
   if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002') throw conflict('A business or application with those details already exists.');
@@ -37,13 +34,13 @@ export async function registerProviderRoutes(app: FastifyInstance) {
       businessId: z.string().min(1).optional(),
       businessName: z.string().trim().min(2).max(120).optional(),
       slug: z.string().trim().toLowerCase().regex(slugPattern).max(80).optional(),
-      timezone: z.string().refine(validTimezone, 'Use a valid IANA timezone.').optional(),
+      timezone: z.literal(PILOT_TIMEZONE, { error: 'Pilot businesses use local Israeli time (Asia/Jerusalem).' }).optional(),
       message: z.string().trim().max(1000).optional(),
     }).safeParse(request.body);
     if (!parsed.success) throw new AppError(400, 'VALIDATION_ERROR', 'Review the business details.', Object.fromEntries(parsed.error.issues.map((issue) => [String(issue.path[0] ?? 'form'), issue.message])));
     const input = parsed.data;
     if (input.businessId && (input.businessName || input.slug || input.timezone)) throw new AppError(400, 'VALIDATION_ERROR', 'Choose an existing business or submit a new business request, not both.');
-    if (!input.businessId && (!input.businessName || !input.slug || !input.timezone)) throw new AppError(400, 'VALIDATION_ERROR', 'A business name, URL name, and timezone are required for a new business.');
+    if (!input.businessId && (!input.businessName || !input.slug)) throw new AppError(400, 'VALIDATION_ERROR', 'A business name and URL name are required for a new business.');
 
     try {
       const application = await prisma.$transaction(async (tx) => {
@@ -54,7 +51,7 @@ export async function registerProviderRoutes(app: FastifyInstance) {
           const current = await tx.membership.findFirst({ where: { identityId: identity.id, businessId: business.id, role: MembershipRole.OWNER, status: MembershipStatus.ACTIVE } });
           if (current) throw conflict('You already manage this business.');
         } else {
-          business = await tx.business.create({ data: { name: input.businessName!, slug: input.slug!, timezone: input.timezone!, approvalStatus: BusinessApprovalStatus.PENDING }, select: { id: true } });
+          business = await tx.business.create({ data: { name: input.businessName!, slug: input.slug!, timezone: PILOT_TIMEZONE, approvalStatus: BusinessApprovalStatus.PENDING }, select: { id: true } });
         }
 
         const created = await tx.providerApplication.create({ data: { identityId: identity.id, businessId: business.id, message: input.message ?? null } });

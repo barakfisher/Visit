@@ -1,4 +1,8 @@
 export const en = {
+  'time.israelNote': 'Times are in local Israeli time, even when your device is abroad.',
+  'time.legacyNote': 'Times follow this business’s existing timezone: {timezone}. Your device location does not change them.',
+  'time.first': 'first occurrence',
+  'time.second': 'second occurrence',
   "auth.providerEntry": "Have a business? Register as a provider",
   "providerEntry.title": "Register your business with Visit",
   "providerEntry.identity": "Use one Visit account to book your own appointments and apply to manage a business. You do not need a second customer account.",
@@ -166,7 +170,7 @@ export const en = {
   'account.becomeProvider': 'Become a provider',
   'account.applyHelp': 'Submit your business for approval. Provider tools will be available after approval.',
   'account.businessName': 'Business name', 'account.slug': 'Business URL name', 'account.timezone': 'Business timezone',
-  'account.timezoneHint': 'Use an IANA timezone such as Asia/Jerusalem or America/New_York.',
+  'account.timezoneHint': 'Pilot businesses use local Israeli time, including daylight-saving changes.',
   'account.submit': 'Submit for approval', 'account.submitted': 'Your application was submitted and is pending review.',
   'account.submitFailed': 'The request could not be submitted. Please try again.',
   'setup.title': 'Set up your business', 'setup.publish': 'Publish business', 'setup.draft': 'Draft',
@@ -180,6 +184,10 @@ export const en = {
 export type MessageKey = keyof typeof en;
 export type Locale = 'he' | 'en';
 export const he: Record<MessageKey, string> = {
+  'time.israelNote': 'השעות מוצגות לפי שעון ישראל המקומי, גם כשהמכשיר בחו״ל.',
+  'time.legacyNote': 'השעות מוצגות לפי אזור הזמן הקיים של העסק: {timezone}. מיקום המכשיר לא משנה אותן.',
+  'time.first': 'מופע ראשון',
+  'time.second': 'מופע שני',
   "auth.providerEntry": "יש לכם עסק? הרשמה כנותני שירות",
   "providerEntry.title": "רישום העסק שלכם ל־Visit",
   "providerEntry.identity": "חשבון Visit אחד מאפשר להזמין תורים וגם להגיש בקשה לניהול עסק. אין צורך בחשבון לקוח נוסף.",
@@ -347,7 +355,7 @@ export const he: Record<MessageKey, string> = {
   'account.becomeProvider': 'פתיחת עסק ב־Visit',
   'account.applyHelp': 'שלחו את פרטי העסק לבדיקה. כלי הניהול יהיו זמינים לאחר האישור.',
   'account.businessName': 'שם העסק', 'account.slug': 'שם העסק בכתובת האתר', 'account.timezone': 'אזור הזמן של העסק',
-  'account.timezoneHint': 'יש להשתמש באזור זמן מסוג IANA, למשל Asia/Jerusalem או America/New_York.',
+  'account.timezoneHint': 'עסקים בפיילוט משתמשים בשעון ישראל המקומי, כולל המעבר בין שעון קיץ לחורף.',
   'account.submit': 'שליחה לאישור', 'account.submitted': 'הבקשה נשלחה וממתינה לבדיקה.',
   'account.submitFailed': 'לא ניתן לשלוח את הבקשה. נסו שוב.',
   'setup.title': 'הגדרת העסק', 'setup.publish': 'פרסום העסק', 'setup.draft': 'טיוטה',

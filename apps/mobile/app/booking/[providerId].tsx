@@ -1,3 +1,5 @@
+import { timePolicyNote } from '@/src/lib/appointmentTime';
+import { useAppLocale } from '@/src/i18n/LocaleContext';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
@@ -15,6 +17,7 @@ import { formatMoney, type ProviderDetail, type Slot, type Hold } from '@/src/ty
 
 const slotId = (slot: Slot) => `${slot.staffId}:${slot.startsAt}`;
 export default function BookingScreen() {
+  const { locale } = useAppLocale();
   const params = useLocalSearchParams<{ providerId: string; serviceId?: string; date?: string; fromBookingId?: string }>();
   const { providerId, fromBookingId } = params;
   const [serviceId, setServiceId] = useState(params.serviceId ?? '');
@@ -40,7 +43,7 @@ export default function BookingScreen() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setConflictSlot((current) => current && slots.data?.slots.some((slot) => slotId(slot) === current && slot.available) ? null : current);
   }, [slots.data]);
-  const labels = slotLabels(slots.data?.slots ?? []);
+  const labels = slotLabels(slots.data?.slots ?? [], locale);
   async function release() {
     const current = holdRef.current; holdRef.current = null; setHold(null);
     if (current) await apiRequest(`/api/bookings/${current.holdId}/release`, { method: 'POST' }).catch(() => {});
@@ -75,7 +78,7 @@ export default function BookingScreen() {
     finally { setBusy(false); }
   }
   return <View className="flex-1 bg-canvas"><ScrollView contentContainerClassName="mx-auto w-full max-w-3xl gap-6 px-5 py-6 pb-10 md:px-8">
-    <Link href="/discover" className="font-semibold text-brand">← Back to providers</Link><View className="gap-2"><Text className="text-xs font-semibold uppercase tracking-widest text-brand">{provider?.name ?? 'Book a visit'}</Text><Text accessibilityRole="header" className="text-3xl font-bold text-ink">Available appointments</Text><Text className="text-body">{provider ? `Times shown in ${provider.timezone}.` : 'Loading provider…'}</Text></View>
+    <Link href="/discover" className="font-semibold text-brand">← Back to providers</Link><View className="gap-2"><Text className="text-xs font-semibold uppercase tracking-widest text-brand">{provider?.name ?? 'Book a visit'}</Text><Text accessibilityRole="header" className="text-3xl font-bold text-ink">Available appointments</Text><Text className="text-body">{provider ? timePolicyNote(provider.timezone, locale) : 'Loading provider…'}</Text></View>
     {details.isLoading ? <ActivityIndicator color="#0f766e"/> : details.isError ? <Text accessibilityRole="alert" className="text-danger">{details.error.message}</Text> : <>
     <View className="gap-3"><Text className="text-lg font-semibold text-ink">1. Choose a service</Text>{provider?.services.map((service) => <ServiceCard key={service.id} name={service.name} description={service.description ?? undefined} durationMinutes={service.durationMinutes} priceLabel={formatMoney(service.priceMinor, service.currency)} selected={service.id === chosenService} disabled={busy} onPress={() => { void reset(); setServiceId(service.id); }}/>)}</View>
     <View className="gap-2"><Text className="text-lg font-semibold text-ink">2. Pick a date</Text><HorizontalCalendarBar days={days.map((day) => ({ ...day, disabled: busy || day.disabled }))} selectedId={chosenDate} onSelect={(value) => { void reset(); setDate(value); }}/><TextInput accessibilityLabel="Appointment date" placeholder="YYYY-MM-DD" editable={!busy} value={chosenDate} onChangeText={(value) => { void reset(); setDate(value); }} className="rounded-control border border-line bg-surface px-4 py-3 text-ink"/></View>

@@ -14,7 +14,7 @@ export const SkeletonLoading: Story = { args: { loading: true }, play: async ({ 
 
 const foldLabels = slotLabels([{ staffId: 'alex', staffName: 'Alex', localTime: '01:30', utcOffset: '+03:00' }, { staffId: 'alex', staffName: 'Alex', localTime: '01:30', utcOffset: '+02:00' }]);
 export const RepeatedClockTime: Story = { args: { slots: foldLabels.map((label, index) => ({ id: `fold-${index}`, label })), onSelect: fn() }, play: async ({ canvas, args }) => {
-  await expect(canvas.getByRole('button', { name: /UTC\+03:00/ })).toBeVisible();
-  await userEvent.click(canvas.getByRole('button', { name: /UTC\+02:00/ }));
+  await expect(canvas.getByRole('button', { name: /first occurrence/ })).toBeVisible();
+  await userEvent.click(canvas.getByRole('button', { name: /second occurrence/ }));
   await expect(args.onSelect).toHaveBeenCalledWith('fold-1');
 } };
