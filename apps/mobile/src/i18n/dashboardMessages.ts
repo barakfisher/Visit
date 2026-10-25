@@ -1,0 +1,14 @@
+export const dashboardEn = {
+  'dashboard.workspace': 'Provider workspace', 'dashboard.title': 'Provider dashboard', 'dashboard.denied': 'An approved provider account is required to manage a business.', 'dashboard.account': 'View account and approval status',
+  'dashboard.agenda': 'Agenda View', 'dashboard.services': 'Service Catalog', 'dashboard.hours': 'Working Hours', 'dashboard.date': 'Agenda date', 'dashboard.appointments': 'Appointments', 'dashboard.revenue': 'Expected revenue',
+  'dashboard.block': 'Block time / add a break', 'dashboard.closeBlock': 'Close break form', 'dashboard.blockOn': 'Block time on {date}', 'dashboard.from': 'Break start time', 'dashboard.to': 'Break end time', 'dashboard.reason': 'Break reason', 'dashboard.saveBlock': 'Save blocked time', 'dashboard.removeBlock': 'Remove blocked time',
+  'dashboard.blockFailure': 'Could not block this time.', 'dashboard.removeFailure': 'Could not remove break.', 'dashboard.loading': 'Loading agenda…', 'dashboard.daily': 'Daily agenda', 'dashboard.empty': 'No appointments for this day.', 'dashboard.customer': 'Customer', 'dashboard.blocked': 'Blocked time',
+  'dashboard.call': 'Call', 'dashboard.noPhoneCall': 'Call (no phone number)', 'dashboard.whatsapp': 'WhatsApp', 'dashboard.noPhoneWhatsapp': 'WhatsApp (no phone number)', 'dashboard.callFailure': 'Could not open the phone app.', 'dashboard.whatsappFailure': 'Could not open WhatsApp.',
+} as const;
+export const dashboardHe: Record<keyof typeof dashboardEn, string> = {
+  'dashboard.workspace': 'ניהול העסק', 'dashboard.title': 'לוח ניהול העסק', 'dashboard.denied': 'נדרש חשבון נותן שירות מאושר כדי לנהל עסק.', 'dashboard.account': 'הצגת החשבון ומצב האישור',
+  'dashboard.agenda': 'יומן', 'dashboard.services': 'קטלוג שירותים', 'dashboard.hours': 'שעות פעילות', 'dashboard.date': 'תאריך ביומן', 'dashboard.appointments': 'תורים', 'dashboard.revenue': 'הכנסה צפויה',
+  'dashboard.block': 'חסימת זמן / הוספת הפסקה', 'dashboard.closeBlock': 'סגירת טופס הפסקה', 'dashboard.blockOn': 'חסימת זמן בתאריך {date}', 'dashboard.from': 'שעת תחילת הפסקה', 'dashboard.to': 'שעת סיום הפסקה', 'dashboard.reason': 'סיבת ההפסקה', 'dashboard.saveBlock': 'שמירת זמן חסום', 'dashboard.removeBlock': 'הסרת זמן חסום',
+  'dashboard.blockFailure': 'לא ניתן לחסום זמן זה.', 'dashboard.removeFailure': 'לא ניתן להסיר את ההפסקה.', 'dashboard.loading': 'טוענים את היומן…', 'dashboard.daily': 'יומן יומי', 'dashboard.empty': 'אין תורים ביום זה.', 'dashboard.customer': 'לקוח', 'dashboard.blocked': 'זמן חסום',
+  'dashboard.call': 'שיחה', 'dashboard.noPhoneCall': 'שיחה (אין מספר טלפון)', 'dashboard.whatsapp': 'WhatsApp', 'dashboard.noPhoneWhatsapp': 'WhatsApp (אין מספר טלפון)', 'dashboard.callFailure': 'לא ניתן לפתוח את יישום הטלפון.', 'dashboard.whatsappFailure': 'לא ניתן לפתוח את WhatsApp.',
+};

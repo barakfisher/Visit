@@ -78,6 +78,9 @@ model Business {
   slug               String                 @unique
   timezone           String
   location           String?
+  description        String?
+  contactEmail       String?
+  contactPhone       String?
   category           String                 @default("General")
   approvalStatus     BusinessApprovalStatus @default(PENDING)
   createdAt          DateTime               @default(now())
@@ -180,6 +183,8 @@ model Session {
 }
 
 model Staff {
+  creationKey String?
+  creationFingerprint String?
   id             String                 @id @default(cuid())
   businessId     String
   displayName    String
@@ -194,6 +199,7 @@ model Staff {
   timeBlocks     TimeBlock[]
 
   @@unique([businessId, id])
+  @@unique([businessId, creationKey])
   @@index([businessId, active])
 }
 

@@ -93,9 +93,11 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
           if (!matchesRequest(existing)) throw conflict('That idempotency key was already used for a different booking request.');
           return existing;
         }
+        const currentStaffLink = await tx.staffService.findUnique({ where: { businessId_staffId_serviceId: { businessId: business.id, staffId: input.staffId, serviceId: input.serviceId } }, include: { staff: true } });
+        if (!currentStaffLink?.staff.active) throw conflict('This staff assignment changed. Choose an available provider.');
         await tx.booking.updateMany({ where: { businessId: business.id, staffId: input.staffId, status: BookingStatus.HELD, holdExpiresAt: { lte: now } }, data: { status: BookingStatus.EXPIRED } });
         const conflicts = await tx.booking.findMany({ where: { businessId: business.id, staffId: input.staffId, status: { in: activeStatuses }, occupiedFrom: { lt: occupied.endsAt }, occupiedUntil: { gt: occupied.startsAt } }, select: { occupiedFrom: true, occupiedUntil: true } });
-        if (!assertCapacity(occupied, conflicts.map((item) => ({ startsAt: item.occupiedFrom, endsAt: item.occupiedUntil })), staffLink.staff.parallelCapacity)) throw conflict('That time was just booked. Choose another time.');
+        if (!assertCapacity(occupied, conflicts.map((item) => ({ startsAt: item.occupiedFrom, endsAt: item.occupiedUntil })), currentStaffLink.staff.parallelCapacity)) throw conflict('That time was just booked. Choose another time.');
         if (await tx.timeBlock.count({ where: { businessId: business.id, staffId: input.staffId, startsAt: { lt: occupied.endsAt }, endsAt: { gt: occupied.startsAt } } })) throw conflict('This provider has blocked this time. Choose another time.');
         await tx.$queryRaw`SELECT id FROM "Service" WHERE id = ${service.id} AND "businessId" = ${business.id} FOR SHARE`;
         const currentService = await tx.service.findFirst({ where: { id: service.id, businessId: business.id, active: true } });

@@ -20,6 +20,8 @@ A customer may legitimately book a different published business; business select
 
 ## Repeatable fixtures
 
+VIS-35 adds `business-setup.test.ts` and `business-setup-smoke.ts`: clean approved-business configuration through the UI, keyed staff-create retry, capacity/assignment races, selective hold expiry, preserved confirmations, cross-device setup and independently decoded QR export. Browser review notifications use a per-run test scope; live workers cannot dispatch those fixture outbox records.
+
 From the API workspace or with `--workspace @visit/api` from the repository root:
 
 ```sh

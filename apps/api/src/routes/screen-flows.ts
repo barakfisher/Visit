@@ -52,7 +52,7 @@ export async function registerScreenFlows(app: FastifyInstance) {
   });
   app.get('/api/providers/:providerId', async (request) => {
     const { providerId } = request.params as { providerId: string };
-    const provider = await prisma.business.findFirst({ where: { id: providerId, ...publicBusinessWhere }, select: { id: true, name: true, timezone: true, location: true, category: true, services: { where: { active: true }, orderBy: { name: 'asc' } }, weeklyAvailability: true, scheduleOverrides: true, bookingPolicy: true } });
+    const provider = await prisma.business.findFirst({ where: { id: providerId, ...publicBusinessWhere }, select: { id: true, name: true, timezone: true, location: true, category: true, description: true, contactEmail: true, contactPhone: true, services: { where: { active: true }, orderBy: { name: 'asc' } }, weeklyAvailability: true, scheduleOverrides: true, bookingPolicy: true } });
     if (!provider) throw notFound();
     return { provider };
   });

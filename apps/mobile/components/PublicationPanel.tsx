@@ -16,7 +16,7 @@ export function PublicationPanel({ businessId }: { businessId: string }) {
   async function change(published: boolean) {
     if (running.current) return;
     running.current = true; setBusy(true); setError('');
-    try { await apiRequest(base, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ published }) }); await client.invalidateQueries({ predicate: q => ['provider', 'availability', 'public'].includes(String(q.queryKey[0])) }); }
+    try { await apiRequest(base, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ published }) }); await client.invalidateQueries({ predicate: q => ['provider', 'availability', 'public', 'my-providers'].includes(String(q.queryKey[0])) }); }
     catch { setError(t('publish.failure')); await query.refetch(); } finally { running.current = false; setBusy(false); }
   }
   return <View className="gap-3 rounded-card border border-line bg-surface p-card">

@@ -76,7 +76,7 @@ try {
   const { createLocalAccountDelivery } = await import('../../api/src/security/account-delivery.js');
   const { createOtpService } = await import('../../api/src/security/phone-otp.js');
   const account = createAccountMethodsService({ namespace: accountNamespace, delivery: createLocalAccountDelivery(), otp: createOtpService({ mode: 'local-inbox', namespace: `${accountNamespace}:otp`, secret: 'web-test-only-account-otp-secret' }) });
-  apiServer = await createApp({ google, account });
+  apiServer = await createApp({ google, account, providerReviewScope: `test:review-web:${run}` });
   await apiServer.listen({ host: '127.0.0.1', port: 3001 });
   assert.equal((await fetch(`${apiUrl}/health/ready`)).status, 200);
   for (const name of ['North', 'South']) {
@@ -304,6 +304,7 @@ try {
     await providerPage.getByTestId('language-he').click();
     await providerPage.goto(`${webUrl}/provider/${businessIds[0]}`);
     await providerPage.setViewportSize({ width: 390, height: 844 });
+    await providerPage.getByTestId('setup-section-services').click();
     await providerPage.getByRole('heading', { name: 'קטלוג שירותים', exact: true }).waitFor();
     assert.equal(await providerPage.getByLabel('מחיר', { exact: true }).evaluate(node => getComputedStyle(node).direction), 'ltr');
     await providerPage.screenshot({ path: path.join(diagnostics, 'service-catalog-he-mobile.png'), fullPage: true });
