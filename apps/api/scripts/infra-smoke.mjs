@@ -11,6 +11,7 @@ const temporary = await mkdtemp(resolve(tmpdir(), 'visit-infra-'));
 const project = `visit-infra-${process.pid}-${Date.now()}`;
 const execute = promisify(execFile);
 const checks = [];
+let apiTests = null;
 const environment = {
   ...process.env,
   SESSION_SECRET: 'isolated-infra-test-only-secret-at-least-32-characters',
@@ -60,7 +61,9 @@ try {
   assert.deepEqual(await ready.json(), { status: 'ready', database: 'ok', redis: 'ok' });
   pass('fresh Compose startup applies migrations before API readiness');
   if (process.argv.includes('--api-tests')) {
-    await compose(['exec', '-T', 'api', 'npm', 'test', '--workspace', '@visit/api'], 120_000);
+    const { stdout } = await compose(['exec', '-T', 'api', 'npm', 'test', '--workspace', '@visit/api'], 120_000);
+    apiTests = Object.fromEntries(['tests', 'pass', 'fail', 'skipped'].map(label => [label, Number(stdout.match(new RegExp(`(?:ℹ|#) ${label} (\\d+)`))?.[1] ?? -1)]));
+    assert.ok(apiTests.tests > 0 && apiTests.pass === apiTests.tests && apiTests.fail === 0, 'API suite must report a complete passing summary');
     pass('API integration suite passes against the fresh isolated PostgreSQL and Redis services');
   }
 
@@ -145,7 +148,7 @@ try {
   await rm(temporary, { recursive: true, force: true });
   const resultsDirectory = resolve(root, 'apps/api/test-results');
   await mkdir(resultsDirectory, { recursive: true });
-  await writeFile(resolve(resultsDirectory, 'infra-smoke.json'), JSON.stringify({ at: new Date().toISOString(), commit: process.env.VISIT_TEST_COMMIT ?? null, passed: !failure, checks }, null, 2));
+  await writeFile(resolve(resultsDirectory, 'infra-smoke.json'), JSON.stringify({ at: new Date().toISOString(), commit: process.env.VISIT_TEST_COMMIT ?? null, passed: !failure, apiTests, checks }, null, 2));
   if (failureDiagnostics) await writeFile(resolve(resultsDirectory, 'infra-smoke-failure.log'), failureDiagnostics);
   else await rm(resolve(resultsDirectory, 'infra-smoke-failure.log'), { force: true });
 }

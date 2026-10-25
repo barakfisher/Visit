@@ -183,17 +183,50 @@ try {
     await providerPage.getByRole('button', { name: 'Remove blocked time' }).waitFor();
     console.log('PASS: approved-provider smart routing, agenda verification and manual break.');
     await providerPage.getByRole('tab', { name: 'Service Catalog', exact: true }).click();
-    await providerPage.getByLabel('Service name', { exact: true }).fill('Unsaved North draft');
+    // Hold an old-workspace response across the switch. Late replies must not
+    // restore the old private catalog or its draft after Query cancellation.
+    const northCatalogUrl = `${apiUrl}/v1/provider/businesses/${businessIds[0]}/services`;
+    let releaseOld!: () => void, observedOld!: () => void, finishedOld!: () => void;
+    const oldGate = new Promise<void>(resolve => { releaseOld = resolve; });
+    const oldObserved = new Promise<void>(resolve => { observedOld = resolve; });
+    const oldFinished = new Promise<void>(resolve => { finishedOld = resolve; });
+    const oldDeadline = setTimeout(releaseOld, 12000);
+    const delayOld = async (route: import('playwright').Route) => {
+      try { const response = await route.fetch(); observedOld(); await oldGate; await route.fulfill({ response }).catch(() => {}); }
+      finally { finishedOld(); }
+    };
+    await providerPage.route(northCatalogUrl, delayOld);
+    try {
+      // Switching away and back clears the fresh 15s query cache, guaranteeing
+      // a real new North request without waiting for a stale-time timer.
+      await providerPage.getByRole('button', { name: `Visit QA South ${run.slice(0, 6)}`, exact: true }).click();
+      await providerPage.getByRole('tab', { name: 'Service Catalog', exact: true }).click();
+      await providerPage.getByText('South consultation', { exact: true }).waitFor();
+      await providerPage.getByRole('button', { name: `Visit QA North ${run.slice(0, 6)}`, exact: true }).click();
+      await providerPage.getByRole('tab', { name: 'Service Catalog', exact: true }).click();
+      await Promise.race([oldObserved, new Promise<never>((_, reject) => { const timer = setTimeout(() => reject(new Error('Old catalog request was not observed')), 10000); oldObserved.then(() => clearTimeout(timer)); })]);
+      await providerPage.getByLabel('Service name', { exact: true }).fill('Unsaved North draft');
     await providerPage.getByRole('button', { name: `Visit QA South ${run.slice(0, 6)}`, exact: true }).click();
     await providerPage.getByRole('tab', { name: 'Service Catalog', exact: true }).click();
     await providerPage.getByText('South consultation', { exact: true }).waitFor();
     assert.equal(await providerPage.getByLabel('Service name', { exact: true }).inputValue(), '');
     assert.equal(await providerPage.getByText('QA consultation', { exact: true }).count(), 0);
+      releaseOld(); await oldFinished;
+      // The agenda intentionally polls; global network-idle is not a reliable
+      // completion condition. Drain browser render frames after fulfillment.
+      await providerPage.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+      assert.equal(await providerPage.getByText('QA consultation', { exact: true }).count(), 0);
+      assert.equal(await providerPage.getByLabel('Service name', { exact: true }).inputValue(), '');
+      assert.deepEqual(await providerPage.evaluate(async () => ({ caches: await caches.keys(), registrations: (await navigator.serviceWorker.getRegistrations()).length })), { caches: [], registrations: 0 });
+      const storage = await providerPage.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }));
+      assert.equal(storage.includes('Unsaved North draft') || storage.includes('QA consultation') || storage.includes('South consultation'), false);
+    } finally { clearTimeout(oldDeadline); releaseOld(); await providerPage.unroute(northCatalogUrl, delayOld); }
+
     await providerPage.getByRole('button', { name: `Visit QA North ${run.slice(0, 6)}`, exact: true }).click();
     await providerPage.getByRole('tab', { name: 'Service Catalog', exact: true }).click();
     await providerPage.getByText('QA consultation', { exact: true }).waitFor();
     assert.equal(await providerPage.getByLabel('Service name', { exact: true }).inputValue(), '');
-    console.log('PASS: business switching resets drafts and shows only the selected business catalog.');
+    console.log('PASS: business switching discards delayed old-workspace responses, clears drafts, and leaves browser caches/private storage empty.');
     const catalogBase = `${apiUrl}/v1/provider/businesses/${businessIds[0]}/services`;
     const form = providerPage.getByTestId('service-form');
     await form.getByLabel('Service name', { exact: true }).fill('QA exact-money service');

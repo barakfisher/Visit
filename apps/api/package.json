@@ -11,7 +11,10 @@
     "test": "tsx --test test/*.test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:deploy": "prisma migrate deploy"
+    "db:deploy": "prisma migrate deploy",
+    "test:security": "tsc -p tsconfig.test.json && tsx --test test/tenant-isolation.test.ts test/tenant-fixtures.test.ts test/booking-guard.test.ts test/redis-slot-lock.test.ts test/request-security.test.ts",
+    "test:infra": "node scripts/infra-smoke.mjs --api-tests",
+    "fixtures:tenants": "tsx scripts/tenant-fixtures.mts"
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",

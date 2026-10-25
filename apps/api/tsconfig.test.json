@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true, "rootDir": "." },
+  "include": ["src/**/*.ts", "test/tenant-fixtures.test.ts", "test/support/**/*.ts", "scripts/tenant-fixtures.mts"]
+}
