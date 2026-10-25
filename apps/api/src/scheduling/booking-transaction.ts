@@ -13,6 +13,7 @@ export async function retrySerializable<T>(operation: () => Promise<T>, attempts
   for (let attempt = 0; attempt < attempts; attempt++) {
     try { return await operation(); }
     catch (error) {
+      if (error && typeof error === 'object' && (('message' in error && String(error.message).includes('VISIT_BUSINESS_UNPUBLISHED')) || ('meta' in error && JSON.stringify(error.meta).includes('VISIT_BUSINESS_UNPUBLISHED')))) throw conflict('This business is not published for bookings.');
       if (isDatabaseCapacityError(error)) throw conflict('That time has no remaining capacity. Choose another time.');
       if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'P2034') throw error;
       if (attempt === attempts - 1) throw conflict('Availability changed. Please retry.');

@@ -25,7 +25,7 @@ test('serialization retries are bounded and do not retry domain conflicts', asyn
 
 test('database capacity guard is authoritative without Redis, including direct writes and crashes', async t => {
   const suffix = randomUUID();
-  const business = await prisma.business.create({ data: { name: 'Guard fixture', slug: `guard-${suffix}`, timezone: 'UTC', approvalStatus: 'APPROVED' } });
+  const business = await prisma.business.create({ data: { publishedAt: new Date(), location: 'Synthetic fixture', name: 'Guard fixture', slug: `guard-${suffix}`, timezone: 'UTC', approvalStatus: 'APPROVED' } });
   const identity = await prisma.identity.create({ data: { email: `guard-${suffix}@example.test` } });
   const service = await prisma.service.create({ data: { businessId: business.id, name: 'Guard service', durationMinutes: 30 } });
   const day = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);

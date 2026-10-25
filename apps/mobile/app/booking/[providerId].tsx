@@ -17,7 +17,7 @@ import { formatMoney, type ProviderDetail, type Slot, type Hold } from '@/src/ty
 
 const slotId = (slot: Slot) => `${slot.staffId}:${slot.startsAt}`;
 export default function BookingScreen() {
-  const { locale } = useAppLocale();
+  const { locale, t } = useAppLocale();
   const params = useLocalSearchParams<{ providerId: string; serviceId?: string; date?: string; fromBookingId?: string }>();
   const { providerId, fromBookingId } = params;
   const [serviceId, setServiceId] = useState(params.serviceId ?? '');
@@ -32,12 +32,12 @@ export default function BookingScreen() {
   const sequence = useRef(0);
   const identityId = useAuthStore((state) => state.identityId);
   const client = useQueryClient();
-  const details = useQuery({ queryKey: ['provider', providerId, 'public'], queryFn: () => apiRequest<{ provider: ProviderDetail }>(`/api/providers/${providerId}`) });
+  const details = useQuery({ queryKey: ['provider', providerId, fromBookingId ?? 'public'], queryFn: () => apiRequest<{ provider: ProviderDetail }>(`/api/${fromBookingId ? `bookings/${fromBookingId}/provider` : `providers/${providerId}`}`) });
   const provider = details.data?.provider;
   const days = provider ? makeCalendarDays(provider) : [];
   const chosenService = serviceId || provider?.services[0]?.id || '';
   const chosenDate = date || days.find((day) => !day.disabled)?.id || days[0]?.id || '';
-  const slots = useQuery({ queryKey: ['availability', providerId, chosenService, chosenDate], queryFn: () => apiRequest<{ slots: Slot[] }>(`/api/providers/${providerId}/availability?${new URLSearchParams({ serviceId: chosenService, date: chosenDate })}`), enabled: Boolean(chosenService && /^\d{4}-\d{2}-\d{2}$/.test(chosenDate)), refetchInterval: 2000 });
+  const slots = useQuery({ queryKey: ['availability', providerId, fromBookingId ?? 'public', chosenService, chosenDate], queryFn: () => apiRequest<{ slots: Slot[] }>(`/api/${fromBookingId ? `bookings/${fromBookingId}` : `providers/${providerId}`}/availability?${new URLSearchParams({ serviceId: chosenService, date: chosenDate })}`), enabled: Boolean(chosenService && /^\d{4}-\d{2}-\d{2}$/.test(chosenDate)), refetchInterval: 2000 });
   useEffect(() => {
     // A fresh availability response may make a previously contested slot bookable again.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -78,7 +78,7 @@ export default function BookingScreen() {
     finally { setBusy(false); }
   }
   return <View className="flex-1 bg-canvas"><ScrollView contentContainerClassName="mx-auto w-full max-w-3xl gap-6 px-5 py-6 pb-10 md:px-8">
-    <Link href="/discover" className="font-semibold text-brand">← Back to providers</Link><View className="gap-2"><Text className="text-xs font-semibold uppercase tracking-widest text-brand">{provider?.name ?? 'Book a visit'}</Text><Text accessibilityRole="header" className="text-3xl font-bold text-ink">Available appointments</Text><Text className="text-body">{provider ? timePolicyNote(provider.timezone, locale) : 'Loading provider…'}</Text></View>
+    <Link href="/" className="font-semibold text-brand">{t('providerEntry.home')}</Link><View className="gap-2"><Text className="text-xs font-semibold uppercase tracking-widest text-brand">{provider?.name ?? 'Book a visit'}</Text><Text accessibilityRole="header" className="text-3xl font-bold text-ink">Available appointments</Text><Text className="text-body">{provider ? timePolicyNote(provider.timezone, locale) : 'Loading provider…'}</Text></View>
     {details.isLoading ? <ActivityIndicator color="#0f766e"/> : details.isError ? <Text accessibilityRole="alert" className="text-danger">{details.error.message}</Text> : <>
     <View className="gap-3"><Text className="text-lg font-semibold text-ink">1. Choose a service</Text>{provider?.services.map((service) => <ServiceCard key={service.id} name={service.name} description={service.description ?? undefined} durationMinutes={service.durationMinutes} priceLabel={formatMoney(service.priceMinor, service.currency)} selected={service.id === chosenService} disabled={busy} onPress={() => { void reset(); setServiceId(service.id); }}/>)}</View>
     <View className="gap-2"><Text className="text-lg font-semibold text-ink">2. Pick a date</Text><HorizontalCalendarBar days={days.map((day) => ({ ...day, disabled: busy || day.disabled }))} selectedId={chosenDate} onSelect={(value) => { void reset(); setDate(value); }}/><TextInput accessibilityLabel="Appointment date" placeholder="YYYY-MM-DD" editable={!busy} value={chosenDate} onChangeText={(value) => { void reset(); setDate(value); }} className="rounded-control border border-line bg-surface px-4 py-3 text-ink"/></View>

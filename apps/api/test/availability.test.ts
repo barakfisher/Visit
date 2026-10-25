@@ -106,7 +106,7 @@ test('availability repository and legacy/compatibility routes share scoped sched
   const app = Fastify();
   app.setErrorHandler((error, _req, reply) => reply.code(error instanceof AppError ? error.statusCode : error instanceof ZodError ? 400 : 500).send({ error: { code: error instanceof AppError ? error.code : 'VALIDATION_ERROR' } }));
   await registerBookingRoutes(app); await registerScreenFlows(app);
-  const businesses = await Promise.all(['a', 'b', 'hidden'].map(name => prisma.business.create({ data: { name, slug: `availability-${name}-${runId}`, timezone: 'UTC', approvalStatus: name === 'hidden' ? 'PENDING' : 'APPROVED' } })));
+  const businesses = await Promise.all(['a', 'b', 'hidden'].map(name => prisma.business.create({ data: { publishedAt: new Date(), location: 'Synthetic fixture', name, slug: `availability-${name}-${runId}`, timezone: 'UTC', approvalStatus: name === 'hidden' ? 'PENDING' : 'APPROVED' } })));
   const a = businesses[0]!, b = businesses[1]!, hidden = businesses[2]!;
   const services = await Promise.all(businesses.map(business => prisma.service.create({ data: { businessId: business.id, name: 'Consultation', durationMinutes: 30 } })));
   const service = services[0]!;

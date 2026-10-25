@@ -1,3 +1,5 @@
+import { validateAuthenticatedSession, type AuthenticatedSession } from './sessions.js';
+import { conflict } from '../http/errors.js';
 import { MembershipRole, MembershipStatus } from '../generated/prisma/client.js';
 import { prisma } from '../db/client.js';
 import { forbidden, notFound } from '../http/errors.js';
@@ -14,7 +16,7 @@ export type AuthorizedBusinessContext = Readonly<{
   [contextBrand]: true;
 }>;
 
-export type PublicBusinessContext = Readonly<{ businessId: string; timezone: string; [publicContextBrand]: true }>;
+export type PublicBusinessContext = Readonly<{ businessId: string; timezone: string; ownedBookingId?: string; customerId?: string; [publicContextBrand]: true }>;
 
 export async function requireBusinessMembership(
   identityId: string,
@@ -39,7 +41,7 @@ export async function requireBusinessMembership(
 
 export async function requirePublicBusiness(businessId: string): Promise<PublicBusinessContext> {
   const business = await prisma.business.findFirst({
-    where: { id: businessId, approvalStatus: 'APPROVED' },
+    where: { id: businessId, approvalStatus: 'APPROVED', publishedAt: { not: null } },
     select: { id: true, timezone: true },
   });
   if (!business) throw notFound();
@@ -61,5 +63,20 @@ export async function validateBusinessContext(context: AuthorizedBusinessContext
 
 export async function validatePublicBusinessContext(context: PublicBusinessContext) {
   if (!context || !issuedPublicContexts.has(context)) throw forbidden();
-  await requirePublicBusiness(context.businessId);
+  if (context.ownedBookingId && context.customerId) await validateOwnedReschedule(context.ownedBookingId, context.customerId);
+  else await requirePublicBusiness(context.businessId);
+}
+
+async function validateOwnedReschedule(bookingId: string, customerId: string) {
+  const booking = await prisma.booking.findFirst({ where: { id: bookingId, customerId, status: 'CONFIRMED', business: { approvalStatus: 'APPROVED' } }, include: { business: { include: { bookingPolicy: true } } } });
+  if (!booking) throw notFound();
+  if (!booking.business.bookingPolicy || booking.startsAt.getTime() < Date.now() + booking.business.bookingPolicy.rescheduleCutoffMinutes * 60000) throw conflict('The reschedule cutoff has passed.');
+  return booking;
+}
+export async function requireOwnedReschedule(actor: AuthenticatedSession, bookingId: string) {
+  await validateAuthenticatedSession(actor);
+  const booking = await validateOwnedReschedule(bookingId, actor.identity.id);
+  const context = Object.freeze({ businessId: booking.businessId, timezone: booking.business.timezone, ownedBookingId: booking.id, customerId: actor.identity.id, [publicContextBrand]: true as const });
+  issuedPublicContexts.add(context);
+  return { context, serviceId: booking.serviceId, booking };
 }

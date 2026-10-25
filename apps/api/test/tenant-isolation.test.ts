@@ -25,7 +25,7 @@ test('tenant repositories and both HTTP surfaces enforce scope, ownership and cu
   const app = Fastify();
   app.setErrorHandler((error, _request, reply) => reply.code(error instanceof AppError ? error.statusCode : error instanceof ZodError ? 400 : 500).send({ error: { code: error instanceof AppError ? error.code : 'VALIDATION_ERROR' } }));
   await registerAuthRoutes(app); await registerProviderRoutes(app); await registerBookingRoutes(app); await registerFlowAuth(app); await registerScreenFlows(app);
-  const businesses = await Promise.all(['a', 'b', 'hidden'].map(name => prisma.business.create({ data: { name: `${name}-${run}`, slug: `isolation-${name}-${run}`, timezone: 'UTC', approvalStatus: name === 'hidden' ? 'PENDING' : 'APPROVED' } })));
+  const businesses = await Promise.all(['a', 'b', 'hidden'].map(name => prisma.business.create({ data: { publishedAt: new Date(), location: 'Synthetic fixture', name: `${name}-${run}`, slug: `isolation-${name}-${run}`, timezone: 'UTC', approvalStatus: name === 'hidden' ? 'PENDING' : 'APPROVED' } })));
   const [a, b, hidden] = businesses;
   const people = await Promise.all(['a', 'b', 'dual', 'staff', 'pending', 'outsider'].map(name => prisma.identity.create({ data: { email: `isolation-${name}-${run}@example.test` } })));
   const [ownerA, ownerB, dual, staffMember, pending, outsider] = people;
@@ -58,6 +58,9 @@ test('tenant repositories and both HTTP surfaces enforce scope, ownership and cu
     const bookingB = await prisma.booking.create({ data: seedBooking(1, outsider!.id) });
     const blockB = await prisma.timeBlock.create({ data: { businessId: b!.id, staffId: staffB!.id, startsAt: new Date(`${date}T12:00:00Z`), endsAt: new Date(`${date}T12:30:00Z`) } });
 
+    // Each isolation subtest starts with explicit synthetic publication. Publication
+    // invalidation itself is covered by the separate lifecycle suite.
+    t.beforeEach(async () => { await prisma.business.updateMany({ where: { id: { in: [a!.id, b!.id] }, approvalStatus: 'APPROVED' }, data: { publishedAt: new Date() } }); });
     await t.test('repository CRUD rejects forged/cloned contexts, foreign IDs and tenant reassignment', async () => {
       const context = await requireBusinessMembership(ownerA!.id, a!.id);
       const created = await createBusinessService(context, { name: 'Owned CRUD', durationMinutes: 15 });
@@ -76,6 +79,7 @@ test('tenant repositories and both HTTP surfaces enforce scope, ownership and cu
       assert.deepEqual(await deleteBusinessService(context, created.id), { deleted: true, archived: false });
       assert.equal(await prisma.service.count({ where: { id: created.id } }), 0);
       await assert.rejects(listPublicServices({ businessId: hidden!.id, timezone: 'UTC' } as PublicBusinessContext), denied(403));
+      await prisma.business.update({ where: { id: a!.id }, data: { publishedAt: new Date() } }); // Explicit synthetic republish after catalog fixture edits.
       assert.equal((await listPublicServices(await requirePublicBusiness(a!.id)))[0]?.name, 'Private service');
       await assert.rejects(requirePublicBusiness(hidden!.id), denied(404));
       const staffContext = await requireBusinessMembership(staffMember!.id, a!.id);

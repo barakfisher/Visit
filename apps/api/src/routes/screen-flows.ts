@@ -1,3 +1,6 @@
+import { withBusinessConfiguration } from '../repositories/publication.js';
+import { requireOwnedReschedule } from '../security/tenant-context.js';
+import { getBusinessAvailability } from '../repositories/availability.js';
 import type { FastifyInstance, FastifyRequest, HTTPMethods } from 'fastify';
 import { z } from 'zod';
 import { Temporal } from '@js-temporal/polyfill';
@@ -34,16 +37,21 @@ async function providerContext(request: FastifyRequest, supplied?: string) {
   return { businessId, business, identity };
 }
 export async function registerScreenFlows(app: FastifyInstance) {
-  app.get('/api/providers', async (request) => {
-    const query = z.object({ search: z.string().max(120).optional(), category: z.string().max(120).optional() }).parse(request.query);
-    const all = await prisma.business.findMany({ where: { approvalStatus: 'APPROVED', services: { some: { active: true } } }, orderBy: { name: 'asc' }, select: { id: true, name: true, slug: true, timezone: true, location: true, category: true } });
-    const search = query.search?.trim().toLocaleLowerCase();
-    const providers = all.filter((provider) => (!search || [provider.name, provider.location, provider.category].some((value) => value?.toLocaleLowerCase().includes(search))) && (!query.category || query.category === 'All' || provider.category === query.category)).map((provider) => ({ ...provider, rating: null }));
-    return { providers, total: all.length, categories: [...new Set(all.map((provider) => provider.category))] };
+  app.get('/api/bookings/:bookingId/provider', async request => {
+    const { bookingId } = z.object({ bookingId: z.string().min(1) }).parse(request.params);
+    const { context, serviceId, booking } = await requireOwnedReschedule(await authenticate(request), bookingId);
+    const provider = await prisma.business.findUniqueOrThrow({ where: { id: context.businessId }, select: { id: true, name: true, timezone: true, location: true, category: true, services: { where: { id: serviceId } }, weeklyAvailability: true, scheduleOverrides: true, bookingPolicy: true } });
+    return { provider: { ...provider, services: provider.services.map(service => ({ ...service, name: booking.serviceName, durationMinutes: booking.serviceDurationMinutes, priceMinor: booking.servicePriceMinor, currency: booking.serviceCurrency })) } };
+  });
+  app.get('/api/bookings/:bookingId/availability', async request => {
+    const { bookingId } = z.object({ bookingId: z.string().min(1) }).parse(request.params);
+    const { date } = z.object({ date: z.string().date() }).parse(request.query);
+    const { context, serviceId } = await requireOwnedReschedule(await authenticate(request), bookingId);
+    return getBusinessAvailability(context, serviceId, date, true);
   });
   app.get('/api/providers/:providerId', async (request) => {
     const { providerId } = request.params as { providerId: string };
-    const provider = await prisma.business.findFirst({ where: { id: providerId, approvalStatus: 'APPROVED' }, select: { id: true, name: true, timezone: true, location: true, category: true, services: { where: { active: true }, orderBy: { name: 'asc' } }, weeklyAvailability: true, scheduleOverrides: true, bookingPolicy: true } });
+    const provider = await prisma.business.findFirst({ where: { id: providerId, approvalStatus: 'APPROVED', publishedAt: { not: null } }, select: { id: true, name: true, timezone: true, location: true, category: true, services: { where: { active: true }, orderBy: { name: 'asc' } }, weeklyAvailability: true, scheduleOverrides: true, bookingPolicy: true } });
     if (!provider) throw notFound();
     return { provider };
   });
@@ -133,14 +141,14 @@ export async function registerScreenFlows(app: FastifyInstance) {
     return { deleted: true };
   });
   app.post('/api/provider/services', async (request, reply) => {
-    const { businessId } = await providerContext(request, (request.query as { businessId?: string }).businessId);
+    const { businessId, identity } = await providerContext(request, (request.query as { businessId?: string }).businessId);
     const body = z.object({ staffIds: z.array(z.string().min(1)).min(1).max(100) }).passthrough().parse(request.body);
     const { staffIds: assigned, ...fields } = body;
     const input = parseService(fields);
     if ('active' in input) throw new AppError(400, 'VALIDATION_ERROR', 'New services start active.');
     const staffIds = [...new Set(assigned)];
     if (await prisma.staff.count({ where: { businessId, id: { in: staffIds }, active: true } }) !== staffIds.length) throw notFound();
-    const service = await prisma.$transaction(async (tx) => {
+    const service = await withBusinessConfiguration(await requireBusinessMembership(identity.id, businessId, ['OWNER', 'MANAGER']), async (tx) => {
       const service = await tx.service.create({ data: { businessId, name: input.name.trim(), description: input.description?.trim() ?? null, durationMinutes: input.durationMinutes, priceMinor: input.priceMinor ?? null, currency: input.currency ?? null } });
       await tx.staffService.createMany({ data: staffIds.map((staffId) => ({ businessId, staffId, serviceId: service.id })) });
       return service;

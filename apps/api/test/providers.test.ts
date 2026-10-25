@@ -74,7 +74,7 @@ test('providers receive no tenant access until approval; approved members remain
     const foreignRead = await app.inject({ method: 'GET', url: `/v1/provider/businesses/${businessId}/services/${serviceId}`, headers: { cookie: secondCookie } });
     assert.equal(foreignRead.statusCode, 403);
 
-    const otherBusiness = await prisma.business.create({ data: { name: 'Other Business', slug: secondSlug, timezone: 'UTC', approvalStatus: BusinessApprovalStatus.APPROVED } });
+    const otherBusiness = await prisma.business.create({ data: { publishedAt: new Date(), location: 'Synthetic fixture', name: 'Other Business', slug: secondSlug, timezone: 'UTC', approvalStatus: BusinessApprovalStatus.APPROVED } });
     secondBusinessId = otherBusiness.id;
     const otherService = await prisma.service.create({ data: { businessId: secondBusinessId, name: 'Other Service', durationMinutes: 30 } });
     const staff = await prisma.staff.create({ data: { businessId, displayName: 'Staff Member' } });

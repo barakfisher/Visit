@@ -31,7 +31,7 @@ export async function createTwoTenantFixture(run: string = randomUUID(), date = 
   const result = await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`qa-fixture:${run}`}, 0))::text`;
     if (await tx.business.count({ where: { id: { in: ids.businessIds } } }) || await tx.identity.count({ where: { id: { in: ids.identityIds } } })) throw new Error('Fixture already exists. Reset this exact run explicitly before creating it again.');
-    const businesses = await Promise.all(['north', 'south'].map((name, index) => tx.business.create({ data: { id: ids.businessIds[index]!, name: `QA ${name}`, slug: `qa-${run}-${name}`, timezone: 'UTC', approvalStatus: 'APPROVED' } })));
+    const businesses = await Promise.all(['north', 'south'].map((name, index) => tx.business.create({ data: { publishedAt: new Date(), location: 'Synthetic fixture', id: ids.businessIds[index]!, name: `QA ${name}`, slug: `qa-${run}-${name}`, timezone: 'UTC', approvalStatus: 'APPROVED' } })));
     const people = await Promise.all(actors.map((name, index) => tx.identity.create({ data: { id: ids.identityIds[index]!, email: `qa-${run}-${name}@example.test`, emailVerifiedAt: new Date(), platformRole: 'USER' } })));
     await tx.session.createMany({ data: people.map((person, index) => ({ identityId: person.id, tokenHash: tokenDigest(tokens[index]!), expiresAt: new Date(Date.now() + 3600000) })) });
     await tx.membership.createMany({ data: [
