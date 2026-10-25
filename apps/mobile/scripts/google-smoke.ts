@@ -3,8 +3,8 @@ import { randomUUID } from 'node:crypto';
 import type { Browser, BrowserContext, Page } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
 
-type Options = { browser: Browser; webUrl: string; apiUrl: string; claims: Map<string, Record<string, unknown>>; run: string; prisma: typeof Prisma; identityIds: string[] };
-export async function googleSmoke({ browser, webUrl, apiUrl, claims, run, prisma, identityIds }: Options) {
+type Options = { browser: Browser; webUrl: string; apiUrl: string; claims: Map<string, Record<string, unknown>>; run: string; prisma: typeof Prisma; identityIds: string[]; sharedBusinessId: string };
+export async function googleSmoke({ browser, webUrl, apiUrl, claims, run, prisma, identityIds, sharedBusinessId }: Options) {
   const contexts: BrowserContext[] = [], errors: string[] = [];
   const subject = `browser-${run}`, email = `google-${run}@example.test`;
   async function context() {
@@ -66,6 +66,15 @@ export async function googleSmoke({ browser, webUrl, apiUrl, claims, run, prisma
     assert.equal((await (await applicant.request.get(`${apiUrl}/api/auth/me`)).json()).profile.id, identity.id);
     console.log('PASS: Google provider-entry intent resumes with the same identity.');
 
+    const sharedBusiness = await prisma.business.findUniqueOrThrow({ where: { id: sharedBusinessId } });
+    const sharedContext = await context(), sharedPage = await sharedContext.newPage(); await intercept(sharedPage);
+    await begin(sharedPage, `/p/${sharedBusiness.slug}`);
+    await sharedPage.getByRole('button', { name: 'Confirm & continue', exact: true }).click();
+    await sharedPage.waitForURL(`${webUrl}/booking/${sharedBusinessId}`);
+    assert.equal(await prisma.savedProvider.count({ where: { identityId: identity.id, businessId: sharedBusinessId } }), 1);
+    assert.equal((await (await sharedContext.request.get(`${apiUrl}/api/auth/me`)).json()).profile.id, identity.id);
+    console.log('PASS: Google shared-provider intent saves to the existing unified identity and continues to booking.');
+
     // Account settings use a distinct code proof and preserve its issued replacement on profile failure.
     await page.unroute(`${apiUrl}/api/auth/me`);
     await page.goto(`${webUrl}/two`);
@@ -95,7 +104,7 @@ export async function googleSmoke({ browser, webUrl, apiUrl, claims, run, prisma
     await page.getByRole('button', { name: 'Confirm removal', exact: true }).click();
     await page.getByText('Add another verified method before removing', { exact: true }).waitFor();
     assert.equal((await prisma.identity.findUniqueOrThrow({ where: { id: identity.id } })).email, null);
-    assert.equal(await prisma.googleAuthProof.count({ where: { identityId: identity.id } }), 2); // One consumed proof for each explicit login above.
+    assert.equal(await prisma.googleAuthProof.count({ where: { identityId: identity.id } }), 3); // Ordinary, provider-entry and shared-provider logins each consume one proof.
     await page.getByRole('button', { name: 'עברית', exact: true }).click();
     await page.getByRole('heading', { name: 'אמצעי כניסה', exact: true }).waitFor();
     assert.equal(await page.getByLabel('כתובת דואר חדשה', { exact: true }).evaluate(element => getComputedStyle(element).direction), 'ltr');

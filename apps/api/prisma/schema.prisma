@@ -44,6 +44,7 @@ enum ChallengePurpose {
 }
 
 model Identity {
+  savedProviders SavedProvider[]
   securityVersion Int @default(0)
   contactChallenges AccountContactChallenge[]
   securityEvents IdentitySecurityEvent[]
@@ -69,6 +70,8 @@ model Identity {
 }
 
 model Business {
+  deletedAt DateTime?
+  savedBy SavedProvider[]
   publishedAt DateTime?
   id                 String                 @id @default(cuid())
   name               String
@@ -419,4 +422,16 @@ model AdminRoleAudit {
   reason String
   previousRole String
   createdAt DateTime @default(now()) @db.Timestamptz
+}
+
+model SavedProvider {
+  id String @id @default(cuid())
+  identityId String
+  businessId String
+  displayName String
+  savedAt DateTime @default(now()) @db.Timestamptz
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  @@unique([identityId, businessId])
+  @@index([identityId, savedAt, id])
 }

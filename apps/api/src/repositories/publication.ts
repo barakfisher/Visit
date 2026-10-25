@@ -7,11 +7,11 @@ import { AppError, forbidden, notFound } from '../http/errors.js';
 import { validateBusinessContext, type AuthorizedBusinessContext } from '../security/tenant-context.js';
 import { effectiveWindows } from '../scheduling/rules.js';
 import { workingWindows } from '../scheduling/availability.js';
-export const publicBusinessWhere = { approvalStatus: 'APPROVED' as const, publishedAt: { not: null } };
 export async function publicationReadiness(tx: Prisma.TransactionClient, businessId: string) {
   const business = await tx.business.findUnique({ where: { id: businessId }, include: { bookingPolicy: true, weeklyAvailability: true, scheduleOverrides: true, services: { where: { active: true }, include: { staff: { where: { staff: { active: true } }, include: { staff: { include: { availability: true, overrides: true } } } } } } } });
   if (!business) throw notFound();
   const blockers: Record<string, string> = {};
+  if (business.deletedAt) blockers.business = 'BUSINESS_UNAVAILABLE';
   if (business.approvalStatus !== 'APPROVED') blockers.approval = 'ADMIN_APPROVAL_REQUIRED';
   if (business.timezone !== PILOT_TIMEZONE) blockers.timezone = 'ISRAEL_TIME_REVIEW_REQUIRED';
   if (business.name.trim().length < 2 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(business.slug) || !business.category.trim() || !business.location?.trim()) blockers.profile = 'COMPLETE_BUSINESS_PROFILE';

@@ -1,3 +1,4 @@
+import { registerSavedProviders } from './routes/saved-providers.js';
 import { registerAccountMethods } from './routes/account-methods.js';
 import Fastify from "fastify";
 import cors from "@fastify/cors";
@@ -39,6 +40,7 @@ export async function createApp({ google, account }: { google?: NonNullable<Para
   await registerAccountMethods(app, account ? { account } : {});
   await registerFlowAuth(app, google ? { google } : {});
   await registerScreenFlows(app);
+  await registerSavedProviders(app);
 
   app.get("/health/live", async () => ({ status: "ok" }));
 

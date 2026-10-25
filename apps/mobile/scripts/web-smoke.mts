@@ -100,8 +100,10 @@ try {
     await authUiSmoke({ browser, webUrl, apiUrl, run, identityIds });
     const { providerReviewSmoke } = await import('./provider-review-smoke.js');
     await providerReviewSmoke({ browser, webUrl, apiUrl, prisma, run, identityIds, businessIds });
+    const { sharedProvidersSmoke } = await import('./shared-providers-smoke.js');
+    await sharedProvidersSmoke({ browser, webUrl, apiUrl, prisma, run, identityIds, businessId: businessIds[0]! });
     const { googleSmoke } = await import('./google-smoke.js');
-    await googleSmoke({ browser, webUrl, apiUrl, claims: googleClaims, run, prisma, identityIds });
+    await googleSmoke({ browser, webUrl, apiUrl, claims: googleClaims, run, prisma, identityIds, sharedBusinessId: businessIds[0]! });
     const localization = await browser.newContext({ viewport: { width: 390, height: 844 } }); contexts.push(localization);
     const localePage = await localization.newPage(); capture = localePage;
     localePage.on('pageerror', error => pageErrors.push(error.message));
@@ -384,6 +386,9 @@ try {
     console.log('PASS: fragment link is scrubbed, opening does not authenticate, and profile outage recovery does not replay it.');
     console.log('PASS: email fallback completes authentication and routes Home.');
     await emailPage.goto(`${webUrl}/two`);
+    // A document reload starts with guest locale controls until cookie-session
+    // hydration finishes. Wait for the authenticated account, not guest storage.
+    await emailPage.getByRole('heading', { name: 'Sign-in methods', exact: true }).waitFor();
     const languageSaved = emailPage.waitForResponse(response => response.url().endsWith('/api/account/preferences') && response.status() === 200);
     await emailPage.getByTestId('language-he').click();
     await languageSaved;
@@ -457,6 +462,7 @@ try {
   if (holds.length) await redis.del(...holds.map((hold) => `visit:hold:${hold.id}`));
   for (const id of businessIds) { const keys: string[] = []; for await (const batch of redis.scanStream({ match: `visit:reservation:${id}:*` })) keys.push(...batch); if (keys.length) await redis.del(...keys); }
   await prisma.booking.deleteMany({ where: { businessId: { in: businessIds } } });
+  await prisma.savedProvider.deleteMany({ where: { identityId: { in: identityIds }, businessId: { in: businessIds } } });
   await prisma.business.deleteMany({ where: { id: { in: businessIds } } });
   await prisma.identity.deleteMany({ where: { id: { in: identityIds } } });
   await Promise.allSettled([redis.quit(), prisma.$disconnect()]);

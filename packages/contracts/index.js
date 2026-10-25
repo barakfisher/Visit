@@ -34,6 +34,7 @@ export function safeAuthReturnTo(value) {
   if (typeof value !== 'string' || !value || value.length > 512 || /[\\\s#]/.test(value) || value.startsWith('//')) return undefined;
   const [pathname] = value.split('?');
   if (pathname === '/discover' && value === '/discover') return '/'; // Retired route.
+  if (/^\/p\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(pathname) && pathname.length <= 83 && value === pathname) return pathname;
   if ((pathname === '/' || pathname === '/register/provider') && value === pathname) return pathname;
   if (!/^\/booking\/[A-Za-z0-9_-]{1,128}$/.test(pathname)) return undefined;
   try {
@@ -51,3 +52,8 @@ export function safeAuthReturnTo(value) {
 
 // Pilot onboarding policy. Existing business zones/booking instants are never relabelled.
 export const PILOT_TIMEZONE = 'Asia/Jerusalem';
+
+export function providerSharePath(slug) {
+  if (typeof slug !== 'string' || slug.length > 80 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return undefined;
+  return `/p/${slug}`;
+}
