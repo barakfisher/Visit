@@ -3,6 +3,10 @@ import { create } from 'zustand';
 import { queryClient } from '../lib/queryClient';
 
 type SessionState = {
+  bootstrapStatus: 'loading' | 'ready' | 'error';
+  bootstrapAttempt: number;
+  setBootstrapStatus: (status: 'loading' | 'ready' | 'error') => void;
+  retryBootstrap: () => void;
   contextVersion: number;
   token: string | null;
   profile: AuthProfile | null;
@@ -16,6 +20,9 @@ type SessionState = {
 };
 
 export const useSessionStore = create<SessionState>((set, get) => ({
+  bootstrapStatus: 'loading', bootstrapAttempt: 0,
+  setBootstrapStatus: bootstrapStatus => set({ bootstrapStatus }),
+  retryBootstrap: () => set({ bootstrapStatus: 'loading', bootstrapAttempt: get().bootstrapAttempt + 1 }),
   contextVersion: 0,
   token: null,
   profile: null,
@@ -23,13 +30,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const changedIdentity = profile.id !== get().identityId;
     const removedBusiness = Boolean(get().activeBusinessId && !profile.businesses.some((business) => business.id === get().activeBusinessId));
     if (changedIdentity || removedBusiness) queryClient.clear();
-    set({ token, profile, identityId: profile.id, ...(changedIdentity || removedBusiness ? { activeBusinessId: null, contextVersion: get().contextVersion + 1 } : {}) });
+    set({ token, profile, identityId: profile.id, bootstrapStatus: 'ready', ...(changedIdentity || removedBusiness ? { activeBusinessId: null, contextVersion: get().contextVersion + 1 } : {}) });
   },
   resetAuthContext: (token, profile) => {
     const previous = get();
     if (previous.identityId && previous.identityId !== profile.id) throw new Error('The signed-in account changed.');
     queryClient.clear();
-    set({ token, profile, identityId: profile.id, contextVersion: previous.contextVersion + 1, activeBusinessId: profile.businesses.some(business => business.id === previous.activeBusinessId) ? previous.activeBusinessId : null });
+    set({ token, profile, identityId: profile.id, bootstrapStatus: 'ready', contextVersion: previous.contextVersion + 1, activeBusinessId: profile.businesses.some(business => business.id === previous.activeBusinessId) ? previous.activeBusinessId : null });
   },
   identityId: null,
   activeBusinessId: null,
@@ -47,6 +54,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
   clear: () => {
     queryClient.clear();
-    set({ identityId: null, activeBusinessId: null, token: null, profile: null, contextVersion: get().contextVersion + 1 });
+    set({ identityId: null, activeBusinessId: null, token: null, profile: null, bootstrapStatus: 'ready', contextVersion: get().contextVersion + 1 });
   },
 }));

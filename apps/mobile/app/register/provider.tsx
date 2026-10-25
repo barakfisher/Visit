@@ -14,7 +14,7 @@ export default function ProviderRegistrationEntry() {
     <AppText className="leading-6 text-body">{t('providerEntry.identity')}</AppText>
     <AppText className="leading-6 text-body">{t('providerEntry.approval')}</AppText>
     {identityId ? <ProviderApplication /> : null}
-    <Link href={identityId ? '/(tabs)/two' : { pathname: '/auth/login', params: { returnTo: '/register/provider' } }} className="min-h-action rounded-control bg-brand px-5 py-4 text-center font-semibold text-white">{t(identityId ? 'providerEntry.continue' : 'providerEntry.signIn')}</Link>
+    <Link href={identityId ? '/account' : { pathname: '/auth/login', params: { returnTo: '/register/provider' } }} className="min-h-action rounded-control bg-brand px-5 py-4 text-center font-semibold text-white">{t(identityId ? 'providerEntry.continue' : 'providerEntry.signIn')}</Link>
     <Link href={identityId ? '/' : '/auth/login'} className="min-h-touch py-3 text-center font-semibold text-brand">{t(identityId ? 'providerEntry.home' : 'email.back')}</Link>
   </ScreenContent></ScrollView>;
 }

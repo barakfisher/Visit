@@ -57,6 +57,8 @@ test('provider links and saved lists are public-read-only, identity-owned and pu
     });
     await t.test('remove is scoped/idempotent and preserves other accounts and customer identity', async () => {
       assert.equal((await add(b.headers)).statusCode, 200);
+      assert.equal((await app.inject({ method: 'DELETE', url: `/api/me/providers/${target.id}`, headers: { ...b.headers, 'x-visit-expected-identity': a.id } })).statusCode, 409);
+      assert.equal(await prisma.savedProvider.count({ where: { identityId: b.id, businessId: target.id } }), 1);
       const staff = await prisma.staff.create({ data: { businessId: target.id, displayName: 'Saved-provider fixture' } });
       const service = await prisma.service.create({ data: { businessId: target.id, name: 'Existing appointment', durationMinutes: 30 } });
       const startsAt = new Date(Date.now() + 86400000), endsAt = new Date(startsAt.getTime() + 1800000);

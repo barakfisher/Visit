@@ -13,6 +13,7 @@ import { apiRequest, ApiError } from '@/src/lib/api';
 import type { AuthProfile } from '@/src/types/flows';
 import { readSessionToken, saveSessionToken } from '@/src/lib/sessionToken';
 import { useSessionStore } from '@/src/state/session';
+import { AppNavigation } from '@/components/AppNavigation';
 import { AppLocaleProvider, useAppLocale } from '@/src/i18n/LocaleProvider';
 
 export {
@@ -55,24 +56,28 @@ function RootLayoutNav() {
   const { direction, ready } = useAppLocale();
   const pathname = usePathname();
   const setAuth = useSessionStore((state) => state.setAuth);
+  const bootstrapAttempt = useSessionStore(state => state.bootstrapAttempt);
+  const navigationVersion = useSessionStore(state => state.contextVersion);
 
   useEffect(() => {
     if (pathname.startsWith('/auth')) return;
     let active = true;
+    if (!useSessionStore.getState().identityId) useSessionStore.getState().setBootstrapStatus('loading');
     apiRequest<{ profile: AuthProfile }>('/api/auth/me').then(async ({ profile }) => {
       const token = await readSessionToken();
       if (active) setAuth(token, profile);
     }).catch((error) => {
       if (active && error instanceof ApiError && error.status === 401) { useSessionStore.getState().clear(); void saveSessionToken(null); }
+      else if (active && !useSessionStore.getState().identityId && !(error instanceof ApiError && error.code === 'SESSION_CHANGED')) useSessionStore.getState().setBootstrapStatus('error');
     });
     return () => { active = false; };
-  }, [pathname, setAuth]);
+  }, [pathname, setAuth, bootstrapAttempt]);
 
   if (!ready) return null;
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={DefaultTheme}>
-        <LocaleProvider direction={direction}><View {...(Platform.OS === 'web' ? { dir: direction } : {})} style={{ flex: 1, direction }}><SafeAreaView style={{ flex: 1, backgroundColor: '#f8fafc', direction }} edges={['top', 'bottom']}><Stack>
+        <LocaleProvider direction={direction}><View {...(Platform.OS === 'web' ? { dir: direction } : {})} style={{ flex: 1, direction }}><SafeAreaView style={{ flex: 1, backgroundColor: '#f8fafc', direction }} edges={['top', 'bottom']}><AppNavigation key={`${pathname}:${navigationVersion}`} /><Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="admin" options={{ headerShown: false }} />
           <Stack.Screen name="p" options={{ headerShown: false }} />
@@ -81,6 +86,7 @@ function RootLayoutNav() {
           <Stack.Screen name="booking" options={{ headerShown: false }} />
           <Stack.Screen name="provider" options={{ headerShown: false }} />
           <Stack.Screen name="appointments" options={{ headerShown: false }} />
+          <Stack.Screen name="account" options={{ headerShown: false }} />
           <Stack.Screen name="discover" options={{ headerShown: false }} />
           <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
         </Stack></SafeAreaView></View></LocaleProvider>
