@@ -1,3 +1,4 @@
+import { safeAuthReturnTo } from '@visit/contracts';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../db/client.js';
@@ -13,8 +14,10 @@ const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 export type EmailMessage = { email: string; token: string; link: string; expiresAt: number; id: string };
 export type EmailDelivery = { mode: 'local-inbox' | 'resend'; send: (message: EmailMessage) => Promise<void>; take?: (email: string) => EmailMessage | undefined };
 const failedDelivery = () => new AppError(503, 'EMAIL_DELIVERY_FAILED', 'Sign-in email could not be sent. Please retry shortly.');
-export function emailLoginLink(token: string, target: 'web' | 'native', webOrigin: string) {
+export function emailLoginLink(token: string, target: 'web' | 'native', webOrigin: string, returnTo?: string) {
   const url = target === 'native' ? new URL('visit://auth/email') : new URL('/auth/email', webOrigin);
+  const destination = safeAuthReturnTo(returnTo);
+  if (destination) url.searchParams.set('returnTo', destination);
   url.hash = new URLSearchParams({ token }).toString();
   return url.toString();
 }
@@ -51,7 +54,7 @@ export function createEmailLoginService({ delivery, webOrigin = env.WEB_APP_URL,
   }
   return {
     deliveryMode: delivery.mode,
-    async send(emailInput: string, ip: string, target: 'web' | 'native' = 'web') {
+    async send(emailInput: string, ip: string, target: 'web' | 'native' = 'web', returnTo?: string) {
       const email = emailSchema.parse(emailInput);
       if (!['web', 'native'].includes(target)) throw new AppError(400, 'VALIDATION_ERROR', 'Choose a supported sign-in destination.');
       await Promise.all([limit(`ip:${hash(ip)}`, 10, 3600), limit(`address:${hash(email)}`, 5, 3600)]);
@@ -65,7 +68,7 @@ export function createEmailLoginService({ delivery, webOrigin = env.WEB_APP_URL,
         return tx.emailChallenge.create({ data: { email, identityId: identity?.id ?? null, tokenHash: tokenDigest(token), expiresAt } });
       });
       try {
-        await delivery.send({ email, token, expiresAt: expiresAt.getTime(), id: challenge.id, link: emailLoginLink(token, target, webOrigin) });
+        await delivery.send({ email, token, expiresAt: expiresAt.getTime(), id: challenge.id, link: emailLoginLink(token, target, webOrigin, returnTo) });
         const delivered = await prisma.emailChallenge.updateMany({ where: { id: challenge.id, consumedAt: null, expiresAt: { gt: new Date(now()) } }, data: { deliveredAt: new Date(now()) } });
         if (delivered.count !== 1) throw failedDelivery();
       } catch {

@@ -43,10 +43,10 @@ export async function beginGoogleSignIn({ intent = 'login', returnTo }: GoogleSt
     const result = await WebBrowser.openAuthSessionAsync(launch, start.nativeReturnUrl, { preferUniversalLinks: start.nativeReturnUrl.startsWith('https:') });
     if (result.type === 'success' && Date.now() - startedAt < 600_000) {
       const parsed = parseGoogleCallback(result.url, start.nativeReturnUrl, clientState);
-      publish('grant' in parsed ? { ...parsed, verifier, returnTo: safeGoogleReturnTo(returnTo) } : parsed);
-    } else publish({ status: result.type === 'cancel' || result.type === 'dismiss' ? 'cancelled' : 'invalid' });
+      publish('grant' in parsed ? { ...parsed, verifier, returnTo: safeGoogleReturnTo(returnTo) } : { ...parsed, returnTo: safeGoogleReturnTo(returnTo) });
+    } else publish({ status: result.type === 'cancel' || result.type === 'dismiss' ? 'cancelled' : 'invalid', returnTo: safeGoogleReturnTo(returnTo) });
     router.replace('/auth/google');
-  } catch (error) { publish({ status: 'failed' }); throw error; }
+  } catch (error) { publish({ status: 'failed', returnTo: safeGoogleReturnTo(returnTo) }); throw error; }
   finally { pending = false; }
 }
 export function useGoogleReceipt() {

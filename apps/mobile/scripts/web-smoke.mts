@@ -54,7 +54,8 @@ async function otpLogin(page: Page, phone: string, provider = false) {
   const { code } = await response.json() as { code: string };
   await otp.fill(code);
   await page.getByRole('button', { name: 'Verify & continue' }).click();
-  await page.waitForURL(provider ? '**/provider/dashboard' : '**/discover');
+  await page.waitForURL(url => url.pathname === '/');
+  if (provider) await page.goto(`${webUrl}/provider/dashboard`); // Explicit approved-provider navigation; login itself always lands Home.
 }
 async function openBooking(page: Page, businessId: string, serviceId: string) {
   await page.goto(`${webUrl}/booking/${businessId}?serviceId=${serviceId}&date=${date}`);
@@ -95,6 +96,8 @@ try {
   await ready(webUrl, webProcess, 'Web');
   const browser = await chromium.launch({ headless: true });
   try {
+    const { authUiSmoke } = await import('./auth-ui-smoke.js');
+    await authUiSmoke({ browser, webUrl, apiUrl, run, identityIds });
     const { googleSmoke } = await import('./google-smoke.js');
     await googleSmoke({ browser, webUrl, apiUrl, claims: googleClaims, run, prisma, identityIds });
     const localization = await browser.newContext({ viewport: { width: 390, height: 844 } }); contexts.push(localization);
@@ -181,7 +184,7 @@ try {
     await providerPage.getByLabel('Break start time').fill('10:00'); await providerPage.getByLabel('Break end time').fill('10:30');
     await providerPage.getByRole('button', { name: 'Save blocked time' }).click();
     await providerPage.getByRole('button', { name: 'Remove blocked time' }).waitFor();
-    console.log('PASS: approved-provider smart routing, agenda verification and manual break.');
+    console.log('PASS: provider login lands Home; explicit dashboard navigation, agenda verification and manual break.');
     await providerPage.getByRole('tab', { name: 'Service Catalog', exact: true }).click();
     // Hold an old-workspace response across the switch. Late replies must not
     // restore the old private catalog or its draft after Query cancellation.
@@ -371,11 +374,11 @@ try {
     assert.equal(new URL(emailPage.url()).pathname, '/auth/email');
     await emailPage.unroute('**/api/auth/me');
     await emailPage.getByRole('button', { name: 'Verify sign-in' }).click();
-    await emailPage.waitForURL('**/discover');
+    await emailPage.waitForURL(url => url.pathname === '/');
     assert.equal(emailVerifications, 1, 'profile loading retry must not replay the one-time link');
     assert.equal(emailRequestUrls.some(url => url.includes(mail.token)), false);
     console.log('PASS: fragment link is scrubbed, opening does not authenticate, and profile outage recovery does not replay it.');
-    console.log('PASS: email fallback completes authentication and routes to consumer discovery.');
+    console.log('PASS: email fallback completes authentication and routes Home.');
     await emailPage.goto(`${webUrl}/two`);
     const languageSaved = emailPage.waitForResponse(response => response.url().endsWith('/api/account/preferences') && response.status() === 200);
     await emailPage.getByTestId('language-he').click();

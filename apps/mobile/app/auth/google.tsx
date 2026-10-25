@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { safeAuthReturnTo } from '@visit/contracts';
 import { Link, router } from 'expo-router';
 import { ScrollView, View } from 'react-native';
 import { ActionButton } from '@/components/ActionButton';
@@ -12,6 +13,7 @@ type Preview = { email: string; intent: 'login' | 'link' };
 type Result = { identity: { id: string }; sessionToken?: string; linked?: boolean };
 export default function GoogleCallbackScreen() {
   const { t } = useAppLocale();
+  const running = useRef(false);
   const { receipt, clear } = useGoogleReceipt();
   const [preview, setPreview] = useState<Preview | null>(null), [issued, setIssued] = useState<Result | null>(null);
   const [busy, setBusy] = useState(false), [loading, setLoading] = useState(false);
@@ -31,8 +33,8 @@ export default function GoogleCallbackScreen() {
     return () => { active = false; };
   }, [receipt, attempt, t]);
   async function confirm() {
-    if (busy || (!issued && (!receipt || !('grant' in receipt) || !preview))) return;
-    setBusy(true); setError('');
+    if (running.current || busy || (!issued && (!receipt || !('grant' in receipt) || !preview))) return;
+    running.current = true; setBusy(true); setError('');
     try {
       let result = issued;
       if (!result && receipt && 'grant' in receipt) {
@@ -45,7 +47,7 @@ export default function GoogleCallbackScreen() {
         router.replace('/(tabs)/two');
       } else await completeSignIn(result.sessionToken, returnTo, result.identity.id);
     } catch (reason) { setError(failure(reason)); }
-    finally { setBusy(false); }
+    finally { running.current = false; setBusy(false); }
   }
   const status = receipt && 'status' in receipt ? receipt.status : undefined;
   return <ScrollView className="flex-1 bg-canvas" contentContainerClassName="px-5 py-10"><View className="mx-auto w-full max-w-lg gap-5 rounded-card border border-line bg-surface p-card">
@@ -59,6 +61,6 @@ export default function GoogleCallbackScreen() {
       {!status ? <ActionButton secondary label={t('common.retry')} onPress={() => setAttempt(value => value + 1)} /> : null}
     </>}
     {error ? <Text accessibilityRole="alert" className="text-danger">{error}</Text> : null}
-    <Link href="/auth/login" onPress={clear} className="text-center font-semibold text-brand">{t('email.back')}</Link>
+    <Link href={{ pathname: '/auth/login', params: safeAuthReturnTo(returnTo ?? receipt?.returnTo) ? { returnTo: safeAuthReturnTo(returnTo ?? receipt?.returnTo) } : {} }} onPress={event => { if (busy) event.preventDefault(); else clear(); }} className="text-center font-semibold text-brand">{t('email.back')}</Link>
   </View></ScrollView>;
 }

@@ -1,3 +1,4 @@
+import { safeAuthReturnTo } from '@visit/contracts';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../db/client.js';
@@ -9,9 +10,9 @@ import { emailSchema, emailLoginService, type createEmailLoginService } from '..
 
 export async function registerAuthRoutes(app: FastifyInstance, { emailLogin = emailLoginService }: { emailLogin?: ReturnType<typeof createEmailLoginService> } = {}) {
   app.post('/v1/auth/email-challenges', async (request, reply) => {
-    const parsed = z.strictObject({ email: emailSchema, target: z.enum(['web', 'native']).default('web') }).safeParse(request.body);
+    const parsed = z.strictObject({ email: emailSchema, target: z.enum(['web', 'native']).default('web'), returnTo: z.string().max(512).refine(value => safeAuthReturnTo(value) !== undefined).optional() }).safeParse(request.body);
     if (!parsed.success) throw new AppError(400, 'VALIDATION_ERROR', 'Enter a valid email address and supported destination.', { email: 'Review the sign-in request.' });
-    const result = await emailLogin.send(parsed.data.email, request.ip, parsed.data.target);
+    const result = await emailLogin.send(parsed.data.email, request.ip, parsed.data.target, parsed.data.returnTo);
     reply.code(202);
     return result;
   });

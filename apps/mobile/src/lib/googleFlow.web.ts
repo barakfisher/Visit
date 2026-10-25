@@ -24,7 +24,7 @@ export function useGoogleReceipt() {
       const parsed = parseGoogleCallback(url.href, `${window.location.origin}/auth/google`);
       let returnTo: string | undefined;
       try { returnTo = safeGoogleReturnTo(sessionStorage.getItem(returnKey) ?? undefined); sessionStorage.removeItem(returnKey); } catch { /* Optional hint. */ }
-      publish('grant' in parsed ? { ...parsed, returnTo } : parsed);
+      publish({ ...parsed, returnTo });
       // Replacing also removes React Navigation's original route path, which can
       // restore an initial fragment after a setParams-only scrub on hard navigation.
       window.history.replaceState(window.history.state, '', '/auth/google');

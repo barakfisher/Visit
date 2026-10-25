@@ -1,0 +1,13 @@
+import type { Meta, StoryObj } from '@storybook/react';
+import { expect, fn, userEvent } from 'storybook/test';
+import { View } from 'react-native';
+import { PhoneSignIn } from './PhoneSignIn';
+const meta = { title: 'Authentication/PhoneSignIn', component: PhoneSignIn, args: { enabled: true, phone: '+972501234567', code: '', sent: false, busy: false, error: '', issued: false, cooldown: 0, remaining: 300, setPhone: fn(), setCode: fn(), send: fn(), verify: fn(), reset: fn() }, decorators: [Story => <View style={{ width: 320, maxWidth: '100%', padding: 8 }}><Story /></View>] } satisfies Meta<typeof PhoneSignIn>;
+export default meta;
+type Story = StoryObj<typeof meta>;
+export const Entry: Story = { play: async ({ canvas, args }) => { await userEvent.click(canvas.getByRole('button', { name: 'Send verification code' })); await expect(args.send).toHaveBeenCalledOnce(); } };
+export const Unconfigured: Story = { args: { enabled: false }, play: async ({ canvas }) => { await expect(canvas.getByRole('button', { name: /not configured/ })).toHaveAttribute('aria-disabled', 'true'); } };
+export const CodeAndCooldown: Story = { args: { sent: true, cooldown: 30, code: '123456' }, play: async ({ canvas, args }) => { await expect(canvas.getByRole('button', { name: /30s/ })).toHaveAttribute('aria-disabled', 'true'); const input = canvas.getByLabelText('Six-digit verification code'); await expect(input).toHaveAttribute('autocomplete', 'one-time-code'); await userEvent.click(canvas.getByRole('button', { name: 'Verify & continue' })); await expect(args.verify).toHaveBeenCalledOnce(); } };
+export const Expired: Story = { args: { sent: true, remaining: 0 }, play: async ({ canvas, args }) => { await expect(canvas.getByText(/code has expired/)).toBeVisible(); await expect(canvas.getByRole('button', { name: 'Verify & continue' })).toHaveAttribute('aria-disabled', 'true'); await userEvent.click(canvas.getByRole('button', { name: 'Send another code' })); await expect(args.send).toHaveBeenCalledOnce(); } };
+export const IssuedSessionRecovery: Story = { args: { sent: true, issued: true, error: 'Connection temporarily unavailable.' }, play: async ({ canvas, args }) => { await expect(canvas.queryByLabelText('Six-digit verification code')).toBeNull(); await userEvent.click(canvas.getByRole('button', { name: 'Continue to my account' })); await expect(args.verify).toHaveBeenCalledOnce(); } };
+export const HebrewCode: Story = { globals: { locale: 'he' }, args: { sent: true, cooldown: 30 }, play: async ({ canvas }) => { await expect(canvas.getByLabelText('קוד אימות בן שש ספרות')).toHaveAttribute('autocomplete', 'one-time-code'); } };

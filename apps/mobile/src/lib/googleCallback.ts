@@ -1,4 +1,4 @@
-export type GoogleReceipt = { grant: string; verifier?: string; returnTo?: string } | { status: 'cancelled' | 'failed' | 'invalid' };
+export type GoogleReceipt = { grant: string; verifier?: string; returnTo?: string } | { status: 'cancelled' | 'failed' | 'invalid'; returnTo?: string };
 export type GoogleStart = { intent?: 'login' | 'link'; returnTo?: string };
 const opaque = /^[A-Za-z0-9_-]{43}$/;
 
@@ -17,14 +17,7 @@ export function parseGoogleCallback(value: string, expected: string, clientState
   } catch { /* Malformed links never authenticate. */ }
   return { status: 'invalid' };
 }
-export function safeGoogleReturnTo(value?: string): string | undefined {
-  if (!value || /[\\\s#]/.test(value)) return undefined;
-  try {
-    const url = new URL(value, 'https://visit.invalid');
-    if (url.origin !== 'https://visit.invalid' || value[0] !== '/' || value.startsWith('//')) return undefined;
-    return url.pathname === '/discover' || /^\/booking\/[A-Za-z0-9-]+$/.test(url.pathname) ? `${url.pathname}${url.search}` : undefined;
-  } catch { return undefined; }
-}
+export { safeAuthReturnTo as safeGoogleReturnTo } from '@visit/contracts';
 export function googleAuthorizationUrl(value: string): string {
   const url = new URL(value);
   if (url.origin !== 'https://accounts.google.com' || url.pathname !== '/o/oauth2/v2/auth' || url.username || url.password || url.hash || url.searchParams.get('response_type') !== 'code' || url.searchParams.get('code_challenge_method') !== 'S256' || !opaque.test(url.searchParams.get('code_challenge') ?? '') || !opaque.test(url.searchParams.get('state') ?? '') || !opaque.test(url.searchParams.get('nonce') ?? '')) throw new Error('Invalid Google authorization destination');

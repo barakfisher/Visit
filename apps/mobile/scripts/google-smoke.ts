@@ -25,8 +25,8 @@ export async function googleSmoke({ browser, webUrl, apiUrl, claims, run, prisma
       await route.fulfill({ status: 302, headers: { location: callback.href }, body: '' });
     });
   }
-  async function begin(page: Page) {
-    await page.goto(`${webUrl}/auth/login`);
+  async function begin(page: Page, returnTo?: string) {
+    await page.goto(`${webUrl}/auth/login${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ''}`);
     await page.getByRole('button', { name: 'Continue with Google', exact: true }).click();
     await page.getByRole('heading', { name: 'Confirm Google sign-in' }).waitFor();
     await page.waitForURL(url => url.pathname === '/auth/google' && !url.hash && !url.search, { waitUntil: 'domcontentloaded' }).catch(async error => { console.error('Callback URL shape:', new URL(page.url()).pathname, new URL(page.url()).hash ? 'fragment-present' : 'fragment-empty', new URL(page.url()).search ? 'query-present' : 'query-empty'); await page.screenshot({ path: 'test-results/google-callback-failure.png' }); throw error; });
@@ -54,10 +54,17 @@ export async function googleSmoke({ browser, webUrl, apiUrl, claims, run, prisma
     await page.getByRole('alert').waitFor(); assert.equal(new URL(page.url()).pathname, '/auth/google');
     mismatch = false;
     await page.getByRole('button', { name: 'Continue to my account', exact: true }).click();
-    await page.waitForURL('**/discover'); assert.equal(redemptions, 1);
+    await page.waitForURL(url => url.pathname === '/'); assert.equal(redemptions, 1);
     assert.equal(await page.evaluate(() => localStorage.getItem('visit.session-token')), null);
     const me = await (await consumer.request.get(`${apiUrl}/api/auth/me`)).json(); assert.equal(me.profile.id, identity.id);
     console.log('PASS: Google code/PKCE browser login, scrubbed handoff, explicit preview, profile outage/mismatch recovery without replay.');
+
+    const applicant = await context(), applicantPage = await applicant.newPage();
+    await intercept(applicantPage); await begin(applicantPage, '/register/provider');
+    await applicantPage.getByRole('button', { name: 'Confirm & continue', exact: true }).click();
+    await applicantPage.waitForURL(`${webUrl}/register/provider`);
+    assert.equal((await (await applicant.request.get(`${apiUrl}/api/auth/me`)).json()).profile.id, identity.id);
+    console.log('PASS: Google provider-entry intent resumes with the same identity.');
 
     // Account settings use a distinct code proof and preserve its issued replacement on profile failure.
     await page.unroute(`${apiUrl}/api/auth/me`);
@@ -88,7 +95,7 @@ export async function googleSmoke({ browser, webUrl, apiUrl, claims, run, prisma
     await page.getByRole('button', { name: 'Confirm removal', exact: true }).click();
     await page.getByText('Add another verified method before removing', { exact: true }).waitFor();
     assert.equal((await prisma.identity.findUniqueOrThrow({ where: { id: identity.id } })).email, null);
-    assert.equal(await prisma.googleAuthProof.count({ where: { identityId: identity.id } }), 1);
+    assert.equal(await prisma.googleAuthProof.count({ where: { identityId: identity.id } }), 2); // One consumed proof for each explicit login above.
     await page.getByRole('button', { name: 'עברית', exact: true }).click();
     await page.getByRole('heading', { name: 'אמצעי כניסה', exact: true }).waitFor();
     assert.equal(await page.getByLabel('כתובת דואר חדשה', { exact: true }).evaluate(element => getComputedStyle(element).direction), 'ltr');
@@ -120,9 +127,12 @@ export async function googleSmoke({ browser, webUrl, apiUrl, claims, run, prisma
 
     for (const scenario of [{ cancel: true }, { fail: true }]) {
       const isolated = await context(), isolatedPage = await isolated.newPage();
-      await intercept(isolatedPage, scenario); await begin(isolatedPage);
+      await intercept(isolatedPage, scenario); await begin(isolatedPage, '/register/provider');
       await isolatedPage.getByText(scenario.cancel ? /Google sign-in was cancelled/ : /Google sign-in could not be completed/).waitFor();
       assert.equal((await isolated.request.get(`${apiUrl}/api/auth/me`)).status(), 401);
+      await isolatedPage.getByRole('link', { name: 'Back to sign-in', exact: true }).click();
+      await isolatedPage.waitForURL(url => url.pathname === '/auth/login');
+      assert.equal(new URL(isolatedPage.url()).searchParams.get('returnTo'), '/register/provider');
     }
     const invalid = await context(), invalidPage = await invalid.newPage();
     await invalidPage.goto(`${webUrl}/auth/google#grant=malformed`);

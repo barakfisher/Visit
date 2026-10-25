@@ -28,3 +28,23 @@ export function parseServicePrice(text) {
   const result = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
   return Number.isSafeInteger(result) && result <= MAX_PRICE_MINOR ? result : undefined;
 }
+
+// Non-secret navigation hint only. Each destination revalidates server access.
+export function safeAuthReturnTo(value) {
+  if (typeof value !== 'string' || !value || value.length > 512 || /[\\\s#]/.test(value) || value.startsWith('//')) return undefined;
+  const [pathname] = value.split('?');
+  if (pathname === '/discover' && value === '/discover') return '/'; // Retired route.
+  if ((pathname === '/' || pathname === '/register/provider') && value === pathname) return pathname;
+  if (!/^\/booking\/[A-Za-z0-9_-]{1,128}$/.test(pathname)) return undefined;
+  try {
+    const url = new URL(value, 'https://visit.invalid');
+    if (url.origin !== 'https://visit.invalid' || url.pathname !== pathname || url.username || url.password) return undefined;
+    for (const [key, field] of url.searchParams) {
+      if (!['serviceId', 'date', 'fromBookingId'].includes(key) || url.searchParams.getAll(key).length !== 1) return undefined;
+      if (key === 'date') {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(field) || !Number.isFinite(Date.parse(`${field}T00:00:00Z`)) || new Date(`${field}T00:00:00Z`).toISOString().slice(0, 10) !== field) return undefined;
+      } else if (!/^[A-Za-z0-9_-]{1,128}$/.test(field)) return undefined;
+    }
+    return `${url.pathname}${url.search}`;
+  } catch { return undefined; }
+}

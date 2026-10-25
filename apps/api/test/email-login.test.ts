@@ -32,6 +32,12 @@ test('email links use canonical addresses, fixed allowlisted destinations and fr
   const web = new URL(emailLoginLink(token, 'web', 'https://visit.example'));
   assert.equal(web.origin, 'https://visit.example'); assert.equal(web.pathname, '/auth/email'); assert.equal(web.searchParams.has('token'), false); assert.equal(new URLSearchParams(web.hash.slice(1)).get('token'), token);
   assert.match(emailLoginLink(token, 'native', 'https://visit.example'), /^visit:\/\/auth\/email#token=/);
+  for (const destination of ['/register/provider', '/booking/business-1?serviceId=service-2&date=2026-11-01']) {
+    const link = new URL(emailLoginLink(token, 'web', 'https://visit.example', destination));
+    assert.equal(link.searchParams.get('returnTo'), destination);
+    assert.equal(new URLSearchParams(link.hash.slice(1)).get('token'), token);
+  }
+  assert.equal(new URL(emailLoginLink(token, 'web', 'https://visit.example', '//evil.test')).searchParams.has('returnTo'), false);
 });
 
 test('ownership is activated once after explicit verification, including simultaneous link use', async () => {

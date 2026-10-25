@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { safeAuthReturnTo } from '@visit/contracts';
+import { TextField } from '@/components/TextField';
+import { useEffect, useRef, useState } from 'react';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Link, useLocalSearchParams } from 'expo-router';
-import { Platform, ScrollView, TextInput, View } from 'react-native';
+import { Platform, ScrollView, View } from 'react-native';
 import { ActionButton } from '@/components/ActionButton';
 import { AppText as Text } from '@/components/AppText';
 import { completeSignIn } from '@/src/lib/auth';
@@ -14,7 +16,9 @@ type LoginResult = { sessionToken?: string; identity: { id: string } };
 export default function AuthScreen() {
   const { t } = useAppLocale();
   const buildRequired = Platform.OS !== 'web' && Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
-  const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
+  const params = useLocalSearchParams<{ returnTo?: string }>();
+  const returnTo = safeAuthReturnTo(params.returnTo);
+  const running = useRef(false);
   const received = useEmailLink();
   const [email, setEmail] = useState(''), [localToken, setLocalToken] = useState('');
   const [sent, setSent] = useState(false), [busy, setBusy] = useState(false);
@@ -28,14 +32,18 @@ export default function AuthScreen() {
   }, [cooldown]);
   const failure = (reason: unknown) => reason instanceof ApiError && reason.status === 429 ? t('email.rateLimited') : t('email.failure');
   async function requestLink() {
+    if (running.current) return;
+    running.current = true;
     setBusy(true); setError('');
     try {
-      const result = await apiRequest<ChallengeResult>('/v1/auth/email-challenges', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, target: Platform.OS === 'web' ? 'web' : 'native' }) });
+      const result = await apiRequest<ChallengeResult>('/v1/auth/email-challenges', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, target: Platform.OS === 'web' ? 'web' : 'native', ...(returnTo ? { returnTo } : {}) }) });
       setSent(true); setCooldown(result.resendAfterSeconds);
     } catch (reason) { setError(failure(reason)); }
-    finally { setBusy(false); }
+    finally { running.current = false; setBusy(false); }
   }
   async function verify() {
+    if (running.current) return;
+    running.current = true;
     setBusy(true); setError('');
     try {
       let session = issued;
@@ -45,13 +53,15 @@ export default function AuthScreen() {
       }
       await completeSignIn(session.sessionToken, returnTo, session.identity.id);
     } catch (reason) { setError(failure(reason)); }
-    finally { setBusy(false); }
+    finally { running.current = false; setBusy(false); }
   }
   async function loadLocalLink() {
+    if (running.current) return;
+    running.current = true;
     setBusy(true); setError('');
     try { const result = await apiRequest<{ token: string }>(`/__dev/mailbox?email=${encodeURIComponent(email)}`); setLocalToken(result.token); }
     catch (reason) { setError(failure(reason)); }
-    finally { setBusy(false); }
+    finally { running.current = false; setBusy(false); }
   }
   function recover() { setIssued(null); received.clear(); setLocalToken(''); setSent(false); setError(''); }
   return <ScrollView keyboardShouldPersistTaps="handled" className="flex-1 bg-canvas" contentContainerClassName="px-5 py-8">
@@ -62,13 +72,13 @@ export default function AuthScreen() {
         <ActionButton label={t('email.verify')} busy={busy} onPress={() => void verify()} />
         <ActionButton secondary label={t('email.recover')} disabled={busy} onPress={recover} />
       </> : <>
-        <TextInput autoCapitalize="none" autoCorrect={false} autoComplete="email" keyboardType="email-address" accessibilityLabel={t('email.address')} placeholder="you@example.com" value={email} editable={!buildRequired} onChangeText={setEmail} style={{ writingDirection: 'ltr', textAlign: 'left' }} className="rounded-control border border-line px-4 py-4 text-ink" />
+        <TextField label={t('email.address')} identifier autoCapitalize="none" autoCorrect={false} autoComplete="email" keyboardType="email-address" placeholder="you@example.com" value={email} editable={!buildRequired && !busy} onChangeText={setEmail} />
         {sent ? <Text accessibilityRole="status" className="leading-6 text-body">{t('email.sent')}</Text> : null}
         <ActionButton label={buildRequired ? t('email.nativeBuild') : cooldown ? t('email.resendIn', { seconds: cooldown }) : sent ? t('email.resend') : t('email.send')} busy={busy} disabled={buildRequired || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || cooldown > 0} onPress={() => void requestLink()} />
         {__DEV__ && sent ? <ActionButton secondary label={t('email.localLink')} busy={busy} onPress={() => void loadLocalLink()} /> : null}
       </>}
       {error ? <Text accessibilityRole="alert" className="text-sm text-danger">{error}</Text> : null}
-      <Link href="/auth/login" className="text-center text-sm font-semibold text-brand">{t('email.back')}</Link>
+      <Link href={{ pathname: '/auth/login', params: returnTo ? { returnTo } : {} }} onPress={event => { if (busy) event.preventDefault(); }} className="min-h-touch py-3 text-center text-sm font-semibold text-brand">{t('email.back')}</Link>
     </View>
   </ScrollView>;
 }
