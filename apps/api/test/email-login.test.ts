@@ -139,6 +139,7 @@ test('Resend adapter uses a bounded request and stable delivery idempotency with
 });
 
 test('HTTP send responses resist enumeration and reject redirect injection; mailbox remains local/development only', async () => {
+  const originalEnvironment = env.NODE_ENV;
   const f = fixture(), app = Fastify();
   app.setErrorHandler((error, _request, reply) => reply.code(error instanceof AppError ? error.statusCode : 500).send({ error: 'generic' }));
   await registerAuthRoutes(app, { emailLogin: f.service });
@@ -148,9 +149,12 @@ test('HTTP send responses resist enumeration and reject redirect injection; mail
     const a = await send(known), b = await send(unknown); assert.equal(a.statusCode, 202); assert.deepEqual(a.json(), b.json());
     assert.equal((await send(email(), { redirectUri: 'https://evil.test' })).statusCode, 400);
     assert.equal((await send(email(), { target: 'https://evil.test' })).statusCode, 400);
+    env.NODE_ENV = 'test';
+    assert.equal((await app.inject({ url: `/__dev/mailbox?email=${encodeURIComponent(known)}` })).statusCode, 404);
+    env.NODE_ENV = 'development';
     assert.equal((await app.inject({ url: `/__dev/mailbox?email=${encodeURIComponent(known)}`, remoteAddress: '198.51.100.10', headers: { 'x-forwarded-for': '127.0.0.1' } })).statusCode, 403);
     const previous = env.NODE_ENV; env.NODE_ENV = 'production';
     try { assert.equal((await app.inject({ url: `/__dev/mailbox?email=${encodeURIComponent(known)}` })).statusCode, 404); }
     finally { env.NODE_ENV = previous; }
-  } finally { await app.close(); }
+  } finally { env.NODE_ENV = originalEnvironment; await app.close(); }
 });
