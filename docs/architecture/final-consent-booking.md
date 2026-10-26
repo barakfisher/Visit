@@ -45,3 +45,5 @@ Local verification on 2026-10-26:
 - Expo iOS/Android JavaScript exports: passed at `/tmp/vis26-native`.
 
  Tests use real local PostgreSQL/Redis with synthetic delivery boundaries. Hosted Actions billing and VIS-2 → VIS-43 → VIS-25 installed-native/live-provider gates remain separate. No deployment or real outbound message is part of this change. Existing API3000/Metro8081 and orphan Expo8082 processes are preserved; exported-web regression uses port8083.
+
+Implementation PR: https://github.com/barakfisher/Visit/pull/11. Code commit: 4ebbdf0f6a12a41b3071e7a9cbf0033cd4976c18. Hosted Actions run40319031356/job121558904554 executed zero steps; GitHub reported failed account payments or a spending-limit restriction. This is not passing hosted CI.
