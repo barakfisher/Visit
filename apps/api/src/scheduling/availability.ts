@@ -5,7 +5,7 @@ import { assertCapacity, maximumConcurrentBookings, occupiedInterval, type Inter
 export type LocalWindow = Readonly<{ startLocal: string; endLocal: string }>;
 export type AvailabilityReason = 'OUTSIDE_WORKING_HOURS' | 'MINIMUM_NOTICE' | 'OUTSIDE_BOOKING_HORIZON' | 'MANUAL_BLOCK' | 'CAPACITY_FULL' | 'TEMPORARY_HOLD';
 export type ScheduleWarning = { code: 'NONEXISTENT_SCHEDULE_BOUNDARY' | 'AMBIGUOUS_SCHEDULE_BOUNDARY'; scope: 'business' | 'staff'; staffId?: string };
-export type Occupancy = Interval & { status: 'CONFIRMED' | 'HELD' | 'CANCELLED' | 'EXPIRED' | 'COMPLETED'; holdExpiresAt: Date | null };
+export type Occupancy = Interval & { status: 'CONFIRMED' | 'HELD' | 'CANCELLED' | 'EXPIRED' | 'COMPLETED' | 'NO_SHOW'; holdExpiresAt: Date | null };
 export type AvailabilityStaff = { id: string; displayName: string; parallelCapacity: number; windows: readonly LocalWindow[]; bookings: readonly Occupancy[]; blocks: readonly Interval[] };
 export type AvailabilityPolicy = { minimumNoticeMinutes: number; maximumAdvanceDays: number; bufferBeforeMinutes: number; bufferAfterMinutes: number };
 export type AvailabilitySlot = { startsAt: string; endsAt: string; occupiedFrom: string; occupiedUntil: string; localTime: string; utcOffset: string; staffId: string; staffName: string; available: boolean; locked: boolean; remainingCapacity: number; reasons: AvailabilityReason[] };
@@ -75,12 +75,12 @@ export function evaluateCandidate(input: { startsAt: Date; durationMinutes: numb
   if (startsAt.getTime() < now.getTime() + policy.minimumNoticeMinutes * 60000) reasons.push('MINIMUM_NOTICE');
   if (Temporal.PlainDate.compare(zoned.toPlainDate(), horizon) > 0) reasons.push('OUTSIDE_BOOKING_HORIZON');
   if (staff.blocks.some(block => block.startsAt < occupied.endsAt && block.endsAt > occupied.startsAt)) reasons.push('MANUAL_BLOCK');
-  const active = staff.bookings.filter(booking => booking.status === 'CONFIRMED' || (booking.status === 'HELD' && booking.holdExpiresAt !== null && booking.holdExpiresAt > now));
+  const active = staff.bookings.filter(booking => ['CONFIRMED', 'COMPLETED', 'NO_SHOW'].includes(booking.status) || (booking.status === 'HELD' && booking.holdExpiresAt !== null && booking.holdExpiresAt > now));
   const existing = clipped(active, occupied);
   const remainingCapacity = Math.max(0, staff.parallelCapacity - maximumConcurrentBookings(existing));
   if (!remainingCapacity) {
     reasons.push('CAPACITY_FULL');
-    if (assertCapacity(occupied, clipped(active.filter(booking => booking.status === 'CONFIRMED'), occupied), staff.parallelCapacity)) reasons.push('TEMPORARY_HOLD');
+    if (assertCapacity(occupied, clipped(active.filter(booking => ['CONFIRMED', 'COMPLETED', 'NO_SHOW'].includes(booking.status)), occupied), staff.parallelCapacity)) reasons.push('TEMPORARY_HOLD');
   }
   return {
     startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), occupiedFrom: occupied.startsAt.toISOString(), occupiedUntil: occupied.endsAt.toISOString(),

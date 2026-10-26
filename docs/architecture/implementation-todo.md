@@ -12,8 +12,9 @@
 - [x] 6a. VIS-36 — per-business verified contact requirements and immutable operational snapshots; customer-contact-policy.md records 191 API / 37 foundation / 55 Storybook, full exported-web, typecheck/lint and JavaScript export evidence.
 - [x] 6b. VIS-26 — final-consent reservation/commit and durable owned attempt recovery; final-consent-booking.md records 204 API / 41 foundation / 55 Storybook, full exported-web, typecheck/lint and JavaScript export evidence.
 - [x] 6c. VIS-24 — compact service/calendar/nearby-time advisory review; compact-booking.md records 208 API / 51 foundation / 60 Storybook, full exported-web, typecheck/lint and JavaScript export evidence.
-- [ ] 6d. VIS-28 — persisted success; also requires VIS-39. Follow actual Linear prerequisites.
-- [ ] 7. Finish VIS-39/VIS-30/VIS-29/VIS-18/VIS-38 operations and integrated VIS-11/VIS-14/VIS-17/VIS-20 evidence plus CI/staging/native/operational release gates.
+- [x] 6d. VIS-39 — appointment lifecycle and immutable audit; appointment-lifecycle.md records 223 API / 58 foundation / 65 Storybook, full exported-web, typecheck/lint and JavaScript export evidence.
+- [ ] 6e. VIS-28 — persisted success; VIS-12/VIS-26/VIS-39 prerequisites are implemented. Follow actual Linear prerequisites.
+- [ ] 7. Finish VIS-30/VIS-29/VIS-18/VIS-38 operations and integrated VIS-11/VIS-14/VIS-17/VIS-20 evidence plus CI/staging/native/operational release gates.
 - [ ] Deferred: VIS-48 NLP assistant, after pilot validation.
 
 Tests accompany each implementation. Only active work is In Progress; completed local code is not proof of real native or external-provider execution. Follow explicit dependency edges and preserve the user-approved native release gate. No additional blocking product decision was identified before starting.

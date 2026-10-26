@@ -49,8 +49,8 @@ test('capacity counts peak overlap throughout the candidate rather than overlapp
   assert.equal(slot(full, '10:00').available, false); assert.deepEqual(slot(full, '10:00').reasons, ['CAPACITY_FULL']);
   assert.equal(slot(full, '11:00').available, true);
 });
-test('held occupancy expires exactly at its deadline, and inactive booking states never consume capacity', () => {
-  const result = run({ staff: [staff({ bookings: [occupied('10:00', '10:30', 'HELD', now), occupied('10:00', '10:30', 'CANCELLED'), occupied('10:00', '10:30', 'COMPLETED'), occupied('10:00', '10:30', 'EXPIRED')] })] });
+test('held occupancy expires exactly at its deadline, and cancelled/expired states never consume capacity', () => {
+  const result = run({ staff: [staff({ bookings: [occupied('10:00', '10:30', 'HELD', now), occupied('10:00', '10:30', 'CANCELLED'), occupied('10:00', '10:30', 'EXPIRED')] })] });
   assert.equal(slot(result, '10:00').available, true);
   const held = run({ staff: [staff({ bookings: [occupied('10:00', '10:30', 'HELD', new Date(now.getTime() + 1))] })] });
   assert.equal(slot(held, '10:00').locked, true); assert.deepEqual(slot(held, '10:00').reasons, ['CAPACITY_FULL', 'TEMPORARY_HOLD']);
@@ -193,5 +193,14 @@ test('availability repository and legacy/compatibility routes share scoped sched
     await prisma.booking.deleteMany({ where: { businessId: { in: businesses.map(business => business.id) } } });
     await prisma.business.deleteMany({ where: { id: { in: businesses.map(business => business.id) } } });
     await prisma.identity.delete({ where: { id: owner.id } }); await app.close(); await prisma.$disconnect(); redis.disconnect();
+  }
+});
+
+test('completed and no-show intervals retain historical capacity without being temporary holds', () => {
+  for (const status of ['COMPLETED', 'NO_SHOW'] as const) {
+    const result = run({ staff: [staff({ bookings: [occupied('10:00', '10:30', status)] })] });
+    assert.equal(slot(result, '10:00').available, false);
+    assert.equal(slot(result, '10:00').locked, false);
+    assert.deepEqual(slot(result, '10:00').reasons, ['CAPACITY_FULL']);
   }
 });

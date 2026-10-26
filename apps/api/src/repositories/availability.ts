@@ -29,7 +29,7 @@ async function availabilityRange(context: PublicBusinessContext, serviceId: stri
       tx.businessWeeklyAvailability.findMany({ where: { businessId: business.id } }),
       tx.staffService.findMany({ where: { businessId: business.id, serviceId: service.id, staff: { active: true } }, include: { staff: { include: {
         availability: { where: { businessId: business.id } }, overrides: { where: { businessId: business.id, date: { gte: fromDate, lt: endDate } } },
-        bookings: { where: { businessId: business.id, ...(context.ownedBookingId ? { id: { not: context.ownedBookingId } } : {}), occupiedFrom: { lt: rangeEnd }, occupiedUntil: { gt: rangeStart }, OR: [{ status: 'CONFIRMED' }, { status: 'HELD', holdExpiresAt: { gt: now } }] }, select: { occupiedFrom: true, occupiedUntil: true, status: true, holdExpiresAt: true } },
+        bookings: { where: { businessId: business.id, ...(context.ownedBookingId ? { id: { not: context.ownedBookingId } } : {}), occupiedFrom: { lt: rangeEnd }, occupiedUntil: { gt: rangeStart }, OR: [{ status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW'] } }, { status: 'HELD', holdExpiresAt: { gt: now } }] }, select: { occupiedFrom: true, occupiedUntil: true, status: true, holdExpiresAt: true } },
         timeBlocks: { where: { businessId: business.id, startsAt: { lt: rangeEnd }, endsAt: { gt: rangeStart } }, select: { startsAt: true, endsAt: true } },
       } } } }),
     ]);

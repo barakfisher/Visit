@@ -1,4 +1,4 @@
-import { canDiscardBookingAttempt } from './BookingAttempt.utils';
+import { canDiscardBookingAttempt, isCommittedBookingOutcome } from './BookingAttempt.utils';
 import { randomUUID } from 'expo-crypto';
 import { useBookingAttempt } from '@/src/state/BookingAttempt.store';
 import { commitBooking, recoverBooking } from './BookingAttempt.service';
@@ -106,12 +106,12 @@ export function useBookingContactFlow() {
         useBookingAttempt.getState().set(logical);
         const recovered = pendingAttempt ? await recoverBooking(logical) : null;
         if (recovered?.status === 'CANCELLED' || recovered?.status === 'EXPIRED') throw new ApiError(t('bookingCommit.conflict'), 'HOLD_EXPIRED', 409);
-        result = recovered?.status === 'CONFIRMED' ? recovered : await commitBooking(logical);
+        result = isCommittedBookingOutcome(recovered) ? recovered : await commitBooking(logical);
       }
     } catch (reason) {
       let terminal = false;
       if (logical) {
-        try { const recovered = await recoverBooking(logical); if (recovered?.status === 'CONFIRMED') result = recovered; terminal = canDiscardBookingAttempt(recovered); }
+        try { const recovered = await recoverBooking(logical); if (isCommittedBookingOutcome(recovered)) result = recovered; terminal = canDiscardBookingAttempt(recovered); }
         catch { /* Preserve the attempt key while the committed outcome is uncertain. */ }
       }
       if (!result && isCurrent()) {
@@ -122,10 +122,10 @@ export function useBookingContactFlow() {
         } else setError(t('bookingCommit.uncertain'));
       }
     } finally {
-      if (result?.status === 'CONFIRMED' && isCurrent()) {
+      if (isCommittedBookingOutcome(result) && result && isCurrent()) {
         useBookingAttempt.getState().set(null);
         await Promise.allSettled([client.invalidateQueries({ queryKey: ['consumer', 'active'] }), client.invalidateQueries({ queryKey: ['me', 'bookings'] })]);
-        if (isCurrent()) router.replace({ pathname: '/confirmation/[bookingId]', params: { bookingId: result.id } });
+        if (isCurrent()) { if (result.status === 'CONFIRMED') router.replace({ pathname: '/confirmation/[bookingId]', params: { bookingId: result.id } }); else router.replace('/appointments'); }
       }
       operation.current = false;
       if (mounted.current) setBusy(false);

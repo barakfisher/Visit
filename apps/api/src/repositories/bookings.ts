@@ -6,7 +6,7 @@ import { validateBusinessContext, type AuthorizedBusinessContext } from '../secu
 export async function listCustomerBookings(session: AuthenticatedSession, activeOnly = false) {
   await validateAuthenticatedSession(session);
   const bookings = await prisma.booking.findMany({
-    where: { customerId: session.identity.id, ...(activeOnly ? { status: 'CONFIRMED' as const, startsAt: { gte: new Date() } } : {}) },
+    where: { customerId: session.identity.id, ...(activeOnly ? { status: 'CONFIRMED' as const, startsAt: { gte: new Date() } } : { status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'] }, events: { some: {} } }) },
     include: {
       business: { select: { id: true, name: true, timezone: true } },
       staff: { select: { displayName: true } },
@@ -18,7 +18,7 @@ export async function listCustomerBookings(session: AuthenticatedSession, active
 
 export async function listProviderBookings(context: AuthorizedBusinessContext) {
   await validateBusinessContext(context, ['OWNER', 'MANAGER']);
-  const bookings = await prisma.booking.findMany({ where: { businessId: context.businessId }, include: { staff: { select: { displayName: true } } }, orderBy: { startsAt: 'asc' } });
+  const bookings = await prisma.booking.findMany({ where: { businessId: context.businessId, status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'] }, events: { some: {} } }, include: { staff: { select: { displayName: true } } }, orderBy: { startsAt: 'asc' } });
   return bookings.map(booking => ({ ...booking, service: bookingServiceSnapshot(booking) }));
 }
 

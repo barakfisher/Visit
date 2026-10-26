@@ -113,7 +113,7 @@ test('publication readiness and public/owned paths preserve lifecycle across set
       const pending = hold('13:00'); const started = pending.then(value => value); await ready;
       try { assert.equal((await publish(false)).statusCode, 200); } finally { release(); }
       assert.equal((await started).statusCode, 409); pause = undefined;
-      await assert.rejects(prisma.booking.update({ where: { id: heldId }, data: { status: 'CONFIRMED' } }), /VISIT_BUSINESS_UNPUBLISHED/);
+      await assert.rejects(prisma.booking.update({ where: { id: heldId }, data: { status: 'CONFIRMED' } }), /VISIT_BOOKING_INVALID_TRANSITION/);
       const existing = await prisma.booking.findUniqueOrThrow({ where: { id: confirmedId } });
       await assert.rejects(prisma.booking.create({ data: { businessId: business.id, customerId: owner.id, serviceId, staffId, startsAt: new Date(at('14:00')), endsAt: new Date(at('14:30')), occupiedFrom: new Date(at('14:00')), occupiedUntil: new Date(at('14:30')), status: 'HELD', holdExpiresAt: new Date(Date.now() + 60000), idempotencyKey: randomUUID() } }), /VISIT_BUSINESS_UNPUBLISHED/);
       assert.equal((await app.inject({ method: 'POST', url: `/v1/bookings/${confirmedId}/cancel`, headers: owner.headers })).statusCode, 200);
