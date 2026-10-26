@@ -10,6 +10,7 @@ export const apiRequest = createApiClient({
   readToken: readSessionToken,
   saveToken: saveSessionToken,
   clearSession: () => useSessionStore.getState().clear(),
+  onProviderForbidden: () => useSessionStore.getState().invalidateProviderAccess(),
   contextVersion: () => useSessionStore.getState().contextVersion,
 });
 

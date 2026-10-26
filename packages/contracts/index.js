@@ -36,6 +36,14 @@ export function safeAuthReturnTo(value) {
   if (pathname === '/discover' && value === '/discover') return '/'; // Retired route.
   if (/^\/p\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(pathname) && pathname.length <= 83 && value === pathname) return pathname;
   if ((pathname === '/' || pathname === '/register/provider') && value === pathname) return pathname;
+  if (/^\/provider\/(?:dashboard|[A-Za-z0-9_-]{1,128}|team\/[A-Za-z0-9_-]{1,128})$/.test(pathname)) {
+    if (pathname !== '/provider/dashboard') return value === pathname ? pathname : undefined;
+    try {
+      const url = new URL(value, 'https://visit.invalid');
+      for (const [key, field] of url.searchParams) if (key !== 'businessId' || url.searchParams.getAll(key).length !== 1 || !/^[A-Za-z0-9_-]{1,128}$/.test(field)) return undefined;
+      return `${pathname}${url.search}`;
+    } catch { return undefined; }
+  }
   if (!/^\/booking\/[A-Za-z0-9_-]{1,128}$/.test(pathname)) return undefined;
   try {
     const url = new URL(value, 'https://visit.invalid');

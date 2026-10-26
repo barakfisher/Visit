@@ -8,6 +8,7 @@ type SessionState = {
   setBootstrapStatus: (status: 'loading' | 'ready' | 'error') => void;
   retryBootstrap: () => void;
   contextVersion: number;
+  invalidateProviderAccess: () => void;
   token: string | null;
   profile: AuthProfile | null;
   resetAuthContext: (token: string | null, profile: AuthProfile) => void;
@@ -24,11 +25,15 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   setBootstrapStatus: bootstrapStatus => set({ bootstrapStatus }),
   retryBootstrap: () => set({ bootstrapStatus: 'loading', bootstrapAttempt: get().bootstrapAttempt + 1 }),
   contextVersion: 0,
+  invalidateProviderAccess: () => {
+    queryClient.clear();
+    set({ activeBusinessId: null, contextVersion: get().contextVersion + 1 });
+  },
   token: null,
   profile: null,
   setAuth: (token, profile) => {
     const changedIdentity = profile.id !== get().identityId;
-    const removedBusiness = Boolean(get().activeBusinessId && !profile.businesses.some((business) => business.id === get().activeBusinessId));
+    const removedBusiness = Boolean(get().profile?.businesses.some(old => !profile.businesses.some(b => b.id === old.id && b.role === old.role)));
     if (changedIdentity || removedBusiness) queryClient.clear();
     set({ token, profile, identityId: profile.id, bootstrapStatus: 'ready', ...(changedIdentity || removedBusiness ? { activeBusinessId: null, contextVersion: get().contextVersion + 1 } : {}) });
   },

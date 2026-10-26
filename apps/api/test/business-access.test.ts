@@ -8,6 +8,7 @@ import { redis } from '../src/infra/redis.js';
 import { registerBusinessAccess } from '../src/routes/business-access.js';
 import { AppError } from '../src/http/errors.js';
 import { newOpaqueToken, tokenDigest, sessionExpiry } from '../src/security/sessions.js';
+import { authProfile } from '../src/routes/flow-auth.js';
 import { requireBusinessMembership } from '../src/security/tenant-context.js';
 after(async () => { redis.disconnect(); await prisma.$disconnect(); });
 test('existing-business access requires scoped, verified, single-use consent and leaves publication intact', async t => {
@@ -62,6 +63,7 @@ test('existing-business access requires scoped, verified, single-use consent and
       const r = await req('POST', `/v1/provider/businesses/${b}/invitations`, manager, { role: 'STAFF', channel: 'phone', recipient: person.phone }); assert.equal(r.statusCode, 200, r.body);
       const token = new URL(r.json().url).hash.slice(8); assert.equal((await accept(token)).statusCode, 200);
       assert.equal((await requireBusinessMembership(receiver.id, b)).role, 'MANAGER');
+      const profile = await authProfile(receiver.id); assert.equal(profile.businesses.length, 1); assert.equal(profile.businesses[0]?.role, 'MANAGER');
       assert.equal((await req('DELETE', `/v1/provider/businesses/${b}/members/${staffMember.id}`, receiver)).statusCode, 200);
       assert.equal((await req('DELETE', `/v1/provider/businesses/${b}/members/${ownerMember.id}`, manager)).statusCode, 403);
     });
@@ -89,6 +91,8 @@ test('existing-business access requires scoped, verified, single-use consent and
       const row = await prisma.businessOwnershipReview.findUniqueOrThrow({ where: { id: fresh.json().id } });
       assert.equal(row.reviewedByIdentityId, admin.id);
       assert.equal(await prisma.membership.count({ where: { businessId: b, identityId: outsider.id, role: 'OWNER', status: 'ACTIVE' } }), row.status === 'APPROVED' ? 1 : 0);
+      await prisma.membership.create({ data: { businessId: b, identityId: owner.id, role: 'MANAGER', status: 'ACTIVE' } });
+      const profile = await authProfile(owner.id); assert.equal(profile.businesses.length, 1); assert.equal(profile.businesses[0]?.role, 'OWNER');
       const event = await prisma.businessAccessEvent.findFirstOrThrow({ where: { businessId: b } }); await assert.rejects(prisma.businessAccessEvent.update({ where: { id: event.id }, data: { action: 'REVOKED' } }));
     });
     await t.test('revocation racing acceptance has one terminal outcome and foreign inviter parents are rejected', async () => {

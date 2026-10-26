@@ -18,6 +18,6 @@ test('Google launch destination and navigation hints cannot override broker trus
   const launch = `https://api.visit.test/api/auth/google/authorize?ticket=${grant}`;
   assert.equal(googleNativeLaunchUrl(launch, 'https://api.visit.test'), launch);
   for (const value of [launch.replace('api.visit.test', 'evil.test'), `${launch}&ticket=${state}`, `${launch}&redirect=evil`, `${launch}#other`]) assert.throws(() => googleNativeLaunchUrl(value, 'https://api.visit.test'));
-  for (const value of ['/', '/register/provider', '/booking/business-123?date=2026-10-25']) assert.equal(safeGoogleReturnTo(value), value);
-  for (const value of ['//evil.test/discover', '/\\evil.test/discover', '/booking/../provider', '/provider/dashboard', '/discover#grant=x', 'https://visit.invalid/discover']) assert.equal(safeGoogleReturnTo(value), undefined);
+  for (const value of ['/', '/register/provider', '/provider/dashboard', '/provider/dashboard?businessId=allowed', '/booking/business-123?date=2026-10-25']) assert.equal(safeGoogleReturnTo(value), value);
+  for (const value of ['//evil.test/discover', '/\\evil.test/discover', '/booking/../provider', '/provider/dashboard?role=OWNER', '/discover#grant=x', 'https://visit.invalid/discover']) assert.equal(safeGoogleReturnTo(value), undefined);
 });
