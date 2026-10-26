@@ -57,3 +57,11 @@ Fresh QA session `/root/vis39_qa` added structured transaction-retry tests, exac
 Fresh security session `/root/vis39_security` reviewed tenant ownership, role/session locking, audit immutability and data minimization, transitions, capacity and committed recovery. Its P2 stale-confirmation finding was fixed by scope checks before mutation and all response/error follow-up queries. Final static re-review reported no outstanding concrete security findings. Audit statements do not imply device, external delivery or hosted CI success.
 
 The browser expiry fixture unloads Home before manually expiring its session so outstanding Home requests cannot rotate a cookie from an abandoned document. This preserves a deterministic fresh-document refresh check without changing production authentication behavior.
+
+## Commit and hosted check evidence
+
+Implementation: `1f805f17bb2b83a589e1bc084cf25aa25698ee82`. [PR #13](https://github.com/barakfisher/Visit/pull/13).
+
+Hosted CI did not run: GitHub account billing/spending blocked job startup (zero steps). Local checks above passed.
+
+Implementation check: [run 40379366989](https://github.com/barakfisher/Visit/actions/runs/40379366989), job `121771104543`. Its failure annotation states that recent account payments failed or the spending limit must be increased. Hosted CI is not claimed to pass. No billing change or administrative merge bypass was performed.
