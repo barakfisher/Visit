@@ -79,6 +79,7 @@ function RootLayoutNav() {
       <ThemeProvider value={DefaultTheme}>
         <LocaleProvider direction={direction}><View {...(Platform.OS === 'web' ? { dir: direction } : {})} style={{ flex: 1, direction }}><SafeAreaView style={{ flex: 1, backgroundColor: '#f8fafc', direction }} edges={['top', 'bottom']}><AppNavigation key={`${pathname}:${navigationVersion}`} /><Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="invite" options={{ headerShown: false }} />
           <Stack.Screen name="admin" options={{ headerShown: false }} />
           <Stack.Screen name="p" options={{ headerShown: false }} />
           <Stack.Screen name="register" options={{ headerShown: false }} />

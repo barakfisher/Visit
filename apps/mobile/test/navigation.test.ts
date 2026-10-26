@@ -15,3 +15,7 @@ test('menu capabilities distinguish ordinary, pending/rejected, approved and mul
   const result = menuCapabilities({ ...empty, memberships: [membership('a'), membership('b', 'MANAGER'), membership('staff', 'STAFF'), membership('suspended', 'OWNER', 'SUSPENDED'), membership('unapproved', 'OWNER', 'ACTIVE', 'PENDING')], providerApplications: [{ id: 'pending', status: 'PENDING', business: { name: 'Another application' } }] });
   assert.deepEqual(result.managed.map(m => m.business.id), ['a', 'b']); assert.equal(result.applicationStatus, true); assert.equal(result.becomeProvider, false);
 });
+test('multiple roles for one business produce one mode choice with owner priority', () => {
+  const result = menuCapabilities({ ...empty, memberships: [membership('a', 'STAFF'), membership('a', 'OWNER'), membership('a', 'MANAGER'), membership('b', 'MANAGER')] });
+  assert.equal(result.managed.length, 2); assert.equal(result.managed.find(m => m.business.id === 'a')?.role, 'OWNER');
+});

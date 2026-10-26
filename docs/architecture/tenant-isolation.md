@@ -17,6 +17,9 @@ VIS-4 implementation contract and audit, 2026-10-24. Business IDs are selectors.
 | SavedProvider | Global, identity-owned | Unique identity/business relation; required business reference. Current session owns add/list/remove; published-only save grants no membership. Unavailable entries project only the previously public saved name and business ID. |
 | Business | Tenant root | Its primary key is businessId; approval controls current provider/public eligibility. Publication/readiness is added in VIS-34. |
 | Membership | Business-owned | Non-null businessId and global identity reference; ACTIVE plus allowed role and approved business required. Identity existence alone grants no membership. |
+| BusinessInvitation | Business-owned | Composite inviter membership/business/identity parent, hashed one-use token, verified recipient HMAC, expiry and revocation; never grants Owner. |
+| BusinessOwnershipReview | Business-owned | Recent admin-only evidence/decision workflow; independent verified claimant; immutable evidence and decisions, no public self-claim. |
+| BusinessAccessEvent | Business-owned | Immutable actor/subject/role/action audit with composite membership/business/subject FK; no public projection. |
 | ProviderApplication | Business-owned | Applicant's own cross-business status projection and admin review are explicitly authorized exceptions to ordinary provider scope. Pending applications grant no access. |
 | Staff | Business-owned | Non-null businessId; unique (businessId, id) resource key. |
 | Service | Business-owned | Non-null businessId; unique (businessId, id); private CRUD requires authorized tenant context. |

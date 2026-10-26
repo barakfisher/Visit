@@ -96,6 +96,8 @@ try {
   await ready(webUrl, webProcess, 'Web');
   const browser = await chromium.launch({ headless: true });
   try {
+    const { businessAccessSmoke } = await import('./business-access-smoke.js');
+    await businessAccessSmoke({ browser, webUrl, apiUrl });
     const { authUiSmoke } = await import('./auth-ui-smoke.js');
     await authUiSmoke({ browser, webUrl, apiUrl, run, identityIds });
     const { providerReviewSmoke } = await import('./provider-review-smoke.js');

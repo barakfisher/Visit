@@ -24,7 +24,7 @@ export async function requireBusinessMembership(
   businessId: string,
   allowedRoles?: readonly MembershipRole[],
 ): Promise<AuthorizedBusinessContext> {
-  const membership = await prisma.membership.findFirst({
+  const memberships = await prisma.membership.findMany({
     where: {
       identityId,
       businessId,
@@ -34,6 +34,7 @@ export async function requireBusinessMembership(
     },
     select: { role: true },
   });
+  const membership = ['OWNER', 'MANAGER', 'STAFF'].map(role => memberships.find(m => m.role === role)).find(Boolean);
   if (!membership) throw forbidden();
   const context = Object.freeze({ identityId, businessId, role: membership.role, [contextBrand]: true as const });
   issuedMembershipContexts.add(context);
