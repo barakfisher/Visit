@@ -1,3 +1,5 @@
+import { runBookingAttempt } from '../scheduling/booking-attempts.service.js';
+import { reviewedServiceSchema } from '../scheduling/booking-consent.utils.js';
 import { publicBusinessWhere } from '../security/business-eligibility.js';
 import { withBusinessConfiguration } from '../repositories/publication.js';
 import { requireOwnedReschedule } from '../security/tenant-context.js';
@@ -11,7 +13,7 @@ import { prisma } from '../db/client.js';
 import { authenticate } from '../security/sessions.js';
 import { requireBusinessMembership } from '../security/tenant-context.js';
 import { AppError, conflict, notFound } from '../http/errors.js';
-import { reserveHold, requireHold, releaseHold } from '../scheduling/reservations.js';
+import { requireHold, releaseHold } from '../scheduling/reservations.js';
 import { acquireIntervalLocks } from '../scheduling/redis-slot-lock.js';
 import { localDateTimeToInstant } from '../scheduling/local-time.js';
 import { withBookingTransaction } from '../scheduling/booking-transaction.js';
@@ -64,9 +66,29 @@ export async function registerScreenFlows(app: FastifyInstance) {
   app.get('/api/consumer/bookings/active', async (request) => {
     return { bookings: await listCustomerBookings(await authenticate(request), true) };
   });
+  app.get('/api/bookings/attempts', async request => {
+    const { identity } = await authenticate(request);
+    const { businessId, key } = z.strictObject({ businessId: z.string().min(1), key: z.string().min(16).max(128) }).parse(request.query);
+    const booking = await prisma.booking.findFirst({ where: { businessId, idempotencyKey: key, customerId: identity.id }, select: { id: true, status: true } });
+    if (booking?.status === 'CONFIRMED' || booking?.status === 'CANCELLED' || booking?.status === 'EXPIRED') return booking;
+    const attempt = await prisma.bookingAttempt.findFirst({ where: { businessId, idempotencyKey: key, customerId: identity.id }, select: { id: true, status: true } });
+    if (attempt?.status === 'REJECTED') return { id: booking?.id ?? attempt.id, status: 'EXPIRED' };
+    if (booking) return booking;
+    if (attempt) return { id: attempt.id, status: 'PENDING' };
+    throw notFound();
+  });
+  app.post('/api/bookings/commit', async request => {
+    const { identity } = await authenticate(request);
+    const input = z.strictObject({ finalConsent: z.literal(true), reviewedService: reviewedServiceSchema, providerId: z.string().min(1), serviceId: z.string().min(1), staffId: z.string().min(1), startsAt: z.string().datetime({ offset: true }), idempotencyKey: z.string().min(16).max(128) }).parse(request.body);
+    return runBookingAttempt(input, identity.id, async () => {
+      const { providerId, ...rest } = input;
+      const attempt = z.object({ id: z.string(), status: z.string() }).parse(await invoke(app, request, 'POST', '/v1/bookings', { ...rest, businessId: providerId }));
+      return attempt.status === 'CONFIRMED' ? attempt : z.object({ id: z.string(), status: z.literal('CONFIRMED') }).parse(await invoke(app, request, 'POST', `/v1/bookings/${encodeURIComponent(attempt.id)}/confirm`, {}));
+    });
+  });
   app.post('/api/bookings/lock-slot', async (request, reply) => {
     const { identity } = await authenticate(request);
-    const parsed = z.object({ providerId: z.string().min(1), serviceId: z.string().min(1), staffId: z.string().min(1), startsAt: z.string().datetime({ offset: true }), idempotencyKey: z.string().min(16).max(128) }).safeParse(request.body);
+    const parsed = z.object({ finalConsent: z.literal(true), providerId: z.string().min(1), serviceId: z.string().min(1), staffId: z.string().min(1), startsAt: z.string().datetime({ offset: true }), idempotencyKey: z.string().min(16).max(128) }).safeParse(request.body);
     if (!parsed.success) throw new AppError(400, 'VALIDATION_ERROR', 'Choose a service and available time.');
     const { providerId, ...input } = parsed.data;
     // Fail closed when Redis is down; do not create a database hold without a reservation service.
@@ -75,8 +97,6 @@ export async function registerScreenFlows(app: FastifyInstance) {
     const result = await invoke(app, request, 'POST', '/v1/bookings', { ...input, businessId: providerId });
     const booking = await prisma.booking.findFirstOrThrow({ where: { id: result.id, businessId: providerId, customerId: identity.id }, include: { staff: true } });
     if (booking.status !== 'HELD') throw conflict('This reservation is no longer active.');
-    try { await reserveHold(booking, booking.staff.parallelCapacity); }
-    catch (error) { await prisma.booking.updateMany({ where: { id: booking.id, customerId: identity.id, status: 'HELD' }, data: { status: 'CANCELLED', holdExpiresAt: null } }); throw error; }
     reply.code(201);
     return { holdId: booking.id, expiresAt: booking.holdExpiresAt!.toISOString(), startsAt: booking.startsAt.toISOString(), endsAt: booking.endsAt.toISOString() };
   });

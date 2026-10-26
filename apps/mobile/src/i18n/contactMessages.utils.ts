@@ -1,4 +1,14 @@
 export const contactEn = {
+  'bookingCommit.processing': 'Booking your appointment…',
+  'bookingCommit.resumeOther': 'Finish the pending booking first',
+  'bookingCommit.review': 'Review your appointment',
+  'bookingCommit.minutes': 'minutes',
+  'bookingCommit.cancel': 'Cancellation cutoff: {minutes} minutes before the appointment.',
+  'bookingCommit.advisory': 'This time is available to others until you confirm. Confirming books this exact appointment.',
+  'bookingCommit.retry': 'Check or retry this booking',
+  'bookingCommit.uncertain': 'We could not verify the booking result. Check or retry this same attempt before choosing another time.',
+  'bookingCommit.conflict': 'This attempt expired or the time changed. Choose an available time again.',
+
   'bookingContact.requireCustomerName': 'Require customer name',
   'bookingContact.requireVerifiedPhone': 'Require verified phone',
   'bookingContact.requireVerifiedEmail': 'Require verified email',
@@ -10,6 +20,16 @@ export const contactEn = {
   'bookingContact.retry': 'Refresh contact requirements',
 };
 export const contactHe: Record<keyof typeof contactEn, string> = {
+  'bookingCommit.processing': 'קביעת התור מתבצעת…',
+  'bookingCommit.resumeOther': 'השלמת ההזמנה הקודמת תחילה',
+  'bookingCommit.review': 'בדיקת פרטי התור',
+  'bookingCommit.minutes': 'דקות',
+  'bookingCommit.cancel': 'ניתן לבטל עד {minutes} דקות לפני התור.',
+  'bookingCommit.advisory': 'השעה זמינה לאחרים עד לאישור הסופי. האישור יקבע את התור המדויק הזה.',
+  'bookingCommit.retry': 'בדיקת התוצאה או ניסיון חוזר',
+  'bookingCommit.uncertain': 'לא הצלחנו לוודא את תוצאת ההזמנה. יש לבדוק או לנסות שוב את אותה הזמנה לפני בחירת שעה אחרת.',
+  'bookingCommit.conflict': 'תוקף הניסיון פג או שהזמינות השתנתה. יש לבחור שעה זמינה מחדש.',
+
   'bookingContact.requireCustomerName': 'דרישת שם לקוח',
   'bookingContact.requireVerifiedPhone': 'דרישת טלפון מאומת',
   'bookingContact.requireVerifiedEmail': 'דרישת דוא״ל מאומת',

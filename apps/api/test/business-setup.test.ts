@@ -31,7 +31,7 @@ test('approved business configures, publishes and shares through scoped setup AP
   const request = (method: 'POST' | 'PATCH' | 'PUT', path: string, payload: object, headers = owner.headers) => app.inject({ method, url: base + path, headers, payload });
   const date = Temporal.Now.zonedDateTimeISO('Asia/Jerusalem').toPlainDate().add({ days: 3 }).toString(), at = (time: string) => localDateTimeToInstant(date, time, 'Asia/Jerusalem').toISOString();
   let serviceId = '', staffId = '', backupId = '';
-  const hold = (time: string, resource = staffId) => app.inject({ method: 'POST', url: '/v1/bookings', headers: owner.headers, payload: { businessId, serviceId, staffId: resource, startsAt: at(time), idempotencyKey: randomUUID() } });
+  const hold = (time: string, resource = staffId) => app.inject({ method: 'POST', url: '/v1/bookings', headers: owner.headers, payload: { finalConsent: true, businessId, serviceId, staffId: resource, startsAt: at(time), idempotencyKey: randomUUID() } });
   try {
     await t.test('pending application cannot configure; reasoned admin approval enables unpublished setup', async () => {
       assert.equal((await app.inject({ url: base, headers: owner.headers })).statusCode, 403);
@@ -74,7 +74,7 @@ test('approved business configures, publishes and shares through scoped setup AP
       const first = await hold('11:00'), second = await hold('11:00'); assert.equal(first.statusCode, 201, first.body); assert.equal(second.statusCode, 201, second.body);
       for (const row of [first, second]) assert.equal((await app.inject({ method: 'POST', url: `/v1/bookings/${row.json().id}/confirm`, headers: owner.headers, payload: {} })).statusCode, 200);
       assert.equal((await request('PATCH', `/staff/${staffId}`, { parallelCapacity: 1 })).statusCode, 409);
-      const held = await app.inject({ method: 'POST', url: '/api/bookings/lock-slot', headers: owner.headers, payload: { providerId: businessId, serviceId, staffId, startsAt: at('14:00'), idempotencyKey: randomUUID() } }), backup = await hold('14:00', backupId); assert.equal(held.statusCode, 201, held.body); assert.equal(backup.statusCode, 201);
+      const held = await app.inject({ method: 'POST', url: '/api/bookings/lock-slot', headers: owner.headers, payload: { finalConsent: true, providerId: businessId, serviceId, staffId, startsAt: at('14:00'), idempotencyKey: randomUUID() } }), backup = await hold('14:00', backupId); assert.equal(held.statusCode, 201, held.body); assert.equal(backup.statusCode, 201);
       await requireHold(held.json().holdId, owner.id);
       const before = await prisma.booking.findUniqueOrThrow({ where: { id: first.json().id } });
       assert.equal((await request('PATCH', `/staff/${staffId}`, { displayName: 'Renamed expert', active: false })).statusCode, 200);

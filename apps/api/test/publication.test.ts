@@ -27,7 +27,7 @@ test('publication readiness and public/owned paths preserve lifecycle across set
   const date = Temporal.Now.zonedDateTimeISO('Asia/Jerusalem').toPlainDate().add({ days: 2 }).toString();
   const at = (time: string) => localDateTimeToInstant(date, time, 'Asia/Jerusalem').toISOString();
   let serviceId = '', staffId = '', confirmedId = '', heldId = '';
-  const hold = (time: string) => app.inject({ method: 'POST', url: '/api/bookings/lock-slot', headers: owner.headers, payload: { providerId: business.id, serviceId, staffId, startsAt: at(time), idempotencyKey: randomUUID() } });
+  const hold = (time: string) => app.inject({ method: 'POST', url: '/api/bookings/lock-slot', headers: owner.headers, payload: { finalConsent: true, providerId: business.id, serviceId, staffId, startsAt: at(time), idempotencyKey: randomUUID() } });
   try {
     await t.test('incomplete/foreign attempts fail with field blockers and no silent publishing', async () => {
       assert.equal((await app.inject({ url: `${base}/publication`, headers: foreign.headers })).statusCode, 403);

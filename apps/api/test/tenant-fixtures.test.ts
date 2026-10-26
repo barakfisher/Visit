@@ -65,7 +65,7 @@ test('repeatable isolated fixtures cover both directions of foundation HTTP tena
         // Release is deliberately non-enumerating/idempotent; it cannot cancel another identity's booking.
         assert.equal((await app.inject({ method: 'POST', url: `/api/bookings/${foreignBooking.id}/release`, headers: f.headers(owner), payload: {} })).statusCode, 200);
         for (const [serviceId, staffId] of [[foreignService.id, resource.id], [service.id, foreignStaff.id]]) {
-          const payload = { businessId: own.id, serviceId, staffId, startsAt: `${f.date}T15:00:00Z`, idempotencyKey: randomUUID() };
+          const payload = { finalConsent: true, businessId: own.id, serviceId, staffId, startsAt: `${f.date}T15:00:00Z`, idempotencyKey: randomUUID() };
           assert.equal((await app.inject({ method: 'POST', url: '/v1/bookings', headers: f.headers(owner), payload })).statusCode, 404);
           const { businessId, ...rest } = payload;
           assert.equal((await app.inject({ method: 'POST', url: '/api/bookings/lock-slot', headers: f.headers(owner), payload: { providerId: businessId, ...rest } })).statusCode, 404);

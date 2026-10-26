@@ -32,7 +32,7 @@ test('two overlapping booking requests cannot consume capacity one twice', async
   const date = nowLocal;
   const startA = new Date(`${date}T10:00:00.000Z`).toISOString();
   const startB = new Date(`${date}T10:15:00.000Z`).toISOString();
-  const post = (token: string, startsAt: string, key: string) => app.inject({ method: 'POST', url: '/v1/bookings', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, payload: { businessId: business.id, serviceId: service.id, staffId: staff.id, startsAt, idempotencyKey: key } });
+  const post = (token: string, startsAt: string, key: string) => app.inject({ method: 'POST', url: '/v1/bookings', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, payload: { finalConsent: true, businessId: business.id, serviceId: service.id, staffId: staff.id, startsAt, idempotencyKey: key } });
   try {
     const responses = await Promise.all([post(tokens[0]!, startA, `booking-${suffix}-a`), post(tokens[1]!, startB, `booking-${suffix}-b`)]);
     assert.deepEqual(responses.map((response) => response.statusCode).sort(), [201, 409]);
