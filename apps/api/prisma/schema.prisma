@@ -44,6 +44,7 @@ enum ChallengePurpose {
 }
 
 model Identity {
+  displayName String?
   accessEventsActed BusinessAccessEvent[] @relation("AccessActor")
   accessEventsSubject BusinessAccessEvent[] @relation("AccessSubject")
   invitationsRevoked BusinessInvitation[] @relation("InvitationRevoker")
@@ -300,6 +301,9 @@ model StaffScheduleOverride {
 }
 
 model BookingPolicy {
+  requireCustomerName Boolean @default(false)
+  requireVerifiedPhone Boolean @default(false)
+  requireVerifiedEmail Boolean @default(false)
   id                       String   @id @default(cuid())
   businessId               String   @unique
   minimumNoticeMinutes     Int
@@ -314,6 +318,12 @@ model BookingPolicy {
 }
 
 model Booking {
+  customerName String?
+  customerPhone String?
+  customerEmail String?
+  customerPhoneVerifiedAt DateTime? @db.Timestamptz(3)
+  customerEmailVerifiedAt DateTime? @db.Timestamptz(3)
+  customerContactCapturedAt DateTime? @db.Timestamptz(3)
   id              String        @id @default(cuid())
   businessId      String
   customerId      String
