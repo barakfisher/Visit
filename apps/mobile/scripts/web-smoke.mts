@@ -12,7 +12,8 @@ const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const repoRoot = path.resolve(appRoot, '../..');
 dotenv.config({ path: path.join(repoRoot, '.env') });
 const apiUrl = 'http://127.0.0.1:3001';
-const webPort = 8082;
+const webPort = Number(process.env.VISIT_TEST_WEB_PORT ?? 8082);
+if (!Number.isInteger(webPort) || webPort < 1024 || webPort > 65535) throw new Error('Invalid test web port.');
 const webUrl = `http://127.0.0.1:${webPort}`;
 Object.assign(process.env, { API_PORT: '3001', API_HOST: '127.0.0.1', NODE_ENV: 'development', SMS_DELIVERY_MODE: 'local-inbox', EMAIL_DELIVERY_MODE: 'local-inbox', EXPO_PUBLIC_API_URL: apiUrl, WEB_APP_URL: webUrl });
 const { prisma } = await import('../../api/src/db/client.js');
@@ -31,7 +32,7 @@ const pageErrors: string[] = [];
 const diagnostics = path.join(appRoot, 'test-results');
 
 async function available(port: number) {
-  await new Promise<void>((resolve, reject) => { const server = createServer(); server.once('error', () => reject(new Error(`Test port ${port} is occupied; stop that test server before running.`))); server.listen(port, '127.0.0.1', () => server.close(() => resolve())); });
+  await new Promise<void>((resolve, reject) => { const server = createServer(); server.once('error', () => reject(new Error(`Test port ${port} is occupied; stop that test server before running.`))); server.listen(port, () => server.close(() => resolve())); });
 }
 async function ready(url: string, child: ChildProcess, label: string) {
   const until = Date.now() + 60000;
@@ -96,6 +97,8 @@ try {
   await ready(webUrl, webProcess, 'Web');
   const browser = await chromium.launch({ headless: true });
   try {
+    const { customerContactSmoke } = await import('./customer-contact-smoke.js');
+    await customerContactSmoke({ browser, webUrl, apiUrl, prisma, run, identityIds, businessId: businessIds[0]! });
     const { providerAccessSmoke } = await import('./provider-access-smoke.js');
     await providerAccessSmoke({ browser, webUrl, apiUrl });
     const { businessAccessSmoke } = await import('./business-access-smoke.js');

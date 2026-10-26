@@ -106,13 +106,13 @@ export async function registerScreenFlows(app: FastifyInstance) {
     const startsAt = new Date(Number(day.toZonedDateTime({ timeZone: business.timezone, plainTime: '00:00' }).epochMilliseconds));
     const endsAt = new Date(Number(day.add({ days: 1 }).toZonedDateTime({ timeZone: business.timezone, plainTime: '00:00' }).epochMilliseconds));
     const [bookings, blocks, staff] = await Promise.all([
-      prisma.booking.findMany({ where: { businessId, status: 'CONFIRMED', startsAt: { gte: startsAt, lt: endsAt } }, include: { staff: { select: { displayName: true } }, customer: { select: { phone: true, email: true } } }, orderBy: { startsAt: 'asc' } }),
+      prisma.booking.findMany({ where: { businessId, status: 'CONFIRMED', startsAt: { gte: startsAt, lt: endsAt } }, include: { staff: { select: { displayName: true } } }, orderBy: { startsAt: 'asc' } }),
       prisma.timeBlock.findMany({ where: { businessId, startsAt: { lt: endsAt }, endsAt: { gt: startsAt } }, include: { staff: { select: { displayName: true } } }, orderBy: { startsAt: 'asc' } }),
       prisma.staff.findMany({ where: { businessId, active: true }, select: { id: true, displayName: true } }),
     ]);
     const revenue: Record<string, number> = {};
     bookings.forEach((booking) => { if (booking.serviceCurrency && booking.servicePriceMinor !== null) revenue[booking.serviceCurrency] = (revenue[booking.serviceCurrency] ?? 0) + booking.servicePriceMinor; });
-    return { business: { id: business.id, name: business.name, timezone: business.timezone }, bookings: bookings.map(booking => ({ ...booking, service: bookingServiceSnapshot(booking) })), blocks, staff, summary: { appointments: bookings.length, revenue } };
+    return { business: { id: business.id, name: business.name, timezone: business.timezone }, bookings: bookings.map(booking => ({ ...booking, customer: { displayName: booking.customerName, phone: booking.customerPhone, email: booking.customerEmail }, service: bookingServiceSnapshot(booking) })), blocks, staff, summary: { appointments: bookings.length, revenue } };
   });
   app.post('/api/provider/block-time', async (request, reply) => {
     const input = z.object({ businessId: z.string().optional(), staffId: z.string(), date: z.string().date(), startLocal: z.string().regex(/^\d{2}:\d{2}$/), endLocal: z.string().regex(/^\d{2}:\d{2}$/), reason: z.string().max(200).optional() }).parse(request.body);

@@ -16,6 +16,7 @@ export type AvailabilityRules = {
   overrides: { date: string; isOpen: boolean; startLocal?: string | undefined; endLocal?: string | undefined }[];
 };
 export type PolicyInput = {
+  requireCustomerName?: boolean | undefined; requireVerifiedPhone?: boolean | undefined; requireVerifiedEmail?: boolean | undefined;
   minimumNoticeMinutes: number; maximumAdvanceDays: number;
   bufferBeforeMinutes: number; bufferAfterMinutes: number;
   cancellationCutoffMinutes: number; rescheduleCutoffMinutes: number;
@@ -37,11 +38,23 @@ export async function saveBusinessPolicy(context: AuthorizedBusinessContext, inp
   await validateBusinessContext(context, managers);
   input = parseBookingPolicy(input);
   const data = {
+    ...(input.requireCustomerName !== undefined ? { requireCustomerName: input.requireCustomerName } : {}),
+    ...(input.requireVerifiedPhone !== undefined ? { requireVerifiedPhone: input.requireVerifiedPhone } : {}),
+    ...(input.requireVerifiedEmail !== undefined ? { requireVerifiedEmail: input.requireVerifiedEmail } : {}),
     minimumNoticeMinutes: input.minimumNoticeMinutes, maximumAdvanceDays: input.maximumAdvanceDays,
     bufferBeforeMinutes: input.bufferBeforeMinutes, bufferAfterMinutes: input.bufferAfterMinutes,
     cancellationCutoffMinutes: input.cancellationCutoffMinutes, rescheduleCutoffMinutes: input.rescheduleCutoffMinutes,
   };
-  return withBusinessConfiguration(context, tx => tx.bookingPolicy.upsert({ where: { businessId: context.businessId }, create: { ...data, businessId: context.businessId }, update: data }));
+  const result = await withBusinessConfiguration(context, async tx => {
+    const previous = await tx.bookingPolicy.findUnique({ where: { businessId: context.businessId } });
+    const changed = (['requireCustomerName', 'requireVerifiedPhone', 'requireVerifiedEmail'] as const).some(key => data[key] !== undefined && data[key] !== (previous?.[key] ?? false));
+    const expired = changed ? await tx.booking.findMany({ where: { businessId: context.businessId, status: 'HELD' }, select: { id: true, customerId: true } }) : [];
+    if (expired.length) await tx.booking.updateMany({ where: { businessId: context.businessId, status: 'HELD' }, data: { status: 'EXPIRED', holdExpiresAt: null } });
+    const policy = await tx.bookingPolicy.upsert({ where: { businessId: context.businessId }, create: { ...data, businessId: context.businessId }, update: data });
+    return { policy, expired };
+  });
+  await Promise.allSettled(result.expired.map(hold => releaseHold(hold.id, hold.customerId)));
+  return result.policy;
 }
 
 export async function getBusinessAvailability(context: AuthorizedBusinessContext) {
