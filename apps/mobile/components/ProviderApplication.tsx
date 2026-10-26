@@ -12,6 +12,10 @@ import type { MessageKey } from '@/src/i18n/messages';
 type Application = { id: string; status: string; reviewReason: string | null; reviewedAt: string | null; business: { name: string }; notification: { status: string; provider: string | null } | null };
 const notificationKeys: Record<string, MessageKey> = { QUEUED: 'review.QUEUED', BLOCKED: 'review.BLOCKED', IN_APP: 'review.IN_APP', LOCAL: 'review.LOCAL', ACCEPTED: 'review.ACCEPTED', FAILED: 'review.FAILED', SENDING: 'review.SENDING' };
 export function ProviderApplication() {
+  const identity = useAuthStore(s => s.identityId), version = useAuthStore(s => s.contextVersion);
+  return <ApplicationContent key={`${identity}:${version}`} />;
+}
+function ApplicationContent() {
   const { t, locale } = useAppLocale();
   const identity = useAuthStore(s => s.identityId);
   const applications = useQuery({ queryKey: ['provider-applications', identity], queryFn: () => apiRequest<{ applications: Application[] }>('/v1/provider-applications'), enabled: !!identity, refetchInterval: 15000 });

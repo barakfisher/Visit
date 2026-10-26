@@ -14,6 +14,7 @@ type Dependencies = {
   contextVersion: () => number;
   fetch?: typeof fetch;
   timeoutMs?: number;
+  onProviderForbidden?: () => void;
 };
 
 export function createApiClient(dependencies: Dependencies) {
@@ -81,7 +82,10 @@ export function createApiClient(dependencies: Dependencies) {
     if (response.status === 401 && !authenticating && await refresh(version)) {
       ({ response, body } = await send(path, init, version));
     }
-    if (!response.ok) throw responseError(response, body);
+    if (!response.ok) {
+      if (response.status === 403 && (path.startsWith('/api/provider/') || path.startsWith('/v1/provider/businesses/'))) dependencies.onProviderForbidden?.();
+      throw responseError(response, body);
+    }
     if (body === null) throw new ApiError('The service returned an invalid response.', 'INVALID_RESPONSE', 502);
     return body as T;
   };

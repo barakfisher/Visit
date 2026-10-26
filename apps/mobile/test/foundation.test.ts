@@ -117,3 +117,26 @@ test('security context reset rejects a switched identity and discards stale priv
   assert.equal(store.getState().profile?.email, 'after@example.test');
   store.getState().clear();
 });
+
+test('provider permission failures invalidate private context without logging the customer out', async () => {
+  let invalidations = 0;
+  const request = createApiClient({ baseUrl: 'https://api.example.test', native: false, fetch: async () => json({ error: { code: 'FORBIDDEN' } }, 403), readToken: async () => null, saveToken: async () => {}, clearSession: () => assert.fail('customer identity must remain'), contextVersion: () => 0, onProviderForbidden: () => { invalidations++; } });
+  await assert.rejects(request('/api/provider/agenda?businessId=a')); await assert.rejects(request('/v1/provider/businesses/a/services'));
+  await assert.rejects(request('/v1/business-invitations/preview')); assert.equal(invalidations, 2);
+  const store = useSessionStore.getState();
+  store.setAuth(null, { id: 'provider-access-test', email: null, phone: null, is_provider: true, businesses: [{ id: 'a', name: 'A', timezone: 'Asia/Jerusalem' }] }); store.selectBusiness('a');
+  queryClient.setQueryData(['provider', 'a', 'agenda'], { private: true });
+  const before = useSessionStore.getState().contextVersion; useSessionStore.getState().invalidateProviderAccess();
+  assert.equal(useSessionStore.getState().identityId, 'provider-access-test'); assert.equal(useSessionStore.getState().activeBusinessId, null); assert.equal(useSessionStore.getState().contextVersion, before + 1); assert.equal(queryClient.getQueryData(['provider', 'a', 'agenda']), undefined);
+  useSessionStore.getState().clear();
+});
+test('server role downgrade invalidates private state while retaining customer identity', () => {
+  const business = { id: 'role-business', name: 'Business', timezone: 'Asia/Jerusalem' };
+  const profile = { id: 'role-person', email: null, phone: null, is_provider: true, businesses: [{ ...business, role: 'OWNER' as const }] };
+  useSessionStore.getState().setAuth(null, profile); useSessionStore.getState().selectBusiness(business.id);
+  const version = useSessionStore.getState().contextVersion;
+  queryClient.setQueryData(['provider', business.id, 'team'], { role: 'OWNER' });
+  useSessionStore.getState().setAuth(null, { ...profile, businesses: [{ ...business, role: 'MANAGER' }] });
+  assert.equal(useSessionStore.getState().contextVersion, version + 1); assert.equal(useSessionStore.getState().activeBusinessId, null); assert.equal(queryClient.getQueryData(['provider', business.id, 'team']), undefined); assert.equal(useSessionStore.getState().identityId, profile.id);
+  useSessionStore.getState().clear();
+});

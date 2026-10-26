@@ -1,4 +1,5 @@
 export const accessEn = {
+  joinHint: 'Joining an existing business? Ask its owner or manager for a private team invitation. A customer booking link does not grant management access. Ownership claims require reviewed evidence from a platform administrator.',
   profileRefresh: 'Your invitation was accepted. Reload your account to refresh its access.',
   title: 'Team access', intro: 'Invite access to this business. These private invitations are separate from your customer booking link.',
   email: 'Email', phone: 'Phone', recipient: 'Verified recipient contact', manager: 'Manager', staff: 'Staff', owner: 'Owner',
@@ -15,6 +16,7 @@ export const accessEn = {
   openCase: 'Record evidence case', reason: 'Decision reason', approve: 'Approve ownership', reject: 'Reject claim', confirmGrant: 'Confirm ownership grant', decided: 'Decision recorded', caseFailure: 'Could not record this action. Reload and check the case. A recent admin sign-in and verified independent claimant are required.',
 };
 export const accessHe: typeof accessEn = {
+  joinHint: 'מצטרפים לעסק קיים? בקשו מהבעלים או מהמנהל הזמנה פרטית לצוות. קישור הזמנת תורים ללקוחות אינו מעניק הרשאות ניהול. בקשות בעלות דורשות בדיקת ראיות על ידי מנהל מערכת.',
   profileRefresh: 'ההזמנה אושרה. טענו את החשבון מחדש כדי לעדכן את ההרשאות.',
   title: 'הרשאות צוות', intro: 'הזמינו גישה לניהול העסק. הזמנות פרטיות אלו נפרדות מקישור הזמנת התורים ללקוחות.',
   email: 'דואר אלקטרוני', phone: 'טלפון', recipient: 'פרטי קשר מאומתים של מקבל ההזמנה', manager: 'מנהל', staff: 'עובד', owner: 'בעלים',

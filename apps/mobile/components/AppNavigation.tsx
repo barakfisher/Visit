@@ -8,6 +8,7 @@ import { ActionButton } from './ActionButton';
 import { useAppLocale } from '@/src/i18n/LocaleContext';
 import { useSessionStore } from '@/src/state/session';
 import { apiRequest } from '@/src/lib/api';
+import type { AuthProfile } from '@/src/types/flows';
 import { signOut } from '@/src/lib/auth';
 import { menuCapabilities, type AccountNavigation } from '@/src/lib/navigation';
 
@@ -23,14 +24,22 @@ export function AppNavigation() {
   const providerMode = pathname.startsWith('/provider/');
   function close() { setOpen(false); setChoosingBusiness(false); }
   function go(href: Href) { close(); router.push(href); }
-  function provider(businessId: string) {
-    // The current account response and the server-authenticated profile must agree.
-    if (!managed.some(m => m.business.id === businessId) || !useSessionStore.getState().profile?.businesses.some(b => b.id === businessId)) { setError(t('nav.changed')); void account.refetch(); return; }
-    selectBusiness(businessId); close(); router.replace({ pathname: '/provider/dashboard', params: { businessId } });
+  const switching = useRef(false);
+  async function provider(businessId: string) {
+    if (switching.current || busy || !managed.some(m => m.business.id === businessId)) return;
+    switching.current = true; setBusy(true); setError('');
+    const expected = identity;
+    try {
+      const { profile } = await apiRequest<{ profile: AuthProfile }>('/api/auth/me');
+      const state = useSessionStore.getState();
+      if (profile.id !== expected || state.identityId !== expected || !profile.businesses.some(b => b.id === businessId)) { setError(t('nav.changed')); void account.refetch(); return; }
+      state.setAuth(state.token, profile);
+      selectBusiness(businessId); close(); router.replace({ pathname: '/provider/dashboard', params: { businessId } });
+    } catch { setError(t('nav.changed')); } finally { switching.current = false; setBusy(false); }
   }
   function switchMode() {
     if (providerMode) { selectBusiness(null); close(); router.replace('/'); }
-    else if (managed.length === 1) provider(managed[0]!.business.id);
+    else if (managed.length === 1) void provider(managed[0]!.business.id);
     else setChoosingBusiness(true);
   }
   async function logout() {
@@ -58,7 +67,7 @@ export function AppNavigation() {
               {becomeProvider ? <ActionButton secondary label={t('account.becomeProvider')} onPress={() => go('/register/provider')} /> : null}
               {applicationStatus ? <ActionButton secondary label={t('account.applicationStatus')} onPress={() => go('/register/provider')} /> : null}
               {managed.length ? <ActionButton secondary label={t(providerMode ? 'nav.customerMode' : 'account.switchProvider')} onPress={switchMode} /> : null}
-              {choosingBusiness ? <View className="gap-3 rounded-control border border-line p-3"><AppText className="font-semibold">{t('nav.chooseBusiness')}</AppText>{managed.map(m => <ActionButton key={m.business.id} secondary label={m.business.name} onPress={() => provider(m.business.id)} />)}</View> : null}
+              {choosingBusiness ? <View className="gap-3 rounded-control border border-line p-3"><AppText className="font-semibold">{t('nav.chooseBusiness')}</AppText>{managed.map(m => <ActionButton key={m.business.id} secondary label={m.business.name} disabled={busy} onPress={() => void provider(m.business.id)} />)}</View> : null}
             </>}
             <ActionButton secondary label={t('account.signOut')} busy={busy} onPress={() => void logout()} />
             {error ? <AppText accessibilityRole="alert" className="text-danger">{error}</AppText> : null}

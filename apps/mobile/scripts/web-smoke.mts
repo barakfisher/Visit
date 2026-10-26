@@ -55,7 +55,7 @@ async function otpLogin(page: Page, phone: string, provider = false) {
   await otp.fill(code);
   await page.getByRole('button', { name: 'Verify & continue' }).click();
   await page.waitForURL(url => url.pathname === '/');
-  if (provider) await page.goto(`${webUrl}/provider/dashboard`); // Explicit approved-provider navigation; login itself always lands Home.
+  if (provider) await page.goto(`${webUrl}/provider/dashboard?businessId=${businessIds[0]}`); // Explicit approved-provider navigation; login itself always lands Home.
 }
 async function openBooking(page: Page, businessId: string, serviceId: string) {
   await page.goto(`${webUrl}/booking/${businessId}?serviceId=${serviceId}&date=${date}`);
@@ -96,6 +96,8 @@ try {
   await ready(webUrl, webProcess, 'Web');
   const browser = await chromium.launch({ headless: true });
   try {
+    const { providerAccessSmoke } = await import('./provider-access-smoke.js');
+    await providerAccessSmoke({ browser, webUrl, apiUrl });
     const { businessAccessSmoke } = await import('./business-access-smoke.js');
     await businessAccessSmoke({ browser, webUrl, apiUrl });
     const { authUiSmoke } = await import('./auth-ui-smoke.js');
