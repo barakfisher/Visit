@@ -1,0 +1,65 @@
+import assert from 'node:assert/strict';
+import { createHash, randomBytes, randomInt } from 'node:crypto';
+import type { Browser } from 'playwright';
+import type { prisma as Prisma } from '../../api/src/db/client.js';
+export async function customerContactSmoke({ browser, webUrl, apiUrl, prisma, run, identityIds, businessId }: { browser: Browser; webUrl: string; apiUrl: string; prisma: typeof Prisma; run: string; identityIds: string[]; businessId: string }) {
+  const person = await prisma.identity.create({ data: { email: `contact-web-${run}@example.test`, phone: `+1555${randomInt(1000000, 9999999)}`, phoneVerifiedAt: new Date(), preferredLocale: 'en' } }); identityIds.push(person.id);
+  const token = randomBytes(32).toString('base64url');
+  await prisma.session.create({ data: { identityId: person.id, tokenHash: createHash('sha256').update(token).digest('hex'), expiresAt: new Date(Date.now() + 600000), authenticatedAt: new Date(Date.now() - 360000) } });
+  await prisma.bookingPolicy.update({ where: { businessId }, data: { requireCustomerName: true, requireVerifiedEmail: true } });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await context.addInitScript(() => localStorage.setItem('visit.locale.v1.guest', 'en'));
+  await context.addCookies([{ name: 'visit_session', value: token, url: apiUrl, httpOnly: true, sameSite: 'Lax' }]);
+  try {
+    const page = await context.newPage();
+    page.on('pageerror', error => console.error('Contact browser error:', error.message));
+    page.on('requestfailed', request => console.error('Contact request failed:', request.url(), request.failure()?.errorText));
+    const date = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const service = await prisma.service.findFirstOrThrow({ where: { businessId } });
+    await page.goto(`${webUrl}/booking/${businessId}?serviceId=${service.id}&date=${date}`);
+    await page.getByRole('heading', { name: 'Contact details for this business' }).waitFor().catch(async error => { console.error('Contact page:', await page.locator('body').innerText()); throw error; });
+    await page.getByRole('button', { name: /09:00 · Alex North/ }).filter({ visible: true }).click();
+    assert.equal(await prisma.booking.count({ where: { customerId: person.id } }), 0);
+    await page.getByLabel('Your name', { exact: true }).fill('Contact Customer');
+    await page.getByRole('button', { name: 'Save name', exact: true }).click();
+    await page.getByLabel('Your name', { exact: true }).waitFor({ state: 'hidden' });
+    assert.equal(await prisma.booking.count({ where: { customerId: person.id } }), 0);
+    await page.getByRole('link', { name: 'Sign in again', exact: true }).click();
+    await page.getByLabel('Phone number', { exact: true }).fill(person.phone!);
+    await page.getByRole('button', { name: 'Send verification code', exact: true }).click();
+    await page.getByLabel('Six-digit verification code').filter({ visible: true }).waitFor();
+    const otp = await context.request.get(`${apiUrl}/__dev/otp?phone=${encodeURIComponent(person.phone!)}`);
+    assert.equal(otp.status(), 200);
+    await page.getByLabel('Six-digit verification code').filter({ visible: true }).fill((await otp.json()).code);
+    await page.getByRole('button', { name: 'Verify & continue', exact: true }).click();
+    await page.waitForURL(url => url.pathname === `/booking/${businessId}`);
+    await page.getByRole('heading', { name: 'Contact details for this business' }).waitFor();
+    assert.equal(await page.getByLabel('Appointment date', { exact: true }).filter({ visible: true }).inputValue(), date);
+    assert.equal(await page.getByRole('button', { name: /09:00 · Alex North/ }).filter({ visible: true }).getAttribute('aria-pressed'), 'true');
+    assert.equal(await prisma.booking.count({ where: { customerId: person.id } }), 0);
+    await page.getByLabel('New email address', { exact: true }).filter({ visible: true }).fill(person.email!);
+    const started = page.waitForResponse(response => response.url() === `${apiUrl}/api/account/contact-challenges`);
+    await page.getByRole('button', { name: 'Send code to verify this contact', exact: true }).filter({ visible: true }).click();
+    const challenge = await (await started).json();
+    const local = await context.request.post(`${apiUrl}/__dev/account/contact-code`, { headers: { Origin: webUrl }, data: { challenge: challenge.challenge } });
+    assert.equal(local.status(), 200);
+    await page.getByLabel('Six-digit verification code').filter({ visible: true }).fill((await local.json()).code);
+    assert.equal(await prisma.booking.count({ where: { customerId: person.id } }), 0);
+    await page.getByRole('button', { name: 'Verify & save contact', exact: true }).filter({ visible: true }).click();
+    await page.getByText('Your contact details meet this business’s requirements.', { exact: true }).filter({ visible: true }).waitFor();
+    assert.equal(await page.getByLabel('Appointment date', { exact: true }).filter({ visible: true }).inputValue(), date);
+    assert.equal(await page.getByRole('button', { name: /09:00 · Alex North/ }).filter({ visible: true }).getAttribute('aria-pressed'), 'true');
+    assert.equal(await prisma.booking.count({ where: { customerId: person.id } }), 0);
+    await page.getByRole('button', { name: /09:00 · Alex North/ }).filter({ visible: true }).click();
+    await page.getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).filter({ visible: true }).click();
+    await page.locator('[data-testid="booking-confirmation"]:visible').waitFor();
+    const booked = await prisma.booking.findFirstOrThrow({ where: { customerId: person.id, status: 'CONFIRMED' } });
+    assert.equal(booked.customerName, 'Contact Customer'); assert.equal(booked.customerEmail, person.email); assert.ok(booked.customerEmailVerifiedAt);
+    console.log('PASS: required booking name/email, no hold during synthetic verification, retained choices and immutable operational snapshot.');
+  } finally {
+    await context.close();
+    await prisma.savedProvider.deleteMany({ where: { identityId: person.id } });
+    await prisma.booking.deleteMany({ where: { customerId: person.id } });
+    await prisma.bookingPolicy.update({ where: { businessId }, data: { requireCustomerName: false, requireVerifiedEmail: false } });
+  }
+}

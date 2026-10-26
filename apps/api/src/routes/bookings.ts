@@ -1,3 +1,4 @@
+import { assertCustomerContact } from '../security/customer-contact.utils.js';
 import { publicBusinessWhere } from '../security/business-eligibility.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -61,6 +62,7 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
     if (startsAt.getUTCSeconds() !== 0 || startsAt.getUTCMilliseconds() !== 0) throw new AppError(400, 'INVALID_LOCAL_TIME', 'Appointment starts must be on a whole minute.');
     const now = new Date();
     const policy = business.bookingPolicy;
+    assertCustomerContact(policy, await prisma.identity.findUniqueOrThrow({ where: { id: identity.id } }));
     const startDateInZone = Temporal.Instant.from(startsAt.toISOString()).toZonedDateTimeISO(business.timezone).toPlainDate();
     const maximumLocalDate = Temporal.Now.zonedDateTimeISO(business.timezone).toPlainDate().add({ days: policy.maximumAdvanceDays });
     if (startsAt.getTime() < now.getTime() + policy.minimumNoticeMinutes * 60_000 || Temporal.PlainDate.compare(startDateInZone, maximumLocalDate) > 0) throw conflict('The requested time is outside this business’s booking window.');

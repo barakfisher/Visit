@@ -1,6 +1,6 @@
 import type { Prisma } from '../generated/prisma/client.js';
 import { prisma } from '../db/client.js';
-import { conflict } from '../http/errors.js';
+import { AppError, conflict } from '../http/errors.js';
 
 export function isDatabaseCapacityError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
@@ -24,6 +24,7 @@ export async function retrySerializable<T>(operation: () => Promise<T>, attempts
     try { return await operation(); }
     catch (error) {
       if (error && typeof error === 'object' && (('message' in error && String(error.message).includes('VISIT_BUSINESS_UNPUBLISHED')) || ('meta' in error && JSON.stringify(error.meta).includes('VISIT_BUSINESS_UNPUBLISHED')))) throw conflict('This business is not published for bookings.');
+      if (error && typeof error === 'object' && (('message' in error && String(error.message).includes('VISIT_CUSTOMER_CONTACT_REQUIRED')) || ('meta' in error && JSON.stringify(error.meta).includes('VISIT_CUSTOMER_CONTACT_REQUIRED')))) throw new AppError(409, 'CUSTOMER_CONTACT_REQUIRED', 'Complete this business’s required verified contact details before booking.');
       if (isDatabaseCapacityError(error)) throw conflict('That time has no remaining capacity. Choose another time.');
       if (!isTransactionConflict(error)) throw error;
       if (attempt === attempts - 1) throw conflict('Availability changed. Please retry.');

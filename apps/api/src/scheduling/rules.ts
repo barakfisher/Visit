@@ -4,6 +4,9 @@ import { possibleLocalInstants } from './local-time.js';
 
 export const DEFAULT_BOOKING_POLICY = Object.freeze({ minimumNoticeMinutes: 60, maximumAdvanceDays: 60, bufferBeforeMinutes: 0, bufferAfterMinutes: 0, cancellationCutoffMinutes: 1440, rescheduleCutoffMinutes: 1440 });
 export const bookingPolicySchema = z.strictObject({
+  requireCustomerName: z.boolean().optional(),
+  requireVerifiedPhone: z.boolean().optional(),
+  requireVerifiedEmail: z.boolean().optional(),
   minimumNoticeMinutes: z.number().int().min(0).max(525600),
   maximumAdvanceDays: z.number().int().min(1).max(730),
   bufferBeforeMinutes: z.number().int().min(0).max(1440),

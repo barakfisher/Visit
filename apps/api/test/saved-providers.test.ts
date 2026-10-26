@@ -62,6 +62,7 @@ test('provider links and saved lists are public-read-only, identity-owned and pu
       const staff = await prisma.staff.create({ data: { businessId: target.id, displayName: 'Saved-provider fixture' } });
       const service = await prisma.service.create({ data: { businessId: target.id, name: 'Existing appointment', durationMinutes: 30 } });
       const startsAt = new Date(Date.now() + 86400000), endsAt = new Date(startsAt.getTime() + 1800000);
+      await prisma.bookingPolicy.create({ data: { businessId: target.id, minimumNoticeMinutes: 0, maximumAdvanceDays: 30, bufferBeforeMinutes: 0, bufferAfterMinutes: 0, cancellationCutoffMinutes: 0, rescheduleCutoffMinutes: 0 } });
       const booking = await prisma.booking.create({ data: { businessId: target.id, customerId: a.id, staffId: staff.id, serviceId: service.id, startsAt, endsAt, occupiedFrom: startsAt, occupiedUntil: endsAt, status: 'CONFIRMED', idempotencyKey: randomUUID() } });
       const remove = () => app.inject({ method: 'DELETE', url: `/api/me/providers/${target.id}`, headers: a.headers });
       assert.equal((await remove()).statusCode, 200); assert.equal((await remove()).statusCode, 200);

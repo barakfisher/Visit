@@ -1,3 +1,4 @@
+import { useBookingContactDraft } from './BookingContactDraft.store';
 import type { AuthProfile } from '../types/flows';
 import { create } from 'zustand';
 import { queryClient } from '../lib/queryClient';
@@ -33,6 +34,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   profile: null,
   setAuth: (token, profile) => {
     const changedIdentity = profile.id !== get().identityId;
+    const draft = useBookingContactDraft.getState().draft;
+    if (draft && draft.identityId !== profile.id) useBookingContactDraft.getState().clear();
     const removedBusiness = Boolean(get().profile?.businesses.some(old => !profile.businesses.some(b => b.id === old.id && b.role === old.role)));
     if (changedIdentity || removedBusiness) queryClient.clear();
     set({ token, profile, identityId: profile.id, bootstrapStatus: 'ready', ...(changedIdentity || removedBusiness ? { activeBusinessId: null, contextVersion: get().contextVersion + 1 } : {}) });
@@ -58,6 +61,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set({ activeBusinessId: businessId, contextVersion: get().contextVersion + 1 });
   },
   clear: () => {
+    useBookingContactDraft.getState().clear();
     queryClient.clear();
     set({ identityId: null, activeBusinessId: null, token: null, profile: null, bootstrapStatus: 'ready', contextVersion: get().contextVersion + 1 });
   },
