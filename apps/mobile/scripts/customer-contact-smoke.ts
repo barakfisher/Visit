@@ -1,3 +1,4 @@
+import { selectedBookingDate, preferBookingTime } from './booking-controls.utils';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import type { Browser } from 'playwright';
@@ -34,7 +35,7 @@ export async function customerContactSmoke({ browser, webUrl, apiUrl, prisma, ru
     await page.getByRole('button', { name: 'Verify & continue', exact: true }).click();
     await page.waitForURL(url => url.pathname === `/booking/${businessId}`);
     await page.getByRole('heading', { name: 'Contact details for this business' }).waitFor();
-    assert.equal(await page.getByLabel('Appointment date', { exact: true }).filter({ visible: true }).inputValue(), date);
+    assert.equal(await selectedBookingDate(page), date);
     assert.equal(await page.getByRole('button', { name: /09:00 · Alex North/ }).filter({ visible: true }).getAttribute('aria-pressed'), 'true');
     assert.equal(await prisma.booking.count({ where: { customerId: person.id } }), 0);
     await page.getByLabel('New email address', { exact: true }).filter({ visible: true }).fill(person.email!);
@@ -47,7 +48,7 @@ export async function customerContactSmoke({ browser, webUrl, apiUrl, prisma, ru
     assert.equal(await prisma.booking.count({ where: { customerId: person.id } }), 0);
     await page.getByRole('button', { name: 'Verify & save contact', exact: true }).filter({ visible: true }).click();
     await page.getByText('Your contact details meet this business’s requirements.', { exact: true }).filter({ visible: true }).waitFor();
-    assert.equal(await page.getByLabel('Appointment date', { exact: true }).filter({ visible: true }).inputValue(), date);
+    assert.equal(await selectedBookingDate(page), date);
     assert.equal(await page.getByRole('button', { name: /09:00 · Alex North/ }).filter({ visible: true }).getAttribute('aria-pressed'), 'true');
     assert.equal(await prisma.booking.count({ where: { customerId: person.id } }), 0);
     await page.getByRole('button', { name: /09:00 · Alex North/ }).filter({ visible: true }).click();
@@ -66,6 +67,7 @@ export async function customerContactSmoke({ browser, webUrl, apiUrl, prisma, ru
     console.log('PASS: required booking name/email, no hold during synthetic verification, retained choices, lost-response recovery and immutable operational snapshot.');
     await page.unrouteAll({ behavior: 'wait' });
     await page.goto(`${webUrl}/booking/${businessId}?serviceId=${service.id}&date=${date}`);
+    await preferBookingTime(page, '10:00');
     await page.getByRole('button', { name: /10:00 · Alex North/ }).filter({ visible: true }).click();
     assert.equal(await prisma.booking.count({ where: { customerId: person.id } }), 1);
     let entered!: () => void, release!: () => void;

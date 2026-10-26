@@ -1,3 +1,4 @@
+import { selectBookingDate, preferBookingTime } from './booking-controls.utils';
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID, randomInt, createHash } from 'node:crypto';
@@ -61,7 +62,7 @@ async function otpLogin(page: Page, phone: string, provider = false) {
 async function openBooking(page: Page, businessId: string, serviceId: string) {
   await page.goto(`${webUrl}/booking/${businessId}?serviceId=${serviceId}&date=${date}`);
   await page.getByRole('heading', { name: 'Available appointments' }).waitFor();
-  await page.getByRole('button', { name: /09:00 · Alex North/ }).waitFor();
+  await page.getByRole('button', { name: /Alex North/ }).first().waitFor();
 }
 try {
   await available(3001); await available(webPort); await mkdir(diagnostics, { recursive: true });
@@ -97,6 +98,8 @@ try {
   await ready(webUrl, webProcess, 'Web');
   const browser = await chromium.launch({ headless: true });
   try {
+    const { compactBookingSmoke } = await import('./compact-booking-smoke.js');
+    await compactBookingSmoke({ browser, webUrl, prisma, run, businessIds });
     const { customerContactSmoke } = await import('./customer-contact-smoke.js');
     await customerContactSmoke({ browser, webUrl, apiUrl, prisma, run, identityIds, businessId: businessIds[0]! });
     const { providerAccessSmoke } = await import('./provider-access-smoke.js');
@@ -167,9 +170,10 @@ try {
     // Organic direct booking; the global directory has been retired.
     await page.goto(`${webUrl}/booking/${businessIds[0]}?serviceId=${service.id}&date=${date}`);
     await page.getByRole('heading', { name: 'Available appointments' }).waitFor();
-    await page.getByRole('button', { name: /QA consultation/ }).click();
+    await page.getByRole('button', { name: /Choose a service/ }).click();
+    await page.getByRole('dialog', { name: 'Choose a service', exact: true }).getByRole('button', { name: /QA consultation/ }).click();
     const dateResponse = page.waitForResponse((response) => response.url().includes('/availability?') && response.url().includes(`date=${date}`));
-    await page.getByLabel('Appointment date', { exact: true }).fill(date); await dateResponse;
+    await selectBookingDate(page, date); await dateResponse;
     const beforeReview = await prisma.booking.count({ where: { customerId: identities[0]!.id } });
     await page.getByRole('button', { name: /09:00 · Alex North/ }).click();
     await page.getByRole('heading', { name: 'Review your appointment' }).waitFor();
@@ -331,7 +335,8 @@ try {
     await otpLogin(pageB, identities[1]!.phone!);
     await Promise.all([openBooking(page, businessIds[0]!, service.id), openBooking(pageB, businessIds[0]!, service.id)]);
     capture = pageB;
-    assert.equal(await page.getByRole('button', { name: /10:00 · Alex North/ }).isDisabled(), true);
+    assert.equal(await page.getByRole('button', { name: /10:00 · Alex North/ }).count(), 0);
+    await Promise.all([page, pageB].map(contestant => preferBookingTime(contestant, '11:00')));
     let arrived = 0; let unblock!: () => void;
     const barrier = new Promise<void>((resolve) => { unblock = resolve; });
     const barrierTimeout = setTimeout(unblock, 10000);
@@ -345,15 +350,16 @@ try {
     const winnerIndex = results.findIndex((response) => response.status() === 200), winner = [page, pageB][winnerIndex]!, loser = [page, pageB][1 - winnerIndex]!;
     capture = loser;
     await loser.getByRole('alert').waitFor();
-    await loser.waitForFunction(() => Array.from(document.querySelectorAll('[role="button"]')).some((element) => element.textContent?.includes('11:00 · Alex North') && element.getAttribute('aria-disabled') === 'true'));
+    await loser.getByRole('button', { name: /11:00 · Alex North/ }).waitFor({ state: 'hidden' });
     await loser.screenshot({ path: path.join(diagnostics, 'slot-conflict-mobile.png'), fullPage: true });
     await winner.getByRole('heading', { name: 'You’re all set' }).waitFor();
     assert.equal(await prisma.booking.count({ where: { businessId: businessIds[0]!, startsAt: new Date(`${date}T11:00:00Z`), status: 'CONFIRMED' } }), 1);
-    console.log('PASS: two simultaneous browser contexts produce exactly one winner, one conflict, and a disabled slot.');
+    console.log('PASS: two simultaneous browser contexts produce exactly one winner, one conflict, and a removed stale slot.');
 
     // Existing appointment actions remain covered after the new screen flow.
     capture = page;
     await page.goto(`${webUrl}/booking/${businessIds[0]}?serviceId=${service.id}&date=${date}&fromBookingId=${hold.holdId}`);
+    await preferBookingTime(page, '14:00');
     await page.getByRole('button', { name: /14:00 · Alex North/ }).click();
     await page.getByRole('button', { name: 'Confirm reschedule' }).click();
     await page.getByRole('heading', { name: 'You’re all set' }).waitFor();
@@ -449,7 +455,9 @@ try {
     capture = providerPage;
     await providerPage.goto(`${webUrl}/booking/${foldBusiness.id}?serviceId=${foldService.id}&date=${foldDate}`);
     await providerPage.getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).waitFor();
+    await preferBookingTime(providerPage, '01:30');
     await providerPage.getByRole('button', { name: /01:30 \(first occurrence\) · Fold specialist/ }).waitFor();
+    await providerPage.getByRole('button', { name: 'Later', exact: true }).click();
     const foldHoldResponse = providerPage.waitForResponse(response => response.url().endsWith('/api/bookings/commit'));
     await providerPage.getByRole('button', { name: /01:30 \(second occurrence\) · Fold specialist/ }).click();
     const previousDay = new Date(`${foldDate}T00:00:00Z`); previousDay.setUTCDate(previousDay.getUTCDate() - 1);
