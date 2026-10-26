@@ -10,19 +10,21 @@ import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest, ApiError } from '@/src/lib/api';
-import { slotLabels } from '@/src/lib/slotLabels';
-import { makeCalendarDays } from '@/src/lib/calendar';
+import { localDate } from './appointmentTime';
+import { useCompactBooking } from './CompactBooking.hook';
+import { bookingSlotId, validBookingDate } from './CompactBooking.utils';
+import type { AdvisorySelection } from '../types/CompactBooking.types';
 import { useAuthStore } from '@/src/state/auth';
 import type { BookingContactReadiness } from '@/src/types/BookingContact.types';
 import { formatMoney, type ProviderDetail, type Slot } from '@/src/types/flows';
-const slotId = (slot: Slot) => `${slot.staffId}:${slot.startsAt}`;
+const slotId = bookingSlotId;
 export function useBookingContactFlow() {
   const { locale, t } = useAppLocale();
   const params = useLocalSearchParams<{ providerId: string; serviceId?: string; date?: string; fromBookingId?: string }>();
   const { providerId, fromBookingId } = params;
   const [serviceId, setServiceId] = useState(params.serviceId ?? '');
   const [date, setDate] = useState(params.date ?? '');
-  const [selected, setSelected] = useState<Slot | null>(null);
+  const [selection, setSelection] = useState<AdvisorySelection | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -45,10 +47,10 @@ export function useBookingContactFlow() {
     sequence.current += 1;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setBusy(false);
-    if (previousIdentity.current !== identityId) { setSelected(null); setName(''); if (previousIdentity.current) { setServiceId(''); setDate(''); } }
+    if (previousIdentity.current !== identityId) { setSelection(null); setName(''); if (previousIdentity.current) { setServiceId(''); setDate(''); } }
     const saved = useBookingContactDraft.getState().draft;
     if (saved && identityId) {
-      if (saved.identityId === identityId && saved.providerId === providerId) { setServiceId(saved.serviceId); setDate(saved.date); setSelected(saved.selected); }
+      if (saved.identityId === identityId && saved.providerId === providerId) { setServiceId(saved.serviceId); setDate(saved.date); setSelection(saved.selected ? { providerId: saved.providerId, serviceId: saved.serviceId, date: saved.date, slot: saved.selected } : null); }
       useBookingContactDraft.getState().clear();
     }
     previousIdentity.current = identityId;
@@ -56,28 +58,31 @@ export function useBookingContactFlow() {
   async function saveName() {
     setBusy(true); setError('');
     try { await apiRequest('/api/account/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ displayName: name }) }); await contacts.refetch(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not save name.'); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : t('compact.nameFailed')); }
     finally { setBusy(false); }
   }
   const details = useQuery({ queryKey: ['provider', providerId, fromBookingId ?? 'public'], queryFn: () => apiRequest<{ provider: ProviderDetail }>(`/api/${fromBookingId ? `bookings/${fromBookingId}/provider` : `providers/${providerId}`}`) });
   const provider = details.data?.provider;
   useProviderActivation(provider && !fromBookingId ? { businessId: provider.id } : undefined);
-  const days = provider ? makeCalendarDays(provider) : [];
-  const chosenService = serviceId || provider?.services[0]?.id || '';
-  const chosenDate = date || days.find((day) => !day.disabled)?.id || days[0]?.id || '';
+  const chosenService = provider?.services.some(service => service.id === serviceId) ? serviceId : !serviceId && provider?.services.length === 1 ? provider.services[0]?.id ?? '' : '';
+  const chosenDate = validBookingDate(date) ? date : provider ? localDate(provider.timezone) : '';
+  const selected = selection?.providerId === providerId && selection.serviceId === chosenService && selection.date === chosenDate ? selection.slot : null;
+  function changeService(id: string) { if (operation.current || pendingAttempt) return; sequence.current += 1; setSelection(null); setConflictSlot(null); setError(''); setServiceId(id); }
+  function changeDate(value: string) { if (operation.current || pendingAttempt || !validBookingDate(value)) return; sequence.current += 1; setSelection(null); setConflictSlot(null); setError(''); setDate(value); }
   const slots = useQuery({ queryKey: ['availability', providerId, fromBookingId ?? 'public', chosenService, chosenDate], queryFn: () => apiRequest<{ slots: Slot[] }>(`/api/${fromBookingId ? `bookings/${fromBookingId}` : `providers/${providerId}`}/availability?${new URLSearchParams({ serviceId: chosenService, date: chosenDate })}`), enabled: Boolean(chosenService && /^\d{4}-\d{2}-\d{2}$/.test(chosenDate)), refetchInterval: 2000 });
   useEffect(() => {
     // A fresh availability response may make a previously contested slot bookable again.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setConflictSlot((current) => current && slots.data?.slots.some((slot) => slotId(slot) === current && slot.available) ? null : current);
   }, [slots.data]);
-  const labels = slotLabels(slots.data?.slots ?? [], locale);
+
   useEffect(() => { focusRef.current = focused; if (!focused) sequence.current += 1; }, [focused]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; sequence.current += 1; }; }, []);
-  async function reset() { if (operation.current || pendingAttempt) return; sequence.current += 1; setConflictSlot(null); setSelected(null); setNotice(''); setError(''); }
+  async function reset() { if (operation.current || pendingAttempt) return; sequence.current += 1; setConflictSlot(null); setSelection(null); setNotice(''); setError(''); }
   async function choose(slot: Slot) {
     if (operation.current || pendingAttempt) return;
-    sequence.current += 1; setSelected(slot); setError(''); setNotice('');
+    if (!slot.available || slot.locked || slotId(slot) === conflictSlot) return;
+    sequence.current += 1; setSelection({ providerId, serviceId: chosenService, date: chosenDate, slot }); setError(''); setNotice('');
   }
   async function confirm() {
     if (operation.current) return;
@@ -111,7 +116,7 @@ export function useBookingContactFlow() {
       }
       if (!result && isCurrent()) {
         if (terminal || fromBookingId && reason instanceof ApiError && reason.status === 409) {
-          useBookingAttempt.getState().set(null); setSelected(null);
+          useBookingAttempt.getState().set(null); setSelection(null);
           if (selected) setConflictSlot(slotId(selected));
           setError(reason instanceof Error ? reason.message : t('bookingCommit.conflict')); await contacts.refetch(); await details.refetch(); await slots.refetch();
         } else setError(t('bookingCommit.uncertain'));
@@ -126,6 +131,18 @@ export function useBookingContactFlow() {
       if (mounted.current) setBusy(false);
     }
   }
+  const controls = useCompactBooking({ provider, providerId, serviceId: chosenService, date: chosenDate, fromBookingId, slots: slots.data?.slots ?? [], excluded: conflictSlot, disabled: busy || Boolean(pendingAttempt), onDate: changeDate, onService: changeService, onReset: () => { void reset(); } });
+  useEffect(() => {
+    if (!selected || operation.current || pendingAttempt || !slots.data || slots.data.slots.some(slot => slotId(slot) === slotId(selected) && slot.available && !slot.locked)) return;
+    setSelection(null); setError(t('compact.changed'));
+  }, [selected, pendingAttempt, slots.data, t]);
+  const routeScope = JSON.stringify([providerId, fromBookingId, params.serviceId, params.date]);
+  const previousRoute = useRef(routeScope);
+  useEffect(() => {
+    if (previousRoute.current === routeScope) return;
+    previousRoute.current = routeScope; sequence.current += 1;
+    setSelection(null); setServiceId(params.serviceId ?? ''); setDate(params.date ?? '');
+  }, [routeScope, params.serviceId, params.date]);
   const reviewedService = provider?.services.find(service => service.id === chosenService);
   const review = selected && provider && reviewedService ? {
     businessAndService: `${provider.name} · ${reviewedService.name}`,
@@ -135,5 +152,5 @@ export function useBookingContactFlow() {
   } : null;
   const reauthReturnTo = `/booking/${providerId}?${new URLSearchParams({ serviceId: chosenService, date: chosenDate })}`;
   function saveReauthDraft() { if (identityId) useBookingContactDraft.getState().save({ identityId, providerId, serviceId: chosenService, date: chosenDate, selected }); }
-  return { review, reauthReturnTo, saveReauthDraft, locale, t, providerId, fromBookingId, serviceId, date, selected, busy, editingDisabled: busy || Boolean(pendingAttempt), pendingAttempt, pendingElsewhere, notice, error, conflictSlot, identityId, details, provider, days, chosenService, chosenDate, slots, labels, contacts, name, setName, setServiceId, setDate, setNotice, reset, choose, confirm, saveName };
+  return { controls, review, reauthReturnTo, saveReauthDraft, locale, t, providerId, fromBookingId, serviceId, date, selected, busy, editingDisabled: busy || Boolean(pendingAttempt), pendingAttempt, pendingElsewhere, notice, error, conflictSlot, identityId, details, provider, chosenService, chosenDate, slots, contacts, name, setName, setServiceId, setDate, setNotice, reset, choose, confirm, saveName };
 }

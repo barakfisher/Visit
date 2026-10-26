@@ -3,7 +3,7 @@ import { reviewedServiceSchema } from '../scheduling/booking-consent.utils.js';
 import { publicBusinessWhere } from '../security/business-eligibility.js';
 import { withBusinessConfiguration } from '../repositories/publication.js';
 import { requireOwnedReschedule } from '../security/tenant-context.js';
-import { getBusinessAvailability } from '../repositories/availability.js';
+import { getBusinessAvailability, getBusinessBookingCalendar } from '../repositories/availability.js';
 import type { FastifyInstance, FastifyRequest, HTTPMethods } from 'fastify';
 import { z } from 'zod';
 import { Temporal } from '@js-temporal/polyfill';
@@ -11,7 +11,7 @@ import { parseService } from '../repositories/services.js';
 import { bookingServiceSnapshot } from '../repositories/bookings.js';
 import { prisma } from '../db/client.js';
 import { authenticate } from '../security/sessions.js';
-import { requireBusinessMembership } from '../security/tenant-context.js';
+import { requirePublicBusiness, requireBusinessMembership } from '../security/tenant-context.js';
 import { AppError, conflict, notFound } from '../http/errors.js';
 import { requireHold, releaseHold } from '../scheduling/reservations.js';
 import { acquireIntervalLocks } from '../scheduling/redis-slot-lock.js';
@@ -51,6 +51,17 @@ export async function registerScreenFlows(app: FastifyInstance) {
     const { date } = z.object({ date: z.string().date() }).parse(request.query);
     const { context, serviceId } = await requireOwnedReschedule(await authenticate(request), bookingId);
     return getBusinessAvailability(context, serviceId, date, true);
+  });
+  app.get('/api/providers/:providerId/booking-calendar', async request => {
+    const { providerId } = z.object({ providerId: z.string().min(1) }).parse(request.params);
+    const { serviceId, fromDate, days } = z.strictObject({ serviceId: z.string().min(1), fromDate: z.string().date(), days: z.coerce.number().int().min(1).max(31).default(31) }).parse(request.query);
+    return getBusinessBookingCalendar(await requirePublicBusiness(providerId), serviceId, fromDate, days);
+  });
+  app.get('/api/bookings/:bookingId/booking-calendar', async request => {
+    const { bookingId } = z.object({ bookingId: z.string().min(1) }).parse(request.params);
+    const { fromDate, days } = z.strictObject({ fromDate: z.string().date(), days: z.coerce.number().int().min(1).max(31).default(31) }).parse(request.query);
+    const { context, serviceId } = await requireOwnedReschedule(await authenticate(request), bookingId);
+    return getBusinessBookingCalendar(context, serviceId, fromDate, days);
   });
   app.get('/api/providers/:providerId', async (request) => {
     const { providerId } = request.params as { providerId: string };

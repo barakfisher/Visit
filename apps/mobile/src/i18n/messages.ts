@@ -1,9 +1,11 @@
+import { compactEn, compactHe } from './compactBooking.utils';
 import { contactEn, contactHe } from './contactMessages.utils';
 import { setupEn, setupHe } from './setupMessages';
 import { dashboardEn, dashboardHe } from './dashboardMessages';
 export const en = {
   ...setupEn,
   ...contactEn,
+  ...compactEn,
   ...dashboardEn,
   'home.title': 'Your time, well spent.',
   'home.intro': 'Your next appointment and the businesses you visit.',
@@ -272,6 +274,7 @@ export type Locale = 'he' | 'en';
 export const he: Record<MessageKey, string> = {
   ...setupHe,
   ...contactHe,
+  ...compactHe,
   ...dashboardHe,
   'home.title': 'הזמן שלכם, מנוצל היטב.',
   'home.intro': 'התור הבא שלכם והעסקים שאתם מבקרים בהם.',
