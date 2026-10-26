@@ -1,0 +1,11 @@
+import type { Meta, StoryObj } from '@storybook/react';
+import { expect, fn, userEvent } from 'storybook/test';
+import { AppointmentLifecycle } from './AppointmentLifecycle.component';
+const meta = { title: 'Booking/Appointment lifecycle', component: AppointmentLifecycle, args: { status: 'Completed', toggleLabel: 'Show audit history', expanded: false, loading: false, loadingLabel: 'Loading…', error: '', busy: false, events: [], empty: 'No events.', retryLabel: 'Try again', completeLabel: 'Mark completed', noShowLabel: 'Mark no-show', cancelLabel: 'Cancel appointment', onToggle: fn(), onRetry: fn() } } satisfies Meta<typeof AppointmentLifecycle>;
+export default meta;
+type Story = StoryObj<typeof meta>;
+export const Terminal: Story = { play: async ({ canvas, args }) => { await expect(canvas.queryByRole('button', { name: 'Mark completed' })).toBeNull(); await userEvent.click(canvas.getByRole('button', { name: 'Show audit history' })); await expect(args.onToggle).toHaveBeenCalled(); } };
+export const EndedScheduled: Story = { args: { status: 'Scheduled', onComplete: fn(), onNoShow: fn() }, play: async ({ canvas, args }) => { await userEvent.click(canvas.getByRole('button', { name: 'Mark no-show' })); await expect(args.onNoShow).toHaveBeenCalled(); } };
+export const AuditHistory: Story = { args: { expanded: true, events: [{ id: 'event', action: 'Appointment booked', recorded: 'October 26, 2026 at 12:00', detail: 'October 27, 2026 at 09:00', source: 'Customer · Final booking consent' }] }, play: async ({ canvas }) => { await expect(canvas.getByText('Customer · Final booking consent')).toBeVisible(); } };
+export const Failed: Story = { args: { error: 'Audit history could not load.' }, play: async ({ canvas, args }) => { await expect(canvas.getByRole('alert')).toBeVisible(); await userEvent.click(canvas.getByRole('button', { name: 'Try again' })); await expect(args.onRetry).toHaveBeenCalled(); } };
+export const Hebrew: Story = { args: { status: 'לא הגיע', toggleLabel: 'הצגת היסטוריית שינויים' }, globals: { locale: 'he' } };

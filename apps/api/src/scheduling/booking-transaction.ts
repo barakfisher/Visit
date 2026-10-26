@@ -14,6 +14,14 @@ export function isDatabaseCapacityError(error: unknown): boolean {
 export function isTransactionConflict(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   if ('code' in error && error.code === 'P2034') return true;
+  if ('code' in error && error.code === 'P2010' && 'meta' in error && error.meta && typeof error.meta === 'object') {
+    if ('code' in error.meta && (error.meta.code === '40001' || error.meta.code === '40P01')) return true;
+    if ('driverAdapterError' in error.meta) return isAdapterTransactionConflict(error.meta.driverAdapterError);
+  }
+  return isAdapterTransactionConflict(error);
+}
+function isAdapterTransactionConflict(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
   return 'name' in error && error.name === 'DriverAdapterError' && 'cause' in error &&
     !!error.cause && typeof error.cause === 'object' && 'kind' in error.cause && error.cause.kind === 'TransactionWriteConflict';
 }

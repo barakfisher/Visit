@@ -28,7 +28,7 @@ export async function runBookingAttempt(input: FinalBookingInput, customerId: st
     if (!locked) throw new AppError(409, 'ATTEMPT_PENDING', 'This same booking attempt is still processing. Check its result shortly.');
     const attempt = await prisma.bookingAttempt.findUniqueOrThrow({ where: { id: registered.id } });
     const current = await prisma.booking.findFirst({ where: { businessId, customerId, idempotencyKey: key }, select: { id: true, status: true } });
-    if (current?.status === 'CONFIRMED') {
+    if (current && ['CONFIRMED', 'COMPLETED', 'NO_SHOW'].includes(current.status)) {
       await prisma.bookingAttempt.update({ where: { id: attempt.id }, data: { status: 'CONFIRMED', bookingId: current.id } });
       return current;
     }
@@ -44,7 +44,7 @@ export async function runBookingAttempt(input: FinalBookingInput, customerId: st
         const final = await withBookingTransaction(async tx => {
           await tx.$queryRaw`SELECT id FROM "Business" WHERE id = ${businessId} FOR SHARE`;
           await tx.$queryRaw`SELECT id FROM "BookingAttempt" WHERE id = ${attempt.id} FOR UPDATE`;
-          const committed = await tx.booking.findFirst({ where: { businessId, customerId, idempotencyKey: key, status: 'CONFIRMED' }, select: { id: true, status: true } });
+          const committed = await tx.booking.findFirst({ where: { businessId, customerId, idempotencyKey: key, status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW'] } }, select: { id: true, status: true } });
           if (committed) {
             await tx.bookingAttempt.update({ where: { id: attempt.id }, data: { status: 'CONFIRMED', bookingId: committed.id } });
             return { committed, expired: null };

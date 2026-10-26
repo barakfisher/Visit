@@ -34,6 +34,7 @@ enum BookingStatus {
   HELD
   CONFIRMED
   COMPLETED
+  NO_SHOW
   CANCELLED
   EXPIRED
 }
@@ -320,6 +321,8 @@ model BookingPolicy {
 }
 
 model Booking {
+  revision Int @default(0)
+  events BookingEvent[]
   customerName String?
   customerPhone String?
   customerEmail String?
@@ -545,4 +548,27 @@ model BookingAttempt {
   customer Identity @relation(fields: [customerId], references: [id], onDelete: Cascade)
   @@unique([businessId, idempotencyKey])
   @@index([customerId, status])
+}
+
+model BookingEvent {
+  id String @id @default(dbgenerated("gen_random_uuid()::text"))
+  businessId String
+  bookingId String
+  revision Int
+  kind String
+  actorIdentityId String?
+  source String
+  reason String
+  oldStatus BookingStatus?
+  newStatus BookingStatus
+  oldStartsAt DateTime?
+  oldEndsAt DateTime?
+  newStartsAt DateTime
+  newEndsAt DateTime
+  oldStaffId String?
+  newStaffId String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  booking Booking @relation(fields: [businessId, bookingId], references: [businessId, id], onDelete: Cascade, onUpdate: Restrict)
+  @@unique([businessId, bookingId, revision])
+  @@index([businessId, bookingId, createdAt])
 }

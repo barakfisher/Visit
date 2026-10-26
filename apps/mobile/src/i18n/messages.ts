@@ -1,3 +1,4 @@
+import { lifecycleEn, lifecycleHe } from './lifecycle.utils';
 import { compactEn, compactHe } from './compactBooking.utils';
 import { contactEn, contactHe } from './contactMessages.utils';
 import { setupEn, setupHe } from './setupMessages';
@@ -6,6 +7,7 @@ export const en = {
   ...setupEn,
   ...contactEn,
   ...compactEn,
+  ...lifecycleEn,
   ...dashboardEn,
   'home.title': 'Your time, well spent.',
   'home.intro': 'Your next appointment and the businesses you visit.',
@@ -275,6 +277,7 @@ export const he: Record<MessageKey, string> = {
   ...setupHe,
   ...contactHe,
   ...compactHe,
+  ...lifecycleHe,
   ...dashboardHe,
   'home.title': 'הזמן שלכם, מנוצל היטב.',
   'home.intro': 'התור הבא שלכם והעסקים שאתם מבקרים בהם.',

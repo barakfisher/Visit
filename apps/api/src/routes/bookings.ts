@@ -1,3 +1,4 @@
+import { changeBookingOutcome, readBookingHistory, setBookingAudit } from '../repositories/BookingLifecycle.service.js';
 import { reviewedServiceSchema } from '../scheduling/booking-consent.utils.js';
 import type { Prisma, Booking } from '../generated/prisma/client.js';
 import { ensureRedisReady } from '../infra/redis.js';
@@ -7,7 +8,7 @@ import { publicBusinessWhere } from '../security/business-eligibility.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { Temporal } from '@js-temporal/polyfill';
-import { BookingStatus, BusinessApprovalStatus, MembershipRole } from '../generated/prisma/client.js';
+import { BookingStatus, MembershipRole } from '../generated/prisma/client.js';
 import { prisma } from '../db/client.js';
 import { AppError, conflict, notFound } from '../http/errors.js';
 import { occupiedInterval, assertCapacity, type Interval } from '../scheduling/intervals.js';
@@ -21,8 +22,7 @@ import { effectiveWindows } from '../scheduling/rules.js';
 import { withBookingTransaction } from '../scheduling/booking-transaction.js';
 import { listCustomerBookings, listProviderBookings } from '../repositories/bookings.js';
 
-const activeStatuses = [BookingStatus.HELD, BookingStatus.CONFIRMED];
-const isActiveStatus = (status: BookingStatus) => status === BookingStatus.HELD || status === BookingStatus.CONFIRMED;
+const activeStatuses = [BookingStatus.HELD, BookingStatus.CONFIRMED, BookingStatus.COMPLETED, BookingStatus.NO_SHOW];
 const asError = (error: unknown) => error instanceof Error ? error.message : 'Invalid time.';
 
 async function assertWorkingHours(businessId: string, timezone: string, staffId: string, startsAt: Date, occupied: Interval, db: Prisma.TransactionClient = prisma) {
@@ -83,7 +83,7 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
       } catch { throw new AppError(400, 'INVALID_LOCAL_TIME', 'Review the appointment time.'); }
       if (recovered.serviceId !== input.serviceId || recovered.staffId !== input.staffId || recovered.startsAt.getTime() !== requestedStart.getTime()) throw conflict('This attempt was already used for different details.');
       if (input.reviewedService && (input.reviewedService.name !== recovered.serviceName || input.reviewedService.durationMinutes !== recovered.serviceDurationMinutes || input.reviewedService.priceMinor !== recovered.servicePriceMinor || input.reviewedService.currency !== recovered.serviceCurrency)) throw conflict('This attempt was already used for different service details.');
-      if (recovered.status === 'CONFIRMED') return bookingResponse(recovered);
+      if (['CONFIRMED', 'COMPLETED', 'NO_SHOW'].includes(recovered.status)) return bookingResponse(recovered);
     }
     if (await prisma.bookingAttempt.findFirst({ where: { businessId: input.businessId, idempotencyKey: input.idempotencyKey, status: 'REJECTED' }, select: { id: true } })) throw new AppError(409, 'ATTEMPT_REJECTED', 'This attempt is no longer active.');
     try { await ensureRedisReady(); } catch { throw new AppError(503, 'LOCK_UNAVAILABLE', 'Reservations are temporarily unavailable.'); }
@@ -193,6 +193,7 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
       if (await tx.timeBlock.count({ where: { businessId: business.id, staffId: current.staffId, startsAt: { lt: occupied.endsAt }, endsAt: { gt: occupied.startsAt } } })) throw conflict('This time is blocked. Choose another time.');
       // Recheck complete Redis ownership after database locks, immediately before the write.
       await requireHold(current.id, identity.id);
+      await setBookingAudit(tx, identity.id, 'CUSTOMER', 'FINAL_CONSENT');
       const result = await tx.booking.updateMany({ where: { id: booking.id, customerId: identity.id, status: BookingStatus.HELD, holdExpiresAt: { gt: new Date() } }, data: { status: BookingStatus.CONFIRMED, holdExpiresAt: null } });
       if (result.count !== 1) throw conflict('This appointment hold has expired. Start again to choose a new time.');
     });
@@ -205,8 +206,9 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
     const params = z.object({ bookingId: z.string().min(1) }).safeParse(request.params);
     const body = z.object({ staffId: z.string().min(1), startsAt: z.string().datetime({ offset: true }).optional(), localDate: z.string().date().optional(), localTime: z.string().regex(/^\d{2}:\d{2}$/).optional(), utcOffset: z.string().optional() }).safeParse(request.body);
     if (!params.success || !body.success || (!body.data.startsAt && (!body.data.localDate || !body.data.localTime)) || (body.data.startsAt && (body.data.localDate || body.data.localTime || body.data.utcOffset))) throw new AppError(400, 'VALIDATION_ERROR', 'Choose a provider and a valid appointment time.');
-    const existing = await prisma.booking.findFirst({ where: { id: params.data.bookingId, customerId: identity.id, status: BookingStatus.CONFIRMED }, include: { business: { include: { bookingPolicy: true } } } });
+    const existing = await prisma.booking.findFirst({ where: { id: params.data.bookingId, customerId: identity.id }, include: { business: { include: { bookingPolicy: true } } } });
     if (!existing || (existing.business.approvalStatus !== 'APPROVED' || existing.business.deletedAt)) throw notFound();
+    if (existing.status !== 'CONFIRMED') throw conflict('This appointment can no longer be rescheduled.');
     const policy = existing.business.bookingPolicy;
     if (!policy) throw conflict('This business has not finished setting its booking policy.');
     if (existing.startsAt.getTime() < Date.now() + policy.rescheduleCutoffMinutes * 60_000) throw conflict('The reschedule cutoff has passed for this appointment.');
@@ -230,9 +232,10 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
         await tx.$queryRaw`SELECT id FROM "Business" WHERE id = ${existing.businessId} FOR SHARE`;
         if (!await tx.business.findFirst({ where: { id: existing.businessId, approvalStatus: 'APPROVED', deletedAt: null }, select: { id: true } })) throw conflict('This business cannot accept rescheduling.');
         if (await tx.timeBlock.count({ where: { businessId: existing.businessId, staffId: staffService.staff.id, startsAt: { lt: occupied.endsAt }, endsAt: { gt: occupied.startsAt } } })) throw conflict('This provider has blocked this time.');
-        const conflicts = await tx.booking.findMany({ where: { businessId: existing.businessId, staffId: staffService.staff.id, id: { not: existing.id }, OR: [{ status: BookingStatus.CONFIRMED }, { status: BookingStatus.HELD, holdExpiresAt: { gt: new Date() } }], occupiedFrom: { lt: occupied.endsAt }, occupiedUntil: { gt: occupied.startsAt } }, select: { occupiedFrom: true, occupiedUntil: true } });
+        const conflicts = await tx.booking.findMany({ where: { businessId: existing.businessId, staffId: staffService.staff.id, id: { not: existing.id }, OR: [{ status: { in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED, BookingStatus.NO_SHOW] } }, { status: BookingStatus.HELD, holdExpiresAt: { gt: new Date() } }], occupiedFrom: { lt: occupied.endsAt }, occupiedUntil: { gt: occupied.startsAt } }, select: { occupiedFrom: true, occupiedUntil: true } });
         if (!assertCapacity(occupied, conflicts.map((item) => ({ startsAt: item.occupiedFrom, endsAt: item.occupiedUntil })), staffService.staff.parallelCapacity)) throw conflict('That time was just booked. Choose another time.');
-        const updated = await tx.booking.updateMany({ where: { id: existing.id, customerId: identity.id, status: BookingStatus.CONFIRMED }, data: { staffId: staffService.staff.id, startsAt, endsAt, occupiedFrom: occupied.startsAt, occupiedUntil: occupied.endsAt } });
+        await setBookingAudit(tx, identity.id, 'CUSTOMER', 'CUSTOMER_REQUEST');
+        const updated = await tx.booking.updateMany({ where: { id: existing.id, customerId: identity.id, status: BookingStatus.CONFIRMED, revision: existing.revision }, data: { staffId: staffService.staff.id, startsAt, endsAt, occupiedFrom: occupied.startsAt, occupiedUntil: occupied.endsAt } });
         if (updated.count !== 1) throw conflict('This appointment changed before it could be rescheduled.');
         return tx.booking.findUniqueOrThrow({ where: { id: existing.id } });
       });
@@ -243,42 +246,28 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
     } finally { await slotLock.release(); }
   });
 
-  app.post('/v1/bookings/:bookingId/cancel', async (request) => {
-    const { identity } = await authenticate(request);
-    const params = z.object({ bookingId: z.string().min(1) }).safeParse(request.params);
-    if (!params.success) throw notFound();
-    const booking = await prisma.booking.findFirst({ where: { id: params.data.bookingId, customerId: identity.id }, include: { business: { include: { bookingPolicy: true } } } });
-    if (!booking) throw notFound();
-    if (booking.status === BookingStatus.CANCELLED) return { id: booking.id, status: BookingStatus.CANCELLED };
-    if (!isActiveStatus(booking.status)) throw conflict('This appointment can no longer be cancelled.');
-    const cutoff = booking.business.bookingPolicy?.cancellationCutoffMinutes ?? 0;
-    if (booking.status === BookingStatus.CONFIRMED && booking.startsAt.getTime() < Date.now() + cutoff * 60_000) throw conflict('The cancellation cutoff has passed for this appointment.');
-    const result = await prisma.booking.updateMany({ where: { id: booking.id, customerId: identity.id, status: booking.status }, data: { status: BookingStatus.CANCELLED, holdExpiresAt: null } });
-    if (result.count !== 1) {
-      const latest = await prisma.booking.findFirst({ where: { id: booking.id, customerId: identity.id } });
-      if (latest?.status === BookingStatus.CANCELLED) return { id: booking.id, status: BookingStatus.CANCELLED };
-      throw conflict('This appointment has already changed. Refresh and retry.');
-    }
-    return { id: booking.id, status: BookingStatus.CANCELLED };
+  app.post('/v1/bookings/:bookingId/cancel', async request => {
+    const { bookingId } = z.object({ bookingId: z.string().min(1) }).parse(request.params);
+    const { expectedRevision } = z.strictObject({ expectedRevision: z.number().int().nonnegative().optional() }).parse(request.body ?? {});
+    return changeBookingOutcome(await authenticate(request), bookingId, 'CANCELLED', undefined, expectedRevision);
   });
-
-  app.post('/v1/provider/businesses/:businessId/bookings/:bookingId/cancel', async (request) => {
-    const params = z.object({ businessId: z.string().min(1), bookingId: z.string().min(1) }).safeParse(request.params);
-    if (!params.success) throw notFound();
-    const { identity } = await authenticate(request);
-    const membership = await prisma.membership.findFirst({ where: { identityId: identity.id, businessId: params.data.businessId, role: { in: [MembershipRole.OWNER, MembershipRole.MANAGER] }, status: 'ACTIVE', business: { approvalStatus: BusinessApprovalStatus.APPROVED } } });
-    if (!membership) throw notFound();
-    const existing = await prisma.booking.findFirst({ where: { id: params.data.bookingId, businessId: params.data.businessId } });
-    if (!existing) throw notFound();
-    if (existing.status === BookingStatus.CANCELLED) return { id: existing.id, status: BookingStatus.CANCELLED };
-    if (!isActiveStatus(existing.status)) throw conflict('This appointment can no longer be cancelled.');
-    const result = await prisma.booking.updateMany({ where: { id: existing.id, businessId: params.data.businessId, status: existing.status }, data: { status: BookingStatus.CANCELLED, holdExpiresAt: null } });
-    if (result.count !== 1) {
-      const latest = await prisma.booking.findFirst({ where: { id: existing.id, businessId: params.data.businessId } });
-      if (latest?.status === BookingStatus.CANCELLED) return { id: existing.id, status: BookingStatus.CANCELLED };
-      throw conflict('This appointment has already changed. Refresh and retry.');
-    }
-    return { id: params.data.bookingId, status: BookingStatus.CANCELLED };
+  app.post('/v1/provider/businesses/:businessId/bookings/:bookingId/cancel', async request => {
+    const { businessId, bookingId } = z.object({ businessId: z.string().min(1), bookingId: z.string().min(1) }).parse(request.params);
+    const { expectedRevision } = z.strictObject({ expectedRevision: z.number().int().nonnegative().optional() }).parse(request.body ?? {});
+    return changeBookingOutcome(await authenticate(request), bookingId, 'CANCELLED', businessId, expectedRevision);
+  });
+  app.post('/v1/provider/businesses/:businessId/bookings/:bookingId/outcome', async request => {
+    const { businessId, bookingId } = z.object({ businessId: z.string().min(1), bookingId: z.string().min(1) }).parse(request.params);
+    const { status, expectedRevision } = z.strictObject({ status: z.enum(['COMPLETED', 'NO_SHOW']), expectedRevision: z.number().int().nonnegative() }).parse(request.body);
+    return changeBookingOutcome(await authenticate(request), bookingId, status, businessId, expectedRevision);
+  });
+  app.get('/v1/bookings/:bookingId/history', async request => {
+    const { bookingId } = z.object({ bookingId: z.string().min(1) }).parse(request.params);
+    return readBookingHistory(await authenticate(request), bookingId);
+  });
+  app.get('/v1/provider/businesses/:businessId/bookings/:bookingId/history', async request => {
+    const { businessId, bookingId } = z.object({ businessId: z.string().min(1), bookingId: z.string().min(1) }).parse(request.params);
+    return readBookingHistory(await authenticate(request), bookingId, businessId);
   });
 
   app.get('/v1/me/bookings', async (request) => {

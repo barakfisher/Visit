@@ -1,5 +1,5 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "noEmit": true, "rootDir": "." },
-  "include": ["src/**/*.ts", "test/tenant-fixtures.test.ts", "test/business-access.test.ts", "test/customer-contact.test.ts", "test/booking-consent.test.ts", "test/booking-calendar.test.ts", "test/reservation-validation.test.ts", "test/customer-contact-readiness.test.ts", "test/support/**/*.ts", "scripts/tenant-fixtures.mts"]
+  "include": ["src/**/*.ts", "test/tenant-fixtures.test.ts", "test/business-access.test.ts", "test/customer-contact.test.ts", "test/booking-consent.test.ts", "test/booking-calendar.test.ts", "test/booking-lifecycle.test.ts", "test/transaction-retry.test.ts", "test/reservation-validation.test.ts", "test/customer-contact-readiness.test.ts", "test/support/**/*.ts", "scripts/tenant-fixtures.mts"]
 }

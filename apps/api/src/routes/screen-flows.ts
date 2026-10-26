@@ -137,13 +137,13 @@ export async function registerScreenFlows(app: FastifyInstance) {
     const startsAt = new Date(Number(day.toZonedDateTime({ timeZone: business.timezone, plainTime: '00:00' }).epochMilliseconds));
     const endsAt = new Date(Number(day.add({ days: 1 }).toZonedDateTime({ timeZone: business.timezone, plainTime: '00:00' }).epochMilliseconds));
     const [bookings, blocks, staff] = await Promise.all([
-      prisma.booking.findMany({ where: { businessId, status: 'CONFIRMED', startsAt: { gte: startsAt, lt: endsAt } }, include: { staff: { select: { displayName: true } } }, orderBy: { startsAt: 'asc' } }),
+      prisma.booking.findMany({ where: { businessId, status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'] }, events: { some: {} }, startsAt: { gte: startsAt, lt: endsAt } }, include: { staff: { select: { displayName: true } } }, orderBy: { startsAt: 'asc' } }),
       prisma.timeBlock.findMany({ where: { businessId, startsAt: { lt: endsAt }, endsAt: { gt: startsAt } }, include: { staff: { select: { displayName: true } } }, orderBy: { startsAt: 'asc' } }),
       prisma.staff.findMany({ where: { businessId, active: true }, select: { id: true, displayName: true } }),
     ]);
     const revenue: Record<string, number> = {};
-    bookings.forEach((booking) => { if (booking.serviceCurrency && booking.servicePriceMinor !== null) revenue[booking.serviceCurrency] = (revenue[booking.serviceCurrency] ?? 0) + booking.servicePriceMinor; });
-    return { business: { id: business.id, name: business.name, timezone: business.timezone }, bookings: bookings.map(booking => ({ ...booking, customer: { displayName: booking.customerName, phone: booking.customerPhone, email: booking.customerEmail }, service: bookingServiceSnapshot(booking) })), blocks, staff, summary: { appointments: bookings.length, revenue } };
+    bookings.forEach((booking) => { if (['CONFIRMED', 'COMPLETED'].includes(booking.status) && booking.serviceCurrency && booking.servicePriceMinor !== null) revenue[booking.serviceCurrency] = (revenue[booking.serviceCurrency] ?? 0) + booking.servicePriceMinor; });
+    return { business: { id: business.id, name: business.name, timezone: business.timezone }, bookings: bookings.map(booking => ({ ...booking, customer: { displayName: booking.customerName, phone: booking.customerPhone, email: booking.customerEmail }, service: bookingServiceSnapshot(booking) })), blocks, staff, summary: { appointments: bookings.filter(booking => booking.status !== 'CANCELLED').length, revenue } };
   });
   app.post('/api/provider/block-time', async (request, reply) => {
     const input = z.object({ businessId: z.string().optional(), staffId: z.string(), date: z.string().date(), startLocal: z.string().regex(/^\d{2}:\d{2}$/), endLocal: z.string().regex(/^\d{2}:\d{2}$/), reason: z.string().max(200).optional() }).parse(request.body);
@@ -157,7 +157,7 @@ export async function registerScreenFlows(app: FastifyInstance) {
     if (!lock.acquired) throw conflict('This time is being booked. Retry shortly.');
     try {
       const block = await withBookingTransaction(async (tx) => {
-        if (await tx.booking.count({ where: { businessId, staffId: staff.id, occupiedFrom: { lt: endsAt }, occupiedUntil: { gt: startsAt }, OR: [{ status: 'CONFIRMED' }, { status: 'HELD', holdExpiresAt: { gt: new Date() } }] } })) throw conflict('This break overlaps an appointment or active hold.');
+        if (await tx.booking.count({ where: { businessId, staffId: staff.id, occupiedFrom: { lt: endsAt }, occupiedUntil: { gt: startsAt }, OR: [{ status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW'] } }, { status: 'HELD', holdExpiresAt: { gt: new Date() } }] } })) throw conflict('This break overlaps an appointment or active hold.');
         return tx.timeBlock.create({ data: { businessId, staffId: staff.id, startsAt, endsAt, reason: input.reason ?? null } });
       });
       reply.code(201); return block;
