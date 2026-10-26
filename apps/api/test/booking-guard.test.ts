@@ -108,7 +108,7 @@ test('database capacity guard is authoritative without Redis, including direct w
       const unavailable = createIntervalLocker({ ready: async () => { throw new Error('offline'); }, evaluate: async () => 0 });
       await registerBookingRoutes(app, { acquireLocks: unavailable });
       try {
-        const result = await app.inject({ method: 'POST', url: '/v1/bookings', headers: { authorization: `Bearer ${token}` }, payload: { businessId: business.id, staffId: staff.id, serviceId: service.id, startsAt: `${day}T09:00:00Z`, idempotencyKey: randomUUID() } });
+        const result = await app.inject({ method: 'POST', url: '/v1/bookings', headers: { authorization: `Bearer ${token}` }, payload: { finalConsent: true, businessId: business.id, staffId: staff.id, serviceId: service.id, startsAt: `${day}T09:00:00Z`, idempotencyKey: randomUUID() } });
         assert.equal(result.statusCode, 503);
         assert.equal(await prisma.booking.count({ where: { businessId: business.id, staffId: staff.id } }), 0);
       } finally { await app.close(); }

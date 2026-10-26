@@ -1,3 +1,7 @@
+import { reviewedServiceSchema } from '../scheduling/booking-consent.utils.js';
+import type { Prisma, Booking } from '../generated/prisma/client.js';
+import { ensureRedisReady } from '../infra/redis.js';
+import { reserveHold, requireHold, releaseHold } from '../scheduling/reservations.js';
 import { assertCustomerContact } from '../security/customer-contact.utils.js';
 import { publicBusinessWhere } from '../security/business-eligibility.js';
 import type { FastifyInstance } from 'fastify';
@@ -21,21 +25,36 @@ const activeStatuses = [BookingStatus.HELD, BookingStatus.CONFIRMED];
 const isActiveStatus = (status: BookingStatus) => status === BookingStatus.HELD || status === BookingStatus.CONFIRMED;
 const asError = (error: unknown) => error instanceof Error ? error.message : 'Invalid time.';
 
-async function assertWorkingHours(businessId: string, timezone: string, staffId: string, startsAt: Date, occupied: Interval) {
+async function assertWorkingHours(businessId: string, timezone: string, staffId: string, startsAt: Date, occupied: Interval, db: Prisma.TransactionClient = prisma) {
   const zonedStart = Temporal.Instant.from(startsAt.toISOString()).toZonedDateTimeISO(timezone);
   const localDate = zonedStart.toPlainDate();
   const weekday = zonedStart.dayOfWeek % 7;
   const dateKey = localDate.toString();
   const [businessOverride, businessHours, staffOverride, staffHours] = await Promise.all([
-    prisma.scheduleOverride.findFirst({ where: { businessId, date: new Date(`${dateKey}T00:00:00.000Z`) } }),
-    prisma.businessWeeklyAvailability.findMany({ where: { businessId, weekday } }),
-    prisma.staffScheduleOverride.findFirst({ where: { businessId, staffId, date: new Date(`${dateKey}T00:00:00.000Z`) } }),
-    prisma.staffWeeklyAvailability.findMany({ where: { businessId, staffId } }),
+    db.scheduleOverride.findFirst({ where: { businessId, date: new Date(`${dateKey}T00:00:00.000Z`) } }),
+    db.businessWeeklyAvailability.findMany({ where: { businessId, weekday } }),
+    db.staffScheduleOverride.findFirst({ where: { businessId, staffId, date: new Date(`${dateKey}T00:00:00.000Z`) } }),
+    db.staffWeeklyAvailability.findMany({ where: { businessId, staffId } }),
   ]);
   const businessWindows = effectiveWindows(businessOverride, businessHours);
   const staffWindows = effectiveWindows(staffOverride, staffHours.length ? staffHours.filter((item) => item.weekday === weekday) : businessWindows);
   const shared = workingWindows(dateKey, timezone, businessWindows, staffWindows);
   if (!containsInterval(shared.intervals, occupied)) throw conflict('The appointment and its buffers must fit inside business and provider working hours.');
+}
+
+function bookingResponse(booking: Booking) { return { id: booking.id, status: booking.status, startsAt: booking.startsAt.toISOString(), endsAt: booking.endsAt.toISOString(), holdExpiresAt: booking.holdExpiresAt?.toISOString() }; }
+async function ensureReservation(booking: Booking) {
+  if (booking.status === 'CONFIRMED') return;
+  if (booking.status !== 'HELD') throw new AppError(409, 'HOLD_EXPIRED', 'This attempt is no longer active. Choose a time again.');
+  const staff = await prisma.staff.findUniqueOrThrow({ where: { id: booking.staffId } });
+  try { await reserveHold(booking, staff.parallelCapacity); }
+  catch (error) {
+    if (error instanceof AppError && error.statusCode === 409) {
+      await prisma.booking.updateMany({ where: { id: booking.id, customerId: booking.customerId, status: 'HELD' }, data: { status: 'EXPIRED', holdExpiresAt: null } });
+      await releaseHold(booking.id, booking.customerId).catch(() => {});
+    }
+    throw error;
+  }
 }
 
 export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks = acquireIntervalLocks }: { acquireLocks?: typeof acquireIntervalLocks } = {}) {
@@ -48,11 +67,26 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
 
   app.post('/v1/bookings', async (request, reply) => {
     const { identity } = await authenticate(request);
-    const parsed = z.object({ businessId: z.string().min(1), serviceId: z.string().min(1), staffId: z.string().min(1), startsAt: z.string().datetime({ offset: true }).optional(), localDate: z.string().date().optional(), localTime: z.string().regex(/^\d{2}:\d{2}$/).optional(), utcOffset: z.string().optional(), idempotencyKey: z.string().min(16).max(128) }).safeParse(request.body);
+    const parsed = z.object({ finalConsent: z.literal(true), reviewedService: reviewedServiceSchema.optional(), businessId: z.string().min(1), serviceId: z.string().min(1), staffId: z.string().min(1), startsAt: z.string().datetime({ offset: true }).optional(), localDate: z.string().date().optional(), localTime: z.string().regex(/^\d{2}:\d{2}$/).optional(), utcOffset: z.string().optional(), idempotencyKey: z.string().min(16).max(128) }).safeParse(request.body);
     if (!parsed.success) throw new AppError(400, 'VALIDATION_ERROR', 'Choose a service, provider, and valid appointment time.');
     const input = parsed.data;
     if ((!input.startsAt && (!input.localDate || !input.localTime)) || (input.startsAt && (input.localDate || input.localTime || input.utcOffset))) throw new AppError(400, 'VALIDATION_ERROR', 'Provide either an instant or a local date and time.');
 
+    // Recover committed results before checking mutable publication/service state.
+    const recovered = await prisma.booking.findUnique({ where: { businessId_idempotencyKey: { businessId: input.businessId, idempotencyKey: input.idempotencyKey } } });
+    if (recovered && recovered.customerId !== identity.id) throw notFound();
+    if (recovered) {
+      let requestedStart: Date;
+      try {
+        const zone = input.startsAt ? null : await prisma.business.findUniqueOrThrow({ where: { id: input.businessId }, select: { timezone: true } });
+        requestedStart = input.startsAt ? new Date(input.startsAt) : localDateTimeToInstant(input.localDate!, input.localTime!, zone?.timezone ?? 'Asia/Jerusalem', input.utcOffset);
+      } catch { throw new AppError(400, 'INVALID_LOCAL_TIME', 'Review the appointment time.'); }
+      if (recovered.serviceId !== input.serviceId || recovered.staffId !== input.staffId || recovered.startsAt.getTime() !== requestedStart.getTime()) throw conflict('This attempt was already used for different details.');
+      if (input.reviewedService && (input.reviewedService.name !== recovered.serviceName || input.reviewedService.durationMinutes !== recovered.serviceDurationMinutes || input.reviewedService.priceMinor !== recovered.servicePriceMinor || input.reviewedService.currency !== recovered.serviceCurrency)) throw conflict('This attempt was already used for different service details.');
+      if (recovered.status === 'CONFIRMED') return bookingResponse(recovered);
+    }
+    if (await prisma.bookingAttempt.findFirst({ where: { businessId: input.businessId, idempotencyKey: input.idempotencyKey, status: 'REJECTED' }, select: { id: true } })) throw new AppError(409, 'ATTEMPT_REJECTED', 'This attempt is no longer active.');
+    try { await ensureRedisReady(); } catch { throw new AppError(503, 'LOCK_UNAVAILABLE', 'Reservations are temporarily unavailable.'); }
     const business = await prisma.business.findFirst({ where: { id: input.businessId, ...publicBusinessWhere }, select: { id: true, timezone: true, bookingPolicy: true } });
     if (!business) throw notFound();
     if (!business.bookingPolicy) throw conflict('This business has not finished setting its booking policy.');
@@ -72,6 +106,7 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
       prisma.staffService.findUnique({ where: { businessId_staffId_serviceId: { businessId: business.id, staffId: input.staffId, serviceId: input.serviceId } }, include: { staff: true } }),
     ]);
     if (!service || !staffLink?.staff.active) throw notFound();
+    if (input.reviewedService && (input.reviewedService.name !== service.name || input.reviewedService.durationMinutes !== service.durationMinutes || input.reviewedService.priceMinor !== service.priceMinor || input.reviewedService.currency !== service.currency)) throw conflict('This service changed since review. Review the appointment again.');
     const endsAt = new Date(startsAt.getTime() + service.durationMinutes * 60_000);
     const occupied = occupiedInterval(startsAt, service.durationMinutes, policy.bufferBeforeMinutes, policy.bufferAfterMinutes);
     await assertWorkingHours(business.id, business.timezone, input.staffId, startsAt, occupied);
@@ -81,6 +116,7 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
     const prior = await prisma.booking.findUnique({ where: { businessId_idempotencyKey: { businessId: business.id, idempotencyKey: input.idempotencyKey } } });
     if (prior) {
       if (!matchesRequest(prior)) throw conflict('That idempotency key was already used for a different booking request.');
+      await ensureReservation(prior);
       reply.code(200);
       return { id: prior.id, status: prior.status, startsAt: prior.startsAt.toISOString(), endsAt: prior.endsAt.toISOString(), holdExpiresAt: prior.holdExpiresAt?.toISOString() };
     }
@@ -90,6 +126,9 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
       const booking = await withBookingTransaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM "Business" WHERE id = ${business.id} FOR SHARE`;
         if (!await tx.business.findFirst({ where: { id: business.id, ...publicBusinessWhere }, select: { id: true } })) throw conflict('This business is not published for bookings.');
+        const currentPolicy = await tx.bookingPolicy.findUnique({ where: { businessId: business.id } });
+        if (!currentPolicy || currentPolicy.minimumNoticeMinutes !== policy.minimumNoticeMinutes || currentPolicy.maximumAdvanceDays !== policy.maximumAdvanceDays || currentPolicy.bufferBeforeMinutes !== policy.bufferBeforeMinutes || currentPolicy.bufferAfterMinutes !== policy.bufferAfterMinutes) throw conflict('Booking policy changed. Review the appointment again.');
+        await assertWorkingHours(business.id, business.timezone, input.staffId, startsAt, occupied, tx);
         const existing = await tx.booking.findUnique({ where: { businessId_idempotencyKey: { businessId: business.id, idempotencyKey: input.idempotencyKey } } });
         if (existing) {
           if (!matchesRequest(existing)) throw conflict('That idempotency key was already used for a different booking request.');
@@ -106,6 +145,7 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
         if (!currentService || currentService.updatedAt.getTime() !== service.updatedAt.getTime() || currentService.name !== service.name || currentService.durationMinutes !== service.durationMinutes || currentService.priceMinor !== service.priceMinor || currentService.currency !== service.currency) throw conflict('This service changed. Review the service and select a time again.');
         return tx.booking.create({ data: { businessId: business.id, customerId: identity.id, staffId: input.staffId, serviceId: service.id, startsAt, endsAt, occupiedFrom: occupied.startsAt, occupiedUntil: occupied.endsAt, idempotencyKey: input.idempotencyKey, status: BookingStatus.HELD, holdExpiresAt } });
       });
+      await ensureReservation(booking);
       reply.code(201);
       return { id: booking.id, status: booking.status, startsAt: booking.startsAt.toISOString(), endsAt: booking.endsAt.toISOString(), holdExpiresAt: booking.holdExpiresAt?.toISOString() };
     } catch (error) {
@@ -113,6 +153,7 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
       if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002') {
         const existing = await prisma.booking.findUnique({ where: { businessId_idempotencyKey: { businessId: business.id, idempotencyKey: input.idempotencyKey } } });
         if (existing && matchesRequest(existing)) {
+          await ensureReservation(existing);
           reply.code(200);
           return { id: existing.id, status: existing.status, startsAt: existing.startsAt.toISOString(), endsAt: existing.endsAt.toISOString(), holdExpiresAt: existing.holdExpiresAt?.toISOString() };
         }
@@ -133,9 +174,29 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
     await withBookingTransaction(async tx => {
       await tx.$queryRaw`SELECT id FROM "Business" WHERE id = ${booking.businessId} FOR SHARE`;
       if (!await tx.business.findFirst({ where: { id: booking.businessId, ...publicBusinessWhere }, select: { id: true } })) throw conflict('This business is not published. The temporary hold cannot be confirmed.');
+      await tx.$queryRaw`SELECT id FROM "BookingAttempt" WHERE "businessId" = ${booking.businessId} AND "idempotencyKey" = ${booking.idempotencyKey} FOR SHARE`;
+      await tx.$queryRaw`SELECT id FROM "Booking" WHERE id = ${booking.id} FOR UPDATE`;
+      const current = await tx.booking.findUniqueOrThrow({ where: { id: booking.id } });
+      if (current.status === 'CONFIRMED') return;
+      if (current.status !== 'HELD') throw conflict('This booking attempt is no longer active.');
+      const business = await tx.business.findUniqueOrThrow({ where: { id: booking.businessId }, include: { bookingPolicy: true } });
+      const policy = business.bookingPolicy;
+      if (!policy) throw conflict('This business has not configured its booking policy.');
+      const link = await tx.staffService.findUnique({ where: { businessId_staffId_serviceId: { businessId: booking.businessId, staffId: current.staffId, serviceId: current.serviceId } }, include: { staff: true, service: true } });
+      if (!link?.staff.active || !link.service.active || link.service.name !== current.serviceName || link.service.durationMinutes !== current.serviceDurationMinutes || link.service.priceMinor !== current.servicePriceMinor || link.service.currency !== current.serviceCurrency) throw conflict('The service or staff changed. Review a new time.');
+      const occupied = occupiedInterval(current.startsAt, current.serviceDurationMinutes, policy.bufferBeforeMinutes, policy.bufferAfterMinutes);
+      if (occupied.startsAt.getTime() !== current.occupiedFrom.getTime() || occupied.endsAt.getTime() !== current.occupiedUntil.getTime()) throw conflict('Booking buffers changed. Review a new time.');
+      const localDate = Temporal.Instant.from(current.startsAt.toISOString()).toZonedDateTimeISO(business.timezone).toPlainDate();
+      const horizon = Temporal.Now.zonedDateTimeISO(business.timezone).toPlainDate().add({ days: policy.maximumAdvanceDays });
+      if (current.startsAt.getTime() < Date.now() + policy.minimumNoticeMinutes * 60000 || Temporal.PlainDate.compare(localDate, horizon) > 0) throw conflict('The requested time is outside this business’s booking window.');
+      await assertWorkingHours(business.id, business.timezone, current.staffId, current.startsAt, occupied, tx);
+      if (await tx.timeBlock.count({ where: { businessId: business.id, staffId: current.staffId, startsAt: { lt: occupied.endsAt }, endsAt: { gt: occupied.startsAt } } })) throw conflict('This time is blocked. Choose another time.');
+      // Recheck complete Redis ownership after database locks, immediately before the write.
+      await requireHold(current.id, identity.id);
       const result = await tx.booking.updateMany({ where: { id: booking.id, customerId: identity.id, status: BookingStatus.HELD, holdExpiresAt: { gt: new Date() } }, data: { status: BookingStatus.CONFIRMED, holdExpiresAt: null } });
       if (result.count !== 1) throw conflict('This appointment hold has expired. Start again to choose a new time.');
     });
+    await releaseHold(booking.id, identity.id).catch(() => {});
     return { id: booking.id, status: BookingStatus.CONFIRMED };
   });
 

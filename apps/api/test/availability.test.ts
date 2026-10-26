@@ -160,7 +160,7 @@ test('availability repository and legacy/compatibility routes share scoped sched
       await prisma.bookingPolicy.update({ where: { businessId: a.id }, data: { bufferBeforeMinutes: 15, bufferAfterMinutes: 15 } });
       const response = (await app.inject({ url: url() })).json();
       assert.equal(response.slots.find((item: { staffId: string; localTime: string }) => item.staffId === expert.id && item.localTime === '09:00').available, false);
-      const payload = { businessId: a.id, serviceId: service.id, staffId: expert.id, startsAt: `${day}T09:00:00Z`, idempotencyKey: randomUUID() };
+      const payload = { finalConsent: true, businessId: a.id, serviceId: service.id, staffId: expert.id, startsAt: `${day}T09:00:00Z`, idempotencyKey: randomUUID() };
       assert.equal((await app.inject({ method: 'POST', url: '/v1/bookings', headers, payload })).statusCode, 409);
       const existing = await book(expert.id, '11:00');
       assert.equal((await app.inject({ method: 'POST', url: `/v1/bookings/${existing.id}/reschedule`, headers, payload: { staffId: expert.id, startsAt: `${day}T09:00:00Z` } })).statusCode, 409);

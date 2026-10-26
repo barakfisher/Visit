@@ -51,11 +51,46 @@ export async function customerContactSmoke({ browser, webUrl, apiUrl, prisma, ru
     assert.equal(await page.getByRole('button', { name: /09:00 · Alex North/ }).filter({ visible: true }).getAttribute('aria-pressed'), 'true');
     assert.equal(await prisma.booking.count({ where: { customerId: person.id } }), 0);
     await page.getByRole('button', { name: /09:00 · Alex North/ }).filter({ visible: true }).click();
+    let finalRequests = 0;
+    await page.route('**/api/bookings/commit', async route => {
+      finalRequests++;
+      const response = await route.fetch(); assert.equal(response.status(), 200);
+      await route.abort('failed'); // The worker committed; the browser never receives its response.
+    });
     await page.getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).filter({ visible: true }).click();
     await page.locator('[data-testid="booking-confirmation"]:visible').waitFor();
     const booked = await prisma.booking.findFirstOrThrow({ where: { customerId: person.id, status: 'CONFIRMED' } });
+    assert.equal(finalRequests, 1);
+    assert.equal(await prisma.booking.count({ where: { customerId: person.id, status: 'CONFIRMED' } }), 1);
     assert.equal(booked.customerName, 'Contact Customer'); assert.equal(booked.customerEmail, person.email); assert.ok(booked.customerEmailVerifiedAt);
-    console.log('PASS: required booking name/email, no hold during synthetic verification, retained choices and immutable operational snapshot.');
+    console.log('PASS: required booking name/email, no hold during synthetic verification, retained choices, lost-response recovery and immutable operational snapshot.');
+    await page.unrouteAll({ behavior: 'wait' });
+    await page.goto(`${webUrl}/booking/${businessId}?serviceId=${service.id}&date=${date}`);
+    await page.getByRole('button', { name: /10:00 · Alex North/ }).filter({ visible: true }).click();
+    assert.equal(await prisma.booking.count({ where: { customerId: person.id } }), 1);
+    let entered!: () => void, release!: () => void;
+    const ready = new Promise<void>(resolve => { entered = resolve; }), gate = new Promise<void>(resolve => { release = resolve; });
+    let committedId = '';
+    await page.route('**/api/bookings/commit', async route => {
+      const response = await route.fetch(); assert.equal(response.status(), 200); committedId = (await response.json()).id;
+      entered(); await gate; await route.fulfill({ response });
+    });
+    await page.getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).filter({ visible: true }).click();
+    await ready;
+    await page.getByRole('link', { name: 'Back to Home', exact: true }).filter({ visible: true }).click();
+    await page.waitForURL(webUrl + '/');
+    const finishedResponse = page.waitForResponse(response => response.url().endsWith('/api/bookings/commit'));
+    release(); const delivered = await finishedResponse; await delivered.finished();
+    await page.getByRole('heading', { name: 'Your time, well spent.', exact: true }).filter({ visible: true }).waitFor();
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    assert.equal(new URL(page.url()).pathname, '/');
+    await page.unrouteAll({ behavior: 'wait' });
+    await page.getByRole('button', { name: 'Book appointment', exact: true }).filter({ visible: true }).click();
+    await page.getByRole('button', { name: 'Check or retry this booking', exact: true }).filter({ visible: true }).click();
+    await page.waitForURL(url => url.pathname === `/confirmation/${committedId}`);
+    assert.equal(await prisma.booking.count({ where: { customerId: person.id, status: 'CONFIRMED' } }), 2);
+    console.log('PASS: delayed final response leaves Home focused; re-entering booking recovers the same committed attempt.');
+
   } finally {
     await context.close();
     await prisma.savedProvider.deleteMany({ where: { identityId: person.id } });

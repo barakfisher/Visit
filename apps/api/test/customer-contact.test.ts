@@ -58,7 +58,7 @@ test('tenant contact policy guards HTTP holds, direct confirmations, snapshots a
       for (const f of [phone, email, combined]) await rejected(() => prisma.booking.create({ data: { ...f.input(), customerPhone: '+972599123456', customerPhoneVerifiedAt: new Date(), customerEmail: person.email, customerEmailVerifiedAt: new Date(), customerContactCapturedAt: new Date() } }));
       await rejected(() => prisma.booking.create({ data: { ...phone.input(), status: 'HELD', holdExpiresAt: new Date(Date.now() + 60000) } }));
       const input = phone.input(); input.startsAt.setUTCSeconds(0, 0);
-      const result = await app.inject({ method: 'POST', url: '/v1/bookings', headers, payload: { businessId: phone.b.id, serviceId: input.serviceId, staffId: input.staffId, startsAt: input.startsAt.toISOString(), idempotencyKey: randomUUID(), verified: true } });
+      const result = await app.inject({ method: 'POST', url: '/v1/bookings', headers, payload: { finalConsent: true, businessId: phone.b.id, serviceId: input.serviceId, staffId: input.staffId, startsAt: input.startsAt.toISOString(), idempotencyKey: randomUUID(), verified: true } });
       assert.equal(result.statusCode, 409); assert.equal(result.json().error, 'CUSTOMER_CONTACT_REQUIRED');
       assert.equal(await prisma.booking.count({ where: { customerId: person.id } }), 0);
     });

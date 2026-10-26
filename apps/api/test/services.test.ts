@@ -57,10 +57,12 @@ test('service CRUD and booking snapshots stay scoped and preserve history on bot
       assert.equal(clear.statusCode, 200); assert.equal(clear.json().description, 'Useful details');
       assert.equal((await app.inject({ method: 'PATCH', url: `${base}/${service.id}`, headers, payload: { priceMinor: 1999, currency: 'ILS' } })).statusCode, 200);
     });
-    const held = await app.inject({ method: 'POST', url: '/v1/bookings', headers, payload: { businessId: business.id, serviceId: service.id, staffId: staff.id, startsAt: `${date}T09:00:00Z`, idempotencyKey: randomUUID() } });
+    const held = await app.inject({ method: 'POST', url: '/v1/bookings', headers, payload: { finalConsent: true, businessId: business.id, serviceId: service.id, staffId: staff.id, startsAt: `${date}T09:00:00Z`, idempotencyKey: randomUUID() } });
     assert.equal(held.statusCode, 201, held.body);
     const bookingId = held.json().id;
-    await t.test('held snapshots survive catalog name, duration, price and currency edits through confirmation', async () => {
+    await t.test('confirmed snapshots survive later catalog name, duration, price and currency edits', async () => {
+      const initialConfirmation = await app.inject({ method: 'POST', url: `/v1/bookings/${bookingId}/confirm`, headers, payload: {} });
+      assert.equal(initialConfirmation.statusCode, 200, initialConfirmation.body);
       const update = await app.inject({ method: 'PATCH', url: `${base}/${service.id}`, headers, payload: { name: 'Renamed service', durationMinutes: 60, priceMinor: 5000, currency: 'USD' } });
       assert.equal(update.statusCode, 200, update.body);
       const confirmed = await app.inject({ method: 'POST', url: `/v1/bookings/${bookingId}/confirm`, headers, payload: {} });
@@ -88,7 +90,7 @@ test('service CRUD and booking snapshots stay scoped and preserve history on bot
         // Even writes sharing a millisecond timestamp must invalidate a stale selection.
         await prisma.service.update({ where: { id: service.id }, data: { durationMinutes: 45, updatedAt: before.updatedAt } });
       };
-      const response = await app.inject({ method: 'POST', url: '/v1/bookings', headers, payload: { businessId: business.id, serviceId: service.id, staffId: staff.id, startsAt: `${date}T13:00:00Z`, idempotencyKey: randomUUID() } });
+      const response = await app.inject({ method: 'POST', url: '/v1/bookings', headers, payload: { finalConsent: true, businessId: business.id, serviceId: service.id, staffId: staff.id, startsAt: `${date}T13:00:00Z`, idempotencyKey: randomUUID() } });
       assert.equal(response.statusCode, 409, response.body);
       assert.equal(await prisma.booking.count({ where: { businessId: business.id } }), 1);
       changeBeforeBooking = undefined;

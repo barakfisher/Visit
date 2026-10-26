@@ -44,6 +44,7 @@ enum ChallengePurpose {
 }
 
 model Identity {
+  bookingAttempts BookingAttempt[]
   displayName String?
   accessEventsActed BusinessAccessEvent[] @relation("AccessActor")
   accessEventsSubject BusinessAccessEvent[] @relation("AccessSubject")
@@ -79,6 +80,7 @@ model Identity {
 }
 
 model Business {
+  bookingAttempts BookingAttempt[]
   accessEvents BusinessAccessEvent[]
   invitations BusinessInvitation[]
   ownershipReviews BusinessOwnershipReview[]
@@ -527,4 +529,20 @@ model BusinessAccessEvent {
   subject Identity @relation("AccessSubject", fields: [subjectIdentityId], references: [id], onDelete: Restrict)
   actor Identity @relation("AccessActor", fields: [actorIdentityId], references: [id], onDelete: Restrict)
   @@index([businessId, createdAt])
+}
+
+model BookingAttempt {
+  id String @id @default(cuid())
+  businessId String
+  customerId String
+  idempotencyKey String
+  fingerprint String
+  status String @default("PENDING")
+  bookingId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer Identity @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  @@unique([businessId, idempotencyKey])
+  @@index([customerId, status])
 }

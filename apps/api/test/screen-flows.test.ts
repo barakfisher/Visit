@@ -42,7 +42,7 @@ test('screen flows enforce OTP single use, tenant access, Redis holds, confirmat
     await prisma.businessWeeklyAvailability.createMany({ data: Array.from({ length: 7 }, (_, weekday) => ({ businessId: business.id, weekday, startLocal: '09:00', endLocal: '17:00' })) });
     const date = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
     const input = { providerId: business.id, serviceId: service.id, staffId: staff.id, startsAt: `${date}T09:00:00Z` };
-    const attempts = await Promise.all([1, 2].map((index) => app.inject({ method: 'POST', url: '/api/bookings/lock-slot', headers: headers(index), payload: { ...input, idempotencyKey: randomUUID() } })));
+    const attempts = await Promise.all([1, 2].map((index) => app.inject({ method: 'POST', url: '/api/bookings/lock-slot', headers: headers(index), payload: { finalConsent: true, ...input, idempotencyKey: randomUUID() } })));
     assert.deepEqual(attempts.map((response) => response.statusCode).sort(), [201, 409], JSON.stringify(attempts.map(r => ({ status: r.statusCode, error: r.statusCode >= 400 ? r.json().error : undefined }))));
     const winner = attempts.findIndex((response) => response.statusCode === 201) + 1;
     const hold = attempts[winner - 1]!.json(); bookingIds.push(hold.holdId);
@@ -60,8 +60,8 @@ test('screen flows enforce OTP single use, tenant access, Redis holds, confirmat
     const availability = await app.inject({ url: `/api/providers/${business.id}/availability?serviceId=${service.id}&date=${date}` });
     assert.equal(availability.statusCode, 200);
     assert.equal(availability.json().slots.find((slot: { localTime: string }) => slot.localTime === '10:00').available, false);
-    assert.equal((await app.inject({ method: 'POST', url: '/api/bookings/lock-slot', headers: headers(1), payload: { ...input, startsAt: `${date}T10:00:00Z`, idempotencyKey: randomUUID() } })).statusCode, 409);
-    const expiring = await app.inject({ method: 'POST', url: '/api/bookings/lock-slot', headers: headers(1), payload: { ...input, startsAt: `${date}T11:00:00Z`, idempotencyKey: randomUUID() } });
+    assert.equal((await app.inject({ method: 'POST', url: '/api/bookings/lock-slot', headers: headers(1), payload: { finalConsent: true, ...input, startsAt: `${date}T10:00:00Z`, idempotencyKey: randomUUID() } })).statusCode, 409);
+    const expiring = await app.inject({ method: 'POST', url: '/api/bookings/lock-slot', headers: headers(1), payload: { finalConsent: true, ...input, startsAt: `${date}T11:00:00Z`, idempotencyKey: randomUUID() } });
     assert.equal(expiring.statusCode, 201, expiring.body); const expiredId = expiring.json().holdId; bookingIds.push(expiredId);
     await redis.del(`visit:hold:${expiredId}`);
     assert.equal((await app.inject({ method: 'POST', url: '/api/bookings/confirm', headers: headers(1), payload: { holdId: expiredId } })).statusCode, 409);
