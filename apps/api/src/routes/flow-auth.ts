@@ -13,7 +13,7 @@ import { phoneSchema as phone, otpService, type createOtpService } from '../secu
 const phoneKey = (value: string) => createHash('sha256').update(value).digest('hex');
 export async function authProfile(identityId: string) {
   const identity = await prisma.identity.findUniqueOrThrow({ where: { id: identityId }, select: { id: true, email: true, phone: true, preferredLocale: true, memberships: { where: { status: 'ACTIVE', role: { in: ['OWNER', 'MANAGER'] }, business: { approvalStatus: 'APPROVED' } }, select: { business: { select: { id: true, name: true, timezone: true } } } } } });
-  return { id: identity.id, email: identity.email, phone: identity.phone, preferredLocale: identity.preferredLocale, is_provider: identity.memberships.length > 0, businesses: identity.memberships.map((membership) => membership.business) };
+  return { id: identity.id, email: identity.email, phone: identity.phone, preferredLocale: identity.preferredLocale, is_provider: identity.memberships.length > 0, businesses: [...new Map(identity.memberships.map(membership => [membership.business.id, membership.business])).values()] };
 }
 export async function registerFlowAuth(app: FastifyInstance, { otp = otpService, google = googleAuthService }: { otp?: ReturnType<typeof createOtpService>; google?: typeof googleAuthService } = {}) {
   app.put('/api/account/preferences', async (request) => {

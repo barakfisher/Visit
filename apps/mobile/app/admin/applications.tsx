@@ -1,3 +1,4 @@
+import { accessEn, accessHe } from '@/src/i18n/accessMessages';
 import { useRef, useState } from 'react';
 import { Link } from 'expo-router';
 import { ScrollView, View } from 'react-native';
@@ -10,7 +11,7 @@ import { useAppLocale } from '@/src/i18n/LocaleContext';
 import { apiRequest, ApiError } from '@/src/lib/api';
 type Item = { id: string; kind: string; message: string | null; identity: { id: string; email: string | null; phone: string | null }; business: { name: string; slug: string; timezone: string } };
 export default function AdminApplications() {
-  const { t } = useAppLocale();
+  const { t, locale } = useAppLocale();
   const queue = useQuery({ queryKey: ['admin', 'provider-applications'], queryFn: () => apiRequest<{ applications: Item[] }>('/v1/admin/provider-applications'), retry: false });
   const [reason, setReason] = useState<Record<string, string>>({}), [busy, setBusy] = useState(false), [feedback, setFeedback] = useState('');
   const running = useRef(false);
@@ -31,6 +32,7 @@ export default function AdminApplications() {
     </View>)}
     {feedback ? <AppText accessibilityRole="alert">{feedback}</AppText> : null}
     <ActionButton secondary label={t('review.refresh')} disabled={busy} onPress={() => void queue.refetch()} />
+    <Link href="/admin/ownership" className="min-h-touch py-3 font-semibold text-brand">{(locale === 'he' ? accessHe : accessEn).cases}</Link>
     <Link href="/account" className="min-h-touch py-3 font-semibold text-brand">{t('nav.account')}</Link>
   </ScreenContent></ScrollView>;
 }

@@ -70,3 +70,8 @@ Milestones are undated scope groups, not commitments to capacity/dates. Explicit
 ## Current implementation evidence
 Sixteen foundation issues remain Done; VIS-2 stays In Review for actual native evidence. The new/revised issues remain Todo/Backlog; none is marked Done by this planning revision. Existing commits through eb5cf4b and their test evidence remain historical foundation coverage. This scope change runs no app tests and implements no runtime UI or database migration. Actual migration/testing work belongs to the open issues above.
 
+
+
+### Existing business team access (VIS-33)
+
+Business setup offers Team access, distinct from the public booking share link. Owner/Manager issues a role-limited invitation bound to a verified recipient. Recipient signs in, reopens the original link if needed, reviews business/role and explicitly accepts. No separate identity or business application is created. Staff does not gain management mode. Ownership claims use recorded administrator verification and never a public Owner invitation. See business-access.md for transaction and evidence rules.

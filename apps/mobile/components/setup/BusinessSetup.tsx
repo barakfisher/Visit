@@ -1,3 +1,4 @@
+import { accessEn, accessHe } from '@/src/i18n/accessMessages';
 import { useState } from 'react';
 import { Link } from 'expo-router';
 import { ScrollView, View } from 'react-native';
@@ -28,7 +29,7 @@ export function BusinessSetup({ businessId }: { businessId: string }) {
   return <SetupContent business={business.data.business} />;
 }
 function SetupContent({ business }: { business: BusinessProfile }) {
-  const { t } = useAppLocale();
+  const { t, locale } = useAppLocale();
   const [section, setSection] = useState<(typeof sections)[number]>('profile');
   const readiness = useQuery({ queryKey: ['provider', business.id, 'publication'], queryFn: () => apiRequest<{ blockers: Record<string, string>; ready: boolean; publishedAt: string | null }>(`/v1/provider/businesses/${business.id}/publication`) });
   function complete(key: (typeof sections)[number]) {
@@ -44,6 +45,7 @@ function SetupContent({ business }: { business: BusinessProfile }) {
       <AppText accessibilityRole="header" className="text-xl font-semibold text-ink">{t(`setup.${section}`)}</AppText>
       {section === 'profile' ? <BusinessProfileForm key={business.id} business={business} /> : section === 'services' ? <ServiceCatalog businessId={business.id} /> : section === 'staff' ? <StaffEditor businessId={business.id} /> : section === 'hours' ? <AvailabilityEditor businessId={business.id} /> : section === 'policy' ? <PolicyEditor businessId={business.id} /> : <ProviderSharing businessId={business.id} />}
     </View>
+    <Link href={{ pathname: "/provider/team/[businessId]", params: { businessId: business.id } }} className="min-h-touch py-3 font-semibold text-brand">{(locale === 'he' ? accessHe : accessEn).title}</Link>
     <PublicationPanel businessId={business.id} />
     <Link href={{ pathname: '/provider/dashboard', params: { businessId: business.id } }} className="min-h-touch py-3 font-semibold text-brand">{t('setup.backAgenda')}</Link>
   </ScrollView>;

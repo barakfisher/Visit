@@ -44,6 +44,14 @@ enum ChallengePurpose {
 }
 
 model Identity {
+  accessEventsActed BusinessAccessEvent[] @relation("AccessActor")
+  accessEventsSubject BusinessAccessEvent[] @relation("AccessSubject")
+  invitationsRevoked BusinessInvitation[] @relation("InvitationRevoker")
+  createdBusinessInvitations BusinessInvitation[] @relation("InvitationCreator")
+  acceptedBusinessInvitations BusinessInvitation[] @relation("InvitationRecipient")
+  ownershipClaims BusinessOwnershipReview[] @relation("OwnershipClaimant")
+  ownershipCasesCreated BusinessOwnershipReview[] @relation("OwnershipCaseCreator")
+  ownershipCasesReviewed BusinessOwnershipReview[] @relation("OwnershipCaseReviewer")
   savedProviders SavedProvider[]
   securityVersion Int @default(0)
   contactChallenges AccountContactChallenge[]
@@ -70,6 +78,9 @@ model Identity {
 }
 
 model Business {
+  accessEvents BusinessAccessEvent[]
+  invitations BusinessInvitation[]
+  ownershipReviews BusinessOwnershipReview[]
   deletedAt DateTime?
   savedBy SavedProvider[]
   publishedAt DateTime?
@@ -100,6 +111,8 @@ model Business {
 }
 
 model Membership {
+  accessEvents BusinessAccessEvent[]
+  createdInvitations BusinessInvitation[]
   id         String           @id @default(cuid())
   identityId String
   businessId String
@@ -110,6 +123,7 @@ model Membership {
   business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@unique([identityId, businessId, role])
+  @@unique([businessId, id, identityId])
   @@index([businessId, status, role])
 }
 
@@ -440,4 +454,67 @@ model SavedProvider {
   business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
   @@unique([identityId, businessId])
   @@index([identityId, savedAt, id])
+}
+
+model BusinessInvitation {
+  revokedByIdentityId String?
+  revokedBy Identity? @relation("InvitationRevoker", fields: [revokedByIdentityId], references: [id], onDelete: Restrict)
+  id String @id @default(cuid())
+  businessId String
+  inviterIdentityId String
+  inviterMembershipId String
+  inviterRole MembershipRole
+  role MembershipRole
+  recipientChannel String
+  recipientDigest String
+  recipientHint String
+  tokenHash String @unique
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  expiresAt DateTime @db.Timestamptz(3)
+  revokedAt DateTime? @db.Timestamptz(3)
+  acceptedAt DateTime? @db.Timestamptz(3)
+  acceptedByIdentityId String?
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  inviter Identity @relation("InvitationCreator", fields: [inviterIdentityId], references: [id], onDelete: Restrict)
+  inviterMembership Membership @relation(fields: [businessId, inviterMembershipId, inviterIdentityId], references: [businessId, id, identityId], onDelete: Restrict, onUpdate: Restrict)
+  acceptedBy Identity? @relation("InvitationRecipient", fields: [acceptedByIdentityId], references: [id], onDelete: Restrict)
+  @@index([businessId, createdAt])
+}
+
+model BusinessOwnershipReview {
+  id String @id @default(cuid())
+  businessId String
+  claimantIdentityId String
+  claimantSecurityVersion Int
+  createdByIdentityId String
+  reviewedByIdentityId String?
+  caseReference String @unique
+  evidenceKind String
+  evidenceSummary String
+  status String @default("PENDING")
+  reason String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  reviewedAt DateTime? @db.Timestamptz(3)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  claimant Identity @relation("OwnershipClaimant", fields: [claimantIdentityId], references: [id], onDelete: Restrict)
+  createdBy Identity @relation("OwnershipCaseCreator", fields: [createdByIdentityId], references: [id], onDelete: Restrict)
+  reviewedBy Identity? @relation("OwnershipCaseReviewer", fields: [reviewedByIdentityId], references: [id], onDelete: Restrict)
+  @@index([status, createdAt])
+}
+
+model BusinessAccessEvent {
+  id String @id @default(cuid())
+  businessId String
+  membershipId String
+  subjectIdentityId String
+  actorIdentityId String
+  role MembershipRole
+  action String
+  referenceId String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  membership Membership @relation(fields: [businessId, membershipId, subjectIdentityId], references: [businessId, id, identityId], onDelete: Restrict, onUpdate: Restrict)
+  subject Identity @relation("AccessSubject", fields: [subjectIdentityId], references: [id], onDelete: Restrict)
+  actor Identity @relation("AccessActor", fields: [actorIdentityId], references: [id], onDelete: Restrict)
+  @@index([businessId, createdAt])
 }
