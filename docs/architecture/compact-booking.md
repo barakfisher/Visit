@@ -23,3 +23,9 @@ Validated on 2026-10-26: **208 API, 51 foundation and 60 Storybook tests pass**,
 - Independent QA added edge-case unit coverage and found no confirmed production defect; Security reviewed tenant/auth/input/response/async/consent boundaries with no concrete introduced vulnerability. Their reviews did not claim device or live-delivery evidence.
 
 Independent QA: fresh `/root/vis24_qa` session added seven edge-case tests, including December 9999, and verified mobile typecheck/lint and 51 foundation tests. Security: fresh `/root/vis24_security` session reviewed the full implementation and final delta statically; no concrete introduced vulnerabilities or outstanding action items were found. Neither audit represented a native or live-provider run.
+
+## Commit and hosted check evidence
+
+Implementation: `f66da2d1ff845f014da13266bcd8ade996ae94c3`. PR: https://github.com/barakfisher/Visit/pull/12.
+
+GitHub Actions run `40374623965`, job `121754179248` on the implementation commit completed with failure and **zero steps**. Its annotation states that recent account payments failed or the spending limit must be increased. This is an account billing gate; hosted CI is not claimed to pass. Local checks above and independent audits are the available execution evidence. No billing change or bypass was performed.
