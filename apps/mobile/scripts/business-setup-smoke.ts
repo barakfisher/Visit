@@ -48,11 +48,11 @@ export async function configureBusinessSmoke({ page, context, webUrl, apiUrl, bu
   const closedDate = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
   await staff.getByRole('textbox', { name: 'Exception date 1 (YYYY-MM-DD)', exact: true }).fill(closedDate);
   const staffHours = page.waitForResponse(r => r.url() === `${base}/staff/${staffId}/availability-rules` && r.request().method() === 'PUT');
-  await staff.getByRole('button', { name: 'Save working hours', exact: true }).click(); assert.equal((await staffHours).status(), 200);
+  await staff.getByRole('button', { name: 'Save working hours', exact: true }).click(); await staff.getByRole('button', { name: 'Confirm schedule change', exact: true }).click(); assert.equal((await staffHours).status(), 200);
   await page.getByTestId('setup-section-hours').click();
   for (const day of ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']) await page.getByRole('button', { name: `Add hours: ${day}`, exact: true }).click();
   const hoursSaved = page.waitForResponse(r => r.url() === `${base}/availability-rules` && r.request().method() === 'PUT');
-  await page.getByRole('button', { name: 'Save working hours', exact: true }).click(); assert.equal((await hoursSaved).status(), 200);
+  await page.getByRole('button', { name: 'Save working hours', exact: true }).click(); await page.getByRole('button', { name: 'Confirm schedule change', exact: true }).click(); assert.equal((await hoursSaved).status(), 200);
   await page.getByTestId('setup-section-policy').click();
   await page.getByRole('textbox', { name: 'Minimum notice (minutes)', exact: true }).fill('0');
   await page.getByRole('textbox', { name: 'Maximum advance (days)', exact: true }).fill('30');

@@ -99,7 +99,7 @@ test('schedule repositories validate consistently and changes preserve existing 
       await Promise.all([saveStaffAvailability(context, staff.id, rules()), saveStaffAvailability(context, staff.id, rules('11:00', '16:00'))]);
       assert.equal(await prisma.staffWeeklyAvailability.count({ where: { businessId: business.id, staffId: staff.id } }), 1);
     });
-    await t.test('closing a day removes availability but preserves confirmed and held booking snapshots', async () => {
+    await t.test('closing a day with active allocations is rejected and preserves schedule and snapshots', async () => {
       await saveBusinessPolicy(context, { ...DEFAULT_BOOKING_POLICY, minimumNoticeMinutes: 0 });
       await saveBusinessAvailability(context, { weekly: [], overrides: [{ date, isOpen: true, startLocal: '09:00', endLocal: '17:00' }] });
       await saveStaffAvailability(context, staff.id, { weekly: [], overrides: [] });
@@ -108,9 +108,9 @@ test('schedule repositories validate consistently and changes preserve existing 
       assert.equal(before.statusCode, 200); assert.ok(before.json().slots.length > 0);
       const create = (hour: string, status: 'CONFIRMED' | 'HELD') => prisma.booking.create({ data: { businessId: business.id, customerId: identity.id, staffId: staff.id, serviceId: service.id, idempotencyKey: randomUUID(), startsAt: new Date(`${date}T${hour}:00:00Z`), endsAt: new Date(`${date}T${hour}:30:00Z`), occupiedFrom: new Date(`${date}T${hour}:00:00Z`), occupiedUntil: new Date(`${date}T${hour}:30:00Z`), status, ...(status === 'HELD' ? { holdExpiresAt: new Date(Date.now() + 60000) } : {}) } });
       const records = await Promise.all([create('09', 'CONFIRMED'), create('10', 'HELD')]);
-      await saveBusinessAvailability(context, { weekly: rules().weekly, overrides: [{ date, isOpen: false }] });
+      await assert.rejects(saveBusinessAvailability(context, { weekly: rules().weekly, overrides: [{ date, isOpen: false }] }), error => error instanceof AppError && error.code === 'SCHEDULE_CONFLICT');
       const after = await app.inject({ method: 'GET', url: `/v1/businesses/${business.id}/availability?serviceId=${service.id}&date=${date}` });
-      assert.deepEqual(after.json().slots, []);
+      assert.ok(after.json().slots.length > 0);
       for (const record of records) assert.deepEqual(await prisma.booking.findUniqueOrThrow({ where: { id: record.id } }), record);
     });
   } finally {

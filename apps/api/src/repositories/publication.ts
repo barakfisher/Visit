@@ -66,6 +66,9 @@ export async function withBusinessConfiguration<T>(context: AuthorizedBusinessCo
   const result = await prisma.$transaction(async tx => {
     await lockBusinessConfiguration(tx, context);
     const value = await work(tx);
+    // Serializable booking readers waiting on this lock must retry with the new
+    // hours/blocks instead of continuing on a snapshot taken before the edit.
+    await tx.business.update({ where: { id: context.businessId }, data: { updatedAt: new Date() } });
     const current = await tx.business.findUniqueOrThrow({ where: { id: context.businessId }, select: { publishedAt: true } });
     let expired: { id: string; customerId: string }[] = [];
     if (current.publishedAt && Object.keys((await publicationReadiness(tx, context.businessId)).blockers).some(field => !['profile', 'timezone'].includes(field))) {

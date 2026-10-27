@@ -20,6 +20,7 @@
     "test/customer-contact-readiness.test.ts",
     "test/support/**/*.ts",
     "scripts/tenant-fixtures.mts",
-    "test/upcoming-appointments.test.ts"
+    "test/upcoming-appointments.test.ts",
+    "test/provider-agenda.test.ts"
   ]
 }

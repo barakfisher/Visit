@@ -27,7 +27,7 @@ export function useAppointmentLifecycle(booking: LifecycleAppointment, timezone:
     const scope = { identityId, contextVersion, activeBusinessId: useAuthStore.getState().activeBusinessId };
     operation.current = true; setBusy(true); setError('');
     try {
-      if (status === 'CANCELLED' && !await confirmAppointmentCancellation()) return;
+      if (status === 'CANCELLED' && !await confirmAppointmentCancellation({ title: t('upcoming.cancelTitle'), message: t('upcoming.cancelMessage'), keep: t('upcoming.keep'), cancel: t('details.cancel') })) return;
       if (!canContinueAppointmentAction(scope, useAuthStore.getState(), mounted.current, businessId)) return;
       await updateAppointmentOutcome(booking, businessId, status);
       if (!canContinueAppointmentAction(scope, useAuthStore.getState(), mounted.current, businessId)) return;

@@ -1,0 +1,3 @@
+import type { ScheduleDraft, ScheduleProposal, ScheduleRules } from '../types/ScheduleEditor.types';
+export function scheduleDraft(rules?: ScheduleRules): ScheduleDraft { return { weekly: Array.from({ length: 7 }, (_, day) => rules?.weekly.filter(row => row.weekday === day).map(({ startLocal, endLocal }) => ({ startLocal, endLocal })) ?? []), overrides: rules?.overrides.map(row => ({ ...row, date: row.date.slice(0, 10) })) ?? [] }; }
+export function scheduleProposal(draft: ScheduleDraft): ScheduleProposal { return { weekly: draft.weekly.map((intervals, weekday) => ({ weekday, intervals })), overrides: draft.overrides.map(row => ({ date: row.date, isOpen: row.isOpen, ...(row.isOpen ? { startLocal: row.startLocal, endLocal: row.endLocal } : {}) })) }; }
