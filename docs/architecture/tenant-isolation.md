@@ -31,6 +31,7 @@ VIS-4 implementation contract and audit, 2026-10-24. Business IDs are selectors.
 | BookingPolicy | Business-owned | Unique businessId; provider policy writes require current OWNER/MANAGER membership. |
 | Booking | Business-owned | Business FK and composite staff/service references; global customer identity reference is intentional. Customer sees only own records across businesses. |
 | BookingEvent | Business-owned | Composite booking/business FK; trigger-generated append-only lifecycle audit, owned customer or current owner/manager reads; actor IDs/contacts omitted from public projections. Privileged parent Booking purge is the explicit retention exception; no deletion API. |
+| BookingNotification | Business-owned | Composite booking/event/business FK; one immutable committed confirmation intent per booking/event, written atomically by trigger. Owned minimal details report record status without contacts or delivery claims. Privileged parent purge cascades; no mutation API. |
 | TimeBlock | Business-owned | Business FK and composite staff reference; agenda/delete/create predicates include businessId. |
 | _prisma_migrations | Global infrastructure metadata | Migration/readiness checks only; never exposed as application/customer data. |
 

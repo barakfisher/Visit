@@ -1,3 +1,4 @@
+import { readBookingDetails, readBookingCalendar } from '../repositories/BookingDetails.service.js';
 import { changeBookingOutcome, readBookingHistory, setBookingAudit } from '../repositories/BookingLifecycle.service.js';
 import { reviewedServiceSchema } from '../scheduling/booking-consent.utils.js';
 import type { Prisma, Booking } from '../generated/prisma/client.js';
@@ -268,6 +269,16 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
   app.get('/v1/provider/businesses/:businessId/bookings/:bookingId/history', async request => {
     const { businessId, bookingId } = z.object({ businessId: z.string().min(1), bookingId: z.string().min(1) }).parse(request.params);
     return readBookingHistory(await authenticate(request), bookingId, businessId);
+  });
+
+  app.get('/v1/bookings/:bookingId/details', async request => {
+    const { bookingId } = z.object({ bookingId: z.string().min(1).max(256) }).parse(request.params);
+    return readBookingDetails(await authenticate(request), bookingId);
+  });
+  app.get('/v1/bookings/:bookingId/calendar', async request => {
+    const { bookingId } = z.object({ bookingId: z.string().min(1).max(256) }).parse(request.params);
+    const { revision } = z.strictObject({ revision: z.string().regex(/^(0|[1-9]\d*)$/).transform(Number).pipe(z.number().int().nonnegative()) }).parse(request.query);
+    return readBookingCalendar(await authenticate(request), bookingId, revision);
   });
 
   app.get('/v1/me/bookings', async (request) => {

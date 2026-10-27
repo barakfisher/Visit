@@ -44,6 +44,7 @@ export function safeAuthReturnTo(value) {
       return `${pathname}${url.search}`;
     } catch { return undefined; }
   }
+  if ((/^\/(?:confirmation|appointment)\/[A-Za-z0-9_-]{1,128}$/.test(pathname) || pathname === '/appointments') && value === pathname) return pathname;
   if (!/^\/booking\/[A-Za-z0-9_-]{1,128}$/.test(pathname)) return undefined;
   try {
     const url = new URL(value, 'https://visit.invalid');

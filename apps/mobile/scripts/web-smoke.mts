@@ -100,6 +100,8 @@ try {
   try {
     const { appointmentLifecycleSmoke } = await import('./appointment-lifecycle-smoke.js');
     await appointmentLifecycleSmoke({ browser, webUrl, apiUrl, prisma, run, businessIds, identityIds });
+    const { bookingSuccessSmoke } = await import('./booking-success-smoke.js');
+    await bookingSuccessSmoke({ browser, webUrl, apiUrl, prisma, run, businessIds, identityIds });
     const { compactBookingSmoke } = await import('./compact-booking-smoke.js');
     await compactBookingSmoke({ browser, webUrl, prisma, run, businessIds });
     const { customerContactSmoke } = await import('./customer-contact-smoke.js');
@@ -470,7 +472,11 @@ try {
     assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: foldHold.id } })).startsAt.toISOString(), expectedInstant);
     await providerPage.locator('[data-testid="booking-confirmation"]:visible').getByText(/01:30.*second occurrence/).waitFor();
     assert.equal(await providerPage.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone), 'America/Los_Angeles');
-    if (zone === 'Asia/Jerusalem') await providerPage.getByText(/Synthetic DST studio · Times are in local Israeli time/).waitFor();
+    if (zone === 'Asia/Jerusalem') {
+      const confirmation = providerPage.getByTestId('booking-confirmation');
+      await confirmation.getByText('Synthetic DST studio · Fold specialist', { exact: true }).waitFor();
+      await confirmation.getByText(/Times are in local Israeli time/).waitFor();
+    }
     console.log(`PASS: ${zone} fold labels and confirmation preserve the second exact instant on a traveling device.`);
     }
 

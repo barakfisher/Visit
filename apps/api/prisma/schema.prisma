@@ -551,6 +551,7 @@ model BookingAttempt {
 }
 
 model BookingEvent {
+  notifications BookingNotification[]
   id String @id @default(dbgenerated("gen_random_uuid()::text"))
   businessId String
   bookingId String
@@ -570,5 +571,17 @@ model BookingEvent {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   booking Booking @relation(fields: [businessId, bookingId], references: [businessId, id], onDelete: Cascade, onUpdate: Restrict)
   @@unique([businessId, bookingId, revision])
+  @@unique([businessId, bookingId, id])
   @@index([businessId, bookingId, createdAt])
+}
+
+model BookingNotification {
+  id String @id @default(dbgenerated("gen_random_uuid()::text"))
+  businessId String
+  bookingId String
+  eventId String @unique
+  kind String @default("BOOKING_CONFIRMED")
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  event BookingEvent @relation(fields: [businessId, bookingId, eventId], references: [businessId, bookingId, id], onDelete: Cascade, onUpdate: Restrict)
+  @@unique([businessId, bookingId])
 }
