@@ -13,6 +13,9 @@ export function NavigationView({ t, direction, trigger, open, providerMode, load
     </View>
     {open ? <Modal transparent visible animationType="none" accessibilityLabel={t('nav.menu')} onRequestClose={close} onDismiss={() => { if (Platform.OS === 'web') trigger.current?.focus(); }}>
       <View style={[styles.overlay, { direction }]}>
+        {/* Tap-outside dismissal. A responder View, not a Pressable: React Native Web gives every Pressable a tabindex,
+            which would pull the backdrop into the modal focus trap ahead of the drawer controls. */}
+        <View testID="menu-backdrop" accessible={false} importantForAccessibility="no" onStartShouldSetResponder={() => true} onResponderRelease={close} style={styles.backdrop} />
         <SafeAreaView testID="menu-panel" edges={['top', 'bottom']} style={[styles.panel, { direction }]}>
           <ScrollView contentContainerStyle={styles.content}>
             <AppText accessibilityRole="header" className="text-xl font-bold text-ink">{t('nav.menu')}</AppText>

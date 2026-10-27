@@ -39,6 +39,12 @@ export const Customer: Story = { play: async ({ canvas, canvasElement }) => {
   await expect(body.getByTestId('menu-panel')).toBeVisible();
   await expect(body.getByRole('button', { name: /יציאה/ })).toBeVisible();
   await userEvent.keyboard('{Escape}'); await expect(trigger).toHaveFocus();
+  await userEvent.click(trigger);
+  const backdrop = body.getByTestId('menu-backdrop');
+  await expect(backdrop).not.toHaveAttribute('tabindex');
+  await userEvent.click(backdrop);
+  await expect(body.queryByTestId('menu-panel')).toBeNull();
+  await expect(trigger).toHaveFocus();
 } };
 export const Pending: Story = { args: { applicationStatus: true, becomeProvider: false } };
 export const Approved: Story = { args: { becomeProvider: false, applicationStatus: true, managed: [0, 1].map(i => ({ role: 'OWNER', status: 'ACTIVE', business: { id: `synthetic-${i}`, name: `המרכז המקצועי לייעוץ ושירותים ${i}`, approvalStatus: 'APPROVED' } })) } };

@@ -4,9 +4,9 @@ Scope: compact advisory booking, Home/My Providers, upcoming appointment and con
 
 ## Implementation
 
-Navigation now exposes a typed pure view and separate orchestration hook. Production membership/profile/session checks are preserved. Drawer dismissal uses Close/Escape; the invisible backdrop no longer participates in React Native Web's programmatic focus trap. Booking review and final action are typed pure components reused by the production booking screen.
+Navigation now exposes a typed pure view and separate orchestration hook. Production membership/profile/session checks are preserved. Drawer dismissal uses Close, Escape or a tap outside the panel. The tap-outside backdrop is non-focusable, so it stays out of React Native Web's programmatic focus trap; the isolated runner checks Tab/Shift+Tab containment and a real pointer dismissal with focus return. Booking review and final action are typed pure components reused by the production booking screen.
 
-Independent 320px checks found calendar targets only 34px wide. A horizontally scrollable 336px grid preserves 44px day targets; the sheet scrolls vertically at constrained heights and zoom. Keyboard selection returns focus to its trigger. Safe-area-context is excluded from Vite dependency prebundling so its real web implementation resolves instead of native Flow sources.
+Independent 320px checks found calendar targets only 34px wide. The day grid fills the sheet with a minimum of seven 44px targets (`tokens.layout.minTouchTarget`) and scrolls horizontally only below that, so the full week is visible from 375px phones upward (asserted by the isolated runner) while 320px and 200% zoom keep reachable 44px targets; the sheet scrolls vertically at constrained heights and zoom. Keyboard selection returns focus to its trigger. Safe-area-context is excluded from Vite dependency prebundling so its real web implementation resolves instead of native Flow sources.
 
 ## Acceptance matrix
 
@@ -40,4 +40,4 @@ Fresh test-only QA added six tests including 240 capability combinations, undefi
 
 52 layout cases cover 320/390/1280px and 640px at CSS zoom 2. Computed rendered text contrast must be at least 4.5:1 for these opaque RGB fixtures; this scanner is not a general alpha-compositing auditor. Axe checks and accessible labels/selection semantics are browser evidence. Physical VoiceOver/TalkBack/touch and live-provider acceptance remain VIS-2 → VIS-43 → VIS-25. No deployment or live delivery is performed.
 
-Hosted CI must be inspected at the actual final head. A billing/spending failure before startup with zero steps is not passing CI. Existing authorization permits normal merge for that verified blocker only; no admin/force bypass or billing change.
+Hosted CI must be inspected at the actual final head. A billing/spending failure before startup with zero steps is not passing CI. Merging is decided by the repository owner per change; no admin/force bypass or billing change.

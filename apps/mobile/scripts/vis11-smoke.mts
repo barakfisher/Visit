@@ -21,6 +21,9 @@ await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 const address = server.address();
 if (!address || typeof address === 'string') throw new Error('Missing server address');
 const origin = `http://127.0.0.1:${address.port}`;
+const FOCUS_RETURN_TIMEOUT_MS = 2000;
+// Standard phone width at which all seven calendar days must fit without horizontal scrolling.
+const FULL_WEEK_MIN_VIEWPORT = 375;
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
 const source = { commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: path.resolve(root, '../../..'), encoding: 'utf8' }).trim(), dirty: !!execFileSync('git', ['status', '--porcelain', '--', '.', ':!.ai'], { cwd: path.resolve(root, '../../..'), encoding: 'utf8' }).trim() };
 const checks: { locale: string; width: number; zoom: number; screenshot: string }[] = [];
@@ -55,6 +58,12 @@ try {
       await buttons.first().focus(); await page.keyboard.press('Shift+Tab');
       await page.waitForFunction(() => document.querySelector('[data-testid="menu-panel"]')?.contains(document.activeElement));
       assert.equal(await panel.evaluate(node => node.contains(document.activeElement)), true, `${story}: reverse focus escaped drawer`);
+      const panelBox = await panel.boundingBox();
+      assert.ok(panelBox, `${story}: drawer panel not rendered`);
+      // A real pointer tap beside the drawer (left or right depending on direction) must dismiss it.
+      await page.mouse.click(panelBox.x > 0 ? 1 : width / zoom - 1, panelBox.y + panelBox.height / 2);
+      await panel.waitFor({ state: 'detached' });
+      await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label')?.match(/Open menu|פתיחת תפריט/), undefined, { timeout: FOCUS_RETURN_TIMEOUT_MS });
     }
     if (story.includes('interactive-calendar')) {
       await page.waitForFunction(() => document.querySelector('[data-testid="booking-date-trigger"]')?.getAttribute('aria-label')?.includes('2026-10-29') && !document.querySelector('[data-testid="booking-day-2026-10-29"]'));
@@ -63,8 +72,19 @@ try {
       await day.waitFor(); await day.focus();
       const box = await day.boundingBox();
       assert.ok(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= width && box.y + box.height <= 1000, `${story}: keyboard-focused date is clipped`);
+      if (zoom === 1) {
+        await page.setViewportSize({ width: Math.max(width, FULL_WEEK_MIN_VIEWPORT), height: 1000 });
+        await page.waitForFunction(() => {
+          let scroller = document.querySelector('[data-testid="booking-day-2026-10-29"]')?.parentElement ?? null;
+          while (scroller && !['auto', 'scroll'].includes(getComputedStyle(scroller).overflowX)) scroller = scroller.parentElement;
+          return scroller !== null && scroller.scrollWidth - scroller.clientWidth <= 1;
+        }, undefined, { timeout: FOCUS_RETURN_TIMEOUT_MS }).catch(() => assert.fail(`${story}/${Math.max(width, FULL_WEEK_MIN_VIEWPORT)}: calendar week needs horizontal scrolling`));
+        await page.setViewportSize({ width, height: 1000 });
+        await day.focus();
+      }
       await page.keyboard.press('Escape');
-      assert.equal(await page.getByTestId('booking-date-trigger').evaluate(node => node === document.activeElement), true);
+      // React Native Web restores modal focus when the sheet unmounts, a render after Escape hides it.
+      await page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'booking-date-trigger', undefined, { timeout: FOCUS_RETURN_TIMEOUT_MS });
       await page.getByTestId('booking-date-trigger').click(); await day.focus();
     }
     const contrast = await page.evaluate(() => {

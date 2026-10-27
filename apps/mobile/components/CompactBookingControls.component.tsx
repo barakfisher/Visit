@@ -1,10 +1,13 @@
-import { compactBookingStyles as styles } from './CompactBookingControls.styles';
+import { useState } from 'react';
+import { CALENDAR_MIN_WIDTH, compactBookingStyles as styles } from './CompactBookingControls.styles';
 import { ActivityIndicator, Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { AppText } from './AppText';
 import { ActionButton } from './ActionButton';
 import { TimeChips } from './TimeChips';
 import type { CompactBookingControlsProps } from './CompactBookingControls.types';
 export function CompactBookingControls({ controls: c, t, disabled, date, selectedId, slotLoading, slotError, onRetrySlots, onSelectSlot }: CompactBookingControlsProps) {
+  // Sheet width measured at layout; the grid takes it, or scrolls horizontally below the minimum touch-target width.
+  const [sheetWidth, setSheetWidth] = useState(0);
   return <View className="gap-5">
     <View className="gap-2"><AppText className="text-sm font-semibold text-body">{t('compact.service')}</AppText>
       <Pressable accessibilityRole="button" accessibilityLabel={`${t('compact.chooseService')} · ${c.chosen?.label ?? t(c.choices.length ? 'compact.chooseService' : 'compact.noServices')} ⌄`} accessibilityState={{ expanded: c.sheet === 'service', disabled: disabled || !c.choices.length }} disabled={disabled || !c.choices.length} onPress={() => c.open('service')} className="min-h-14 flex-row items-center justify-between gap-3 rounded-control border border-line bg-surface px-4 py-3"><AppText className="flex-1 font-semibold text-ink">{c.chosen?.label ?? t(c.choices.length ? 'compact.chooseService' : 'compact.noServices')}</AppText><AppText>⌄</AppText></Pressable>
@@ -31,10 +34,10 @@ export function CompactBookingControls({ controls: c, t, disabled, date, selecte
           {c.sheet === 'service' ? <ScrollView contentContainerStyle={styles.choices}>{c.choices.map(choice => <Pressable key={choice.id} accessibilityRole="button" accessibilityState={{ selected: choice.selected }} aria-pressed={choice.selected} onPress={() => c.selectService(choice.id)} className={`min-h-14 gap-1 rounded-control border px-4 py-3 ${choice.selected ? 'border-brand bg-brand-soft' : 'border-line'}`}><AppText className="font-semibold text-ink">{choice.label}</AppText><AppText className="text-sm text-body">{choice.summary}</AppText></Pressable>)}</ScrollView> : <>
             <View className="flex-row items-center gap-2"><View className="flex-1"><ActionButton secondary label={t('compact.previousMonth')} disabled={c.calendarLoading || !c.canPreviousMonth} onPress={c.previousMonth} /></View><AppText testID="booking-calendar-month" accessibilityLabel={c.month} className="flex-1 text-center font-semibold text-ink">{c.monthTitle}</AppText><View className="flex-1"><ActionButton secondary label={t('compact.nextMonth')} disabled={c.calendarLoading || !c.canNextMonth} onPress={c.nextMonth} /></View></View>
             {c.calendarLoading ? <ActivityIndicator accessibilityLabel={t('compact.loadingCalendar')} /> : null}
-            {c.calendarError ? <View className="gap-2"><AppText accessibilityRole="alert" className="text-danger">{t('compact.calendarFailed')}</AppText><ActionButton secondary label={t('common.retry')} onPress={c.retryCalendar} /></View> : <ScrollView horizontal accessibilityLabel={c.monthTitle}><View style={styles.calendar}>
+            {c.calendarError ? <View className="gap-2"><AppText accessibilityRole="alert" className="text-danger">{t('compact.calendarFailed')}</AppText><ActionButton secondary label={t('common.retry')} onPress={c.retryCalendar} /></View> : <View onLayout={event => setSheetWidth(event.nativeEvent.layout.width)}><ScrollView horizontal accessibilityLabel={c.monthTitle}><View style={{ width: Math.max(sheetWidth, CALENDAR_MIN_WIDTH) }}>
               <View className="flex-row">{c.weekdays.map((label, index) => <AppText key={index} style={styles.weekday} className="text-xs text-muted">{label}</AppText>)}</View>
               <View className="flex-row flex-wrap">{c.cells.map((cell, index) => <View key={cell?.date ?? `blank-${index}`} style={styles.cell}>{cell ? <Pressable testID={`booking-day-${cell.date}`} accessibilityRole="button" accessibilityLabel={cell.label} accessibilityState={{ disabled: !cell.available || c.calendarLoading, selected: cell.selected }} aria-pressed={cell.selected} disabled={!cell.available || c.calendarLoading} onPress={() => c.selectDate(cell.date)} className={`min-h-11 items-center justify-center rounded-control border ${!cell.available ? 'border-transparent bg-canvas' : cell.selected ? 'border-brand bg-brand-soft' : 'border-line bg-surface'}`}><AppText className={cell.available ? 'font-semibold text-brand' : 'text-muted'}>{cell.day}</AppText></Pressable> : <View style={styles.blank} />}</View>)}</View>
-            </View></ScrollView>}
+            </View></ScrollView></View>}
             <AppText className="text-sm text-muted">{t('compact.calendarHelp')}</AppText>
           </>}
         </ScrollView>
