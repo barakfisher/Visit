@@ -1,3 +1,5 @@
+import { BookingFinalAction } from './BookingFinalAction.component';
+import { BookingReview } from './BookingReview.component';
 import { UpcomingAppointment } from './UpcomingAppointment.component';
 import { Link } from 'expo-router';
 import { ActivityIndicator, ScrollView, Text, TextInput, View } from 'react-native';
@@ -20,6 +22,6 @@ export function BookingContactFlow(props: ReturnType<typeof useBookingContactFlo
     </> : null}</View> : null}
     </>}
 
-  {review ? <View accessibilityLabel={t('bookingCommit.review')} className="gap-2 rounded-card border border-line bg-surface p-4"><Text accessibilityRole="header" className="text-xl font-bold text-ink">{t('bookingCommit.review')}</Text><Text>{review.businessAndService}</Text><Text>{review.timeAndStaff}</Text><Text>{review.durationAndPrice}</Text><Text>{review.cancellation}</Text><Text>{t('bookingCommit.advisory')}</Text></View> : null}
-  </ScrollView><View className="border-t border-line bg-surface px-5 py-4"><View className="mx-auto w-full max-w-3xl gap-3">{notice ? <Text accessibilityLiveRegion="polite" className="rounded-control bg-brand-soft p-4 text-brand">{notice}</Text> : null}{error ? <Text accessibilityRole="alert" accessibilityLiveRegion="assertive" className="rounded-control bg-red-50 p-4 text-danger">{error}</Text> : null}<ActionButton label={!identityId ? t('compact.signIn') : fromBookingId && !pendingAttempt ? t('compact.reschedule') : pendingElsewhere ? t('bookingCommit.resumeOther') : busy && pendingAttempt ? t('bookingCommit.processing') : pendingAttempt ? t('bookingCommit.retry') : t('compact.confirm')} onPress={() => void confirm()} busy={busy} disabled={!pendingElsewhere && ((!selected && !pendingAttempt) || Boolean(identityId && !fromBookingId && !contacts.data?.ready && !pendingAttempt))}/></View></View></View>;
+  {review ? <BookingReview {...review} heading={t('bookingCommit.review')} advisory={t('bookingCommit.advisory')} /> : null}
+  </ScrollView><View className="border-t border-line bg-surface px-5 py-4"><View className="mx-auto w-full max-w-3xl gap-3">{notice ? <Text accessibilityLiveRegion="polite" className="rounded-control bg-brand-soft p-4 text-brand">{notice}</Text> : null}{error ? <Text accessibilityRole="alert" accessibilityLiveRegion="assertive" className="rounded-control bg-red-50 p-4 text-danger">{error}</Text> : null}<BookingFinalAction label={!identityId ? t('compact.signIn') : fromBookingId && !pendingAttempt ? t('compact.reschedule') : pendingElsewhere ? t('bookingCommit.resumeOther') : busy && pendingAttempt ? t('bookingCommit.processing') : pendingAttempt ? t('bookingCommit.retry') : t('compact.confirm')} onConfirm={confirm} busy={busy} disabled={!pendingElsewhere && ((!selected && !pendingAttempt) || Boolean(identityId && !fromBookingId && !contacts.data?.ready && !pendingAttempt))} /></View></View></View>;
 }

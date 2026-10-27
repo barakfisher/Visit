@@ -1,0 +1,11 @@
+import type { Meta, StoryObj } from '@storybook/react';
+import { expect } from 'storybook/test';
+import { BookingReview } from './BookingReview.component';
+import { slotLabels } from '../src/lib/slotLabels';
+const fold = slotLabels([{ staffId: 'staff', staffName: 'Specialist', localTime: '01:30', utcOffset: '+03:00' }, { staffId: 'staff', staffName: 'Specialist', localTime: '01:30', utcOffset: '+02:00' }]);
+const meta = { title: 'Booking/Advisory review', component: BookingReview, args: { heading: 'Review appointment', businessAndService: 'Extended consultation and follow-up care with the specialist team · Visit studio', timeAndStaff: `October 25, 2026 · ${fold[0]}`, durationAndPrice: '30 min · ₪120', cancellation: 'Cancel up to 60 minutes before your appointment.', advisory: 'This selection is advisory. No appointment or time is reserved until you confirm.' } } satisfies Meta<typeof BookingReview>;
+export default meta;
+type Story = StoryObj<typeof meta>;
+export const FirstOccurrence: Story = { play: async ({ canvas }) => { await expect(canvas.getByText(/first/)).toBeVisible(); await expect(canvas.queryAllByRole('button')).toHaveLength(0); } };
+export const SecondOccurrence: Story = { args: { timeAndStaff: `October 25, 2026 · ${fold[1]}` }, play: async ({ canvas }) => { await expect(canvas.getByText(/second/)).toBeVisible(); } };
+export const Hebrew: Story = { globals: { locale: 'he' }, args: { heading: 'בדיקת פרטי התור', businessAndService: 'פגישת ייעוץ מקיפה ומעקב ארוך טווח עם צוות המומחים · המרכז המקצועי לייעוץ ושירותים', timeAndStaff: 'יום ראשון, 25 באוקטובר 2026 · 01:30 (מופע ראשון) · מומחית ראשית', cancellation: 'אפשר לבטל עד 60 דקות לפני התור.', advisory: 'הבחירה אינה שומרת את השעה. התור ייקבע רק לאחר אישור סופי.' } };

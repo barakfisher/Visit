@@ -1,0 +1,8 @@
+
+> visit-scheduling-platform@0.1.0 lint
+> npm run lint --workspaces --if-present
+
+
+> @visit/mobile@0.1.0 lint
+> eslint app components src
+
