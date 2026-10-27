@@ -1,3 +1,4 @@
+import { isBookingQuery } from './BookingQueries.utils';
 import { canContinueAppointmentAction } from './AppointmentLifecycle.utils';
 import { useEffect, useRef, useState } from 'react';
 import { router } from 'expo-router';
@@ -29,7 +30,7 @@ export function useAppointments() {
       setError('');
       await apiRequest(`/v1/bookings/${encodeURIComponent(booking.id)}/cancel`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedRevision: current.revision }) });
       if (!canContinueAppointmentAction(scope, useAuthStore.getState(), mounted.current)) return;
-      await client.invalidateQueries({ predicate: query => ['consumer', 'me', 'appointment-history', 'booking-details', 'provider', 'availability', 'booking-calendar'].includes(String(query.queryKey[0])) });
+      await client.invalidateQueries({ predicate: query => isBookingQuery(query.queryKey) });
     } catch { if (canContinueAppointmentAction(scope, useAuthStore.getState(), mounted.current)) { setError(t('lifecycle.failure')); await bookings.refetch(); } }
     finally { pending.current = false; if (mounted.current) setBusyBookingId(null); }
   }

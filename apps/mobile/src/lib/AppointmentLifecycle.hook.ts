@@ -1,3 +1,4 @@
+import { isBookingQuery } from './BookingQueries.utils';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppLocale } from '../i18n/LocaleContext';
@@ -30,7 +31,7 @@ export function useAppointmentLifecycle(booking: LifecycleAppointment, timezone:
       if (!canContinueAppointmentAction(scope, useAuthStore.getState(), mounted.current, businessId)) return;
       await updateAppointmentOutcome(booking, businessId, status);
       if (!canContinueAppointmentAction(scope, useAuthStore.getState(), mounted.current, businessId)) return;
-      await client.invalidateQueries({ predicate: query => ['provider', 'consumer', 'me', 'appointment-history'].includes(String(query.queryKey[0])) });
+      await client.invalidateQueries({ predicate: query => isBookingQuery(query.queryKey) });
     } catch { if (canContinueAppointmentAction(scope, useAuthStore.getState(), mounted.current, businessId)) { setError(t('lifecycle.failure')); await client.invalidateQueries({ queryKey: ['provider', businessId, 'agenda'] }); } }
     finally { operation.current = false; if (mounted.current) setBusy(false); }
   }

@@ -105,7 +105,8 @@ export async function bookingSuccessSmoke({ browser, webUrl, apiUrl, prisma, run
     await detailsView.getByText('Cancelled', { exact: true }).waitFor();
     await assertNoSuccess();
     await page.goto(`${webUrl}/account`);
-    await page.getByTestId('language-he').click();
+    const localeSaved = page.waitForResponse(response => response.url() === `${apiUrl}/api/account/preferences` && response.request().method() === 'PUT');
+    await page.getByTestId('language-he').click(); assert.equal((await localeSaved).status(), 200);
     await page.goto(`${webUrl}/appointment/${owned.id}`);
     await detailsView.getByRole('heading', { name: 'פרטי התור', exact: true }).waitFor();
     await detailsView.getByText('בוטל', { exact: true }).waitFor();

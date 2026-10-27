@@ -1,3 +1,4 @@
+import { customerBookingActions } from './BookingActions.utils.js';
 import { prisma } from '../db/client.js';
 import { validateAuthenticatedSession, type AuthenticatedSession } from '../security/sessions.js';
 import { conflict, notFound } from '../http/errors.js';
@@ -14,7 +15,7 @@ export async function readBookingDetails(session: AuthenticatedSession, id: stri
   const notification = await prisma.bookingNotification.findFirst({ where: { businessId: booking.businessId, bookingId: booking.id }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } });
   return { id: booking.id, status: booking.status, revision: booking.revision, startsAt: booking.startsAt, endsAt: booking.endsAt, service: bookingServiceSnapshot(booking), staff: booking.staff,
     business: { id: booking.business.id, name: booking.business.name, timezone: booking.business.timezone }, cancellationCutoffMinutes: policy?.cancellationCutoffMinutes ?? 0,
-    actions: { canExport: booking.status === 'CONFIRMED', canCancel: booking.status === 'CONFIRMED' && Boolean(policy) && +booking.startsAt >= now + (policy?.cancellationCutoffMinutes ?? 0) * 60000, canReschedule: booking.status === 'CONFIRMED' && Boolean(policy) && booking.business.approvalStatus === 'APPROVED' && !booking.business.deletedAt && +booking.startsAt >= now + (policy?.rescheduleCutoffMinutes ?? 0) * 60000 },
+    actions: customerBookingActions(booking, now),
     notification: { status: notification ? 'RECORDED' : 'LEGACY', recordedAt: notification?.createdAt ?? null, sms: 'UNSUPPORTED', whatsapp: 'UNSUPPORTED' },
   };
 }

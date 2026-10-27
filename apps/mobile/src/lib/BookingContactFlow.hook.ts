@@ -1,3 +1,5 @@
+import { useUpcomingAppointment } from './UpcomingAppointment.hook';
+import { isBookingQuery } from './BookingQueries.utils';
 import { useRescheduleAttempt } from '../state/BookingReschedule.store';
 import { commitReschedule } from './BookingReschedule.service';
 import type { RescheduleAttempt } from '../types/BookingReschedule.types';
@@ -25,6 +27,7 @@ export function useBookingContactFlow() {
   const { locale, t } = useAppLocale();
   const params = useLocalSearchParams<{ providerId: string; serviceId?: string; date?: string; fromBookingId?: string }>();
   const { providerId, fromBookingId } = params;
+  const upcoming = useUpcomingAppointment(providerId, !fromBookingId);
   const [serviceId, setServiceId] = useState(params.serviceId ?? '');
   const [date, setDate] = useState(params.date ?? '');
   const [selection, setSelection] = useState<AdvisorySelection | null>(null);
@@ -134,7 +137,7 @@ export function useBookingContactFlow() {
     } finally {
       if (result && (isCommittedBookingOutcome(result) || Boolean(fromBookingId && result.status === 'CANCELLED')) && isCurrent()) {
         if (fromBookingId) useRescheduleAttempt.getState().set(null); else useBookingAttempt.getState().set(null);
-        await Promise.allSettled([client.invalidateQueries({ predicate: query => ['consumer', 'me', 'booking-details', 'appointment-history', 'provider', 'availability', 'booking-calendar'].includes(String(query.queryKey[0])) })]);
+        await Promise.allSettled([client.invalidateQueries({ predicate: query => isBookingQuery(query.queryKey) })]);
         if (isCurrent()) { if (result.status === 'CONFIRMED') router.replace({ pathname: '/confirmation/[bookingId]', params: { bookingId: result.id } }); else router.replace('/appointments'); }
       }
       operation.current = false;
@@ -162,5 +165,5 @@ export function useBookingContactFlow() {
   } : null;
   const reauthReturnTo = `/booking/${providerId}?${new URLSearchParams({ serviceId: chosenService, date: chosenDate })}`;
   function saveReauthDraft() { if (identityId) useBookingContactDraft.getState().save({ identityId, providerId, serviceId: chosenService, date: chosenDate, selected }); }
-  return { controls, review, reauthReturnTo, saveReauthDraft, locale, t, providerId, fromBookingId, serviceId, date, selected, busy, editingDisabled: busy || Boolean(pendingAttempt), pendingAttempt, pendingElsewhere, notice, error, conflictSlot, identityId, details, provider, chosenService, chosenDate, slots, contacts, name, setName, setServiceId, setDate, setNotice, reset, choose, confirm, saveName };
+  return { upcoming, controls, review, reauthReturnTo, saveReauthDraft, locale, t, providerId, fromBookingId, serviceId, date, selected, busy, editingDisabled: busy || Boolean(pendingAttempt), pendingAttempt, pendingElsewhere, notice, error, conflictSlot, identityId, details, provider, chosenService, chosenDate, slots, contacts, name, setName, setServiceId, setDate, setNotice, reset, choose, confirm, saveName };
 }

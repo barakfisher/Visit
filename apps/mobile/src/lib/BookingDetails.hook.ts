@@ -1,3 +1,4 @@
+import { isBookingQuery } from './BookingQueries.utils';
 import { useEffect, useRef, useState } from 'react';
 import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -39,7 +40,7 @@ export function useBookingDetails(mode: 'confirmation' | 'details'): BookingDeta
     try {
       if (!await confirmAppointmentCancellation() || !isCurrent()) return;
       await cancelDetailedBooking(booking.id, booking.revision);
-      if (isCurrent()) await Promise.allSettled([details.refetch(), client.invalidateQueries({ predicate: query => ['me', 'consumer', 'appointment-history'].includes(String(query.queryKey[0])) })]);
+      if (isCurrent()) await Promise.allSettled([details.refetch(), client.invalidateQueries({ predicate: query => isBookingQuery(query.queryKey) })]);
     } catch { if (isCurrent()) { setError(t('lifecycle.failure')); await details.refetch(); } }
     finally { operation.current = false; if (mounted.current) setBusy(false); }
   }

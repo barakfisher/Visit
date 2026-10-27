@@ -98,6 +98,8 @@ try {
   await ready(webUrl, webProcess, 'Web');
   const browser = await chromium.launch({ headless: true });
   try {
+    const { upcomingAppointmentsSmoke } = await import('./upcoming-appointments-smoke.js');
+    await upcomingAppointmentsSmoke({ browser, webUrl, apiUrl, prisma, run, businessIds, identityIds });
     const { appointmentLifecycleSmoke } = await import('./appointment-lifecycle-smoke.js');
     await appointmentLifecycleSmoke({ browser, webUrl, apiUrl, prisma, run, businessIds, identityIds });
     const { bookingSuccessSmoke } = await import('./booking-success-smoke.js');

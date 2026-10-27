@@ -1,3 +1,4 @@
+import { readUpcomingAppointment } from '../repositories/UpcomingAppointments.service.js';
 import { readBookingDetails, readBookingCalendar } from '../repositories/BookingDetails.service.js';
 import { changeBookingOutcome, readBookingHistory, setBookingAudit } from '../repositories/BookingLifecycle.service.js';
 import { reviewedServiceSchema } from '../scheduling/booking-consent.utils.js';
@@ -230,6 +231,12 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
     const { bookingId } = z.object({ bookingId: z.string().min(1).max(256) }).parse(request.params);
     const { revision } = z.strictObject({ revision: z.string().regex(/^(0|[1-9]\d*)$/).transform(Number).pipe(z.number().int().nonnegative()) }).parse(request.query);
     return readBookingCalendar(await authenticate(request), bookingId, revision);
+  });
+
+  app.get('/v1/me/bookings/upcoming', async request => {
+    const session = await authenticate(request);
+    const { businessId } = z.strictObject({ businessId: z.string().min(1).max(256).optional() }).parse(request.query);
+    return readUpcomingAppointment(session, businessId);
   });
 
   app.get('/v1/me/bookings', async (request) => {

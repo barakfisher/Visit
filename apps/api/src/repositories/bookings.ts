@@ -11,14 +11,14 @@ export async function listCustomerBookings(session: AuthenticatedSession, active
       business: { select: { id: true, name: true, timezone: true } },
       staff: { select: { displayName: true } },
     },
-    orderBy: { startsAt: 'asc' },
+    orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
   });
   return bookings.map(booking => ({ ...booking, service: bookingServiceSnapshot(booking) }));
 }
 
 export async function listProviderBookings(context: AuthorizedBusinessContext) {
   await validateBusinessContext(context, ['OWNER', 'MANAGER']);
-  const bookings = await prisma.booking.findMany({ where: { businessId: context.businessId, status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'] }, events: { some: {} } }, include: { staff: { select: { displayName: true } } }, orderBy: { startsAt: 'asc' } });
+  const bookings = await prisma.booking.findMany({ where: { businessId: context.businessId, status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'] }, events: { some: {} } }, include: { staff: { select: { displayName: true } } }, orderBy: [{ startsAt: 'asc' }, { id: 'asc' }] });
   return bookings.map(booking => ({ ...booking, service: bookingServiceSnapshot(booking) }));
 }
 
