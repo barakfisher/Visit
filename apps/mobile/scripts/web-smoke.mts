@@ -8,18 +8,24 @@ import { createServer } from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Page, BrowserContext } from 'playwright';
-import dotenv from 'dotenv';
+import { migrateTestDatabase, testEnvironment } from './test-environment';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(appRoot, '../..');
-dotenv.config({ path: path.join(repoRoot, '.env') });
-const apiUrl = 'http://127.0.0.1:3001';
+const apiPort = 3001;
+const apiUrl = `http://127.0.0.1:${apiPort}`;
 const webPort = Number(process.env.VISIT_TEST_WEB_PORT ?? 8082);
 if (!Number.isInteger(webPort) || webPort < 1024 || webPort > 65535) throw new Error('Invalid test web port.');
 const webUrl = `http://127.0.0.1:${webPort}`;
-Object.assign(process.env, { API_PORT: '3001', API_HOST: '127.0.0.1', NODE_ENV: 'development', SMS_DELIVERY_MODE: 'local-inbox', EMAIL_DELIVERY_MODE: 'local-inbox', EXPO_PUBLIC_API_URL: apiUrl, WEB_APP_URL: webUrl });
+// Explicit isolated configuration: the dedicated test database and Redis logical database, never .env (decisions.md).
+const environment = testEnvironment({ apiPort, webUrl });
+Object.assign(process.env, environment, { EXPO_PUBLIC_API_URL: apiUrl });
+migrateTestDatabase(repoRoot, environment.DATABASE_URL);
 const { prisma } = await import('../../api/src/db/client.js');
 const { redis } = await import('../../api/src/infra/redis.js');
+const { environmentKeys } = await import('../../api/src/env.js');
+const unassigned = environmentKeys.filter(key => !(key in environment));
+if (unassigned.length) throw new Error(`Add to testEnvironment() so .env cannot supply them: ${unassigned.join(', ')}`);
 const { chromium } = await import('playwright');
 const run = randomUUID();
 const date = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
@@ -70,7 +76,8 @@ try {
   if (redis.status === 'wait') await redis.connect();
   // Only the local test IP's OTP counters are reset; fixture phone numbers are unique.
   const ipHash = createHash('sha256').update('127.0.0.1').digest('hex');
-  await redis.del(`visit:otp:limit:ip:${ipHash}`, `visit:otp:limit:verify-ip:${ipHash}`, `visit:email:limit:ip:${ipHash}`, `visit:email:limit:verify:${ipHash}`);
+  const resetLocalSignInLimits = () => redis.del(`visit:otp:limit:ip:${ipHash}`, `visit:otp:limit:verify-ip:${ipHash}`, `visit:email:limit:ip:${ipHash}`, `visit:email:limit:verify:${ipHash}`);
+  await resetLocalSignInLimits();
   const { createApp } = await import('../../api/src/app.js');
   const { createGoogleAuthService } = await import('../../api/src/security/google-auth.js');
   const google = createGoogleAuthService({ namespace: googleNamespace, config: { clientId: 'web-test-client', clientSecret: 'web-test-secret', callbackUrl: `${apiUrl}/api/auth/google/callback`, webOrigin: webUrl }, provider: { exchange: async ({ code }) => { const claims = googleClaims.get(code); googleClaims.delete(code); if (!claims) throw new Error('Invalid synthetic code'); return claims; } } });
@@ -126,6 +133,10 @@ try {
     await googleSmoke({ browser, webUrl, apiUrl, claims: googleClaims, run, prisma, identityIds, sharedBusinessId: businessIds[0]! });
     const { homeNavigationSmoke } = await import('./home-navigation-smoke.js');
     await homeNavigationSmoke({ browser, webUrl, apiUrl, prisma, run, identityIds, businessIds });
+    const { pilotLifecycleSmoke } = await import('./pilot-lifecycle-smoke.js');
+    // Its three UI phone sign-ins share the loopback IP budget with later suites; restore it afterwards.
+    await pilotLifecycleSmoke({ browser, webUrl, apiUrl, prisma, redis, run, identityIds, businessIds });
+    await resetLocalSignInLimits();
     const localization = await browser.newContext({ viewport: { width: 390, height: 844 } }); contexts.push(localization);
     const localePage = await localization.newPage(); capture = localePage;
     localePage.on('pageerror', error => pageErrors.push(error.message));
