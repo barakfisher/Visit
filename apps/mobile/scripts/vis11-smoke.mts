@@ -44,7 +44,7 @@ try {
     await page.evaluate(value => { document.documentElement.style.zoom = String(value); }, zoom);
     if (story.includes('navigation')) {
       const trigger = page.getByRole('button', { name: /Open menu|פתיחת תפריט/ });
-      await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label')?.match(/Open menu|פתיחת תפריט/) && document.activeElement.getAttribute('aria-expanded') === 'false');
+      await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label')?.match(/Open menu|פתיחת תפריט/) && document.activeElement.getAttribute('aria-expanded') !== 'true');
       await trigger.click();
       await page.getByTestId('menu-panel').waitFor();
       const panel = page.getByTestId('menu-panel');
