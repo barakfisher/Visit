@@ -1,3 +1,4 @@
+import { upcomingEn, upcomingHe } from './upcomingAppointment.utils';
 import { bookingDetailsEn, bookingDetailsHe } from './bookingDetails.utils';
 import { lifecycleEn, lifecycleHe } from './lifecycle.utils';
 import { compactEn, compactHe } from './compactBooking.utils';
@@ -5,6 +6,7 @@ import { contactEn, contactHe } from './contactMessages.utils';
 import { setupEn, setupHe } from './setupMessages';
 import { dashboardEn, dashboardHe } from './dashboardMessages';
 export const en = {
+  ...upcomingEn,
   ...setupEn,
   ...contactEn,
   ...compactEn,
@@ -276,6 +278,7 @@ export const en = {
 export type MessageKey = keyof typeof en;
 export type Locale = 'he' | 'en';
 export const he: Record<MessageKey, string> = {
+  ...upcomingHe,
   ...setupHe,
   ...contactHe,
   ...compactHe,

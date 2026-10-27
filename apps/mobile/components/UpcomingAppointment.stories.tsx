@@ -1,0 +1,22 @@
+import type { Meta, StoryObj } from '@storybook/react';
+import { expect, fn, userEvent } from 'storybook/test';
+import { UpcomingAppointment } from './UpcomingAppointment.component';
+const appointment = { id: 'upcoming', service: 'Consultation', business: 'Visit studio', staff: 'Specialist', when: 'Tomorrow · 12:00', timeNote: 'Israel time', canCancel: true, canReschedule: true };
+const meta = { title: 'Home/Upcoming appointment', component: UpcomingAppointment, args: { state: 'ready', heading: 'Your next appointment', loadingLabel: 'Loading upcoming appointment…', error: '', retryLabel: 'Try again', appointment, additionalLabel: '2 more appointments', detailsLabel: 'Appointment details', cancelLabel: 'Cancel appointment', rescheduleLabel: 'Reschedule appointment', busy: false, onRetry: fn(), onDetails: fn(), onAll: fn(), onCancel: fn(), onReschedule: fn() } } satisfies Meta<typeof UpcomingAppointment>;
+export default meta;
+type Story = StoryObj<typeof meta>;
+export const Ready: Story = { play: async ({ canvas, args }) => {
+  await expect(canvas.getByText('Tomorrow · 12:00')).toBeVisible();
+  await userEvent.click(canvas.getByRole('button', { name: 'Appointment details' })); await expect(args.onDetails).toHaveBeenCalled();
+  await userEvent.click(canvas.getByRole('button', { name: 'Reschedule appointment' })); await expect(args.onReschedule).toHaveBeenCalled();
+  await userEvent.click(canvas.getByRole('button', { name: 'Cancel appointment' })); await expect(args.onCancel).toHaveBeenCalled();
+  await userEvent.click(canvas.getByRole('button', { name: '2 more appointments' })); await expect(args.onAll).toHaveBeenCalled();
+} };
+export const Hidden: Story = { args: { state: 'hidden', appointment: null }, play: async ({ canvas }) => { await expect(canvas.queryByText('Your next appointment')).toBeNull(); await expect(canvas.queryAllByRole('button')).toHaveLength(0); } };
+export const MissingAppointment: Story = { args: { appointment: null }, play: async ({ canvas }) => { await expect(canvas.queryByText('Your next appointment')).toBeNull(); await expect(canvas.queryAllByRole('button')).toHaveLength(0); } };
+export const Loading: Story = { args: { state: 'loading', appointment: null }, play: async ({ canvas }) => { await expect(canvas.getByRole('status')).toHaveTextContent('Loading upcoming appointment…'); await expect(canvas.queryAllByRole('button')).toHaveLength(0); } };
+export const FailedRead: Story = { args: { state: 'error', appointment: null, error: 'Upcoming appointments could not load.' }, play: async ({ canvas, args }) => { await expect(canvas.getByRole('alert')).toHaveTextContent('Upcoming appointments could not load.'); await userEvent.click(canvas.getByRole('button', { name: 'Try again' })); await expect(args.onRetry).toHaveBeenCalled(); await expect(canvas.queryByText('Consultation')).toBeNull(); } };
+export const Pending: Story = { args: { busy: true }, play: async ({ canvas, args }) => { for (const button of canvas.getAllByRole('button')) await expect(button).toBeDisabled(); await expect(args.onCancel).not.toHaveBeenCalled(); } };
+export const PolicyRestricted: Story = { args: { appointment: { ...appointment, canCancel: false, canReschedule: false }, additionalLabel: '' }, play: async ({ canvas }) => { await expect(canvas.queryByRole('button', { name: 'Cancel appointment' })).toBeNull(); await expect(canvas.queryByRole('button', { name: 'Reschedule appointment' })).toBeNull(); await expect(canvas.getAllByRole('button')).toHaveLength(1); } };
+export const MutationFailed: Story = { args: { error: 'Cancellation could not finish. Your original appointment remains.' }, play: async ({ canvas, args }) => { await expect(canvas.getByText('Tomorrow · 12:00')).toBeVisible(); await expect(canvas.getByRole('alert')).toBeVisible(); await userEvent.click(canvas.getByRole('button', { name: 'Try again' })); await expect(args.onRetry).toHaveBeenCalled(); } };
+export const HebrewLongText: Story = { args: { heading: 'התור הבא שלך', appointment: { ...appointment, service: 'פגישת ייעוץ מקיפה ומעקב ארוך טווח עם צוות המומחים', business: 'המרכז המקצועי לייעוץ ושירותים', staff: 'מומחית ראשית', when: 'מחר · 12:00', timeNote: 'השעה לפי שעון ישראל' }, additionalLabel: 'עוד שני תורים מתוכננים', detailsLabel: 'כל פרטי התור המתוכנן', cancelLabel: 'ביטול התור', rescheduleLabel: 'שינוי מועד התור' }, globals: { locale: 'he' } };

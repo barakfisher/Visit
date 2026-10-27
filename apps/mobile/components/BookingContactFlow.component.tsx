@@ -1,3 +1,4 @@
+import { UpcomingAppointment } from './UpcomingAppointment.component';
 import { Link } from 'expo-router';
 import { ActivityIndicator, ScrollView, Text, TextInput, View } from 'react-native';
 import { AccountMethods } from '@/components/auth/AccountMethods';
@@ -11,6 +12,7 @@ export function BookingContactFlow(props: ReturnType<typeof useBookingContactFlo
   return <View className="flex-1 bg-canvas"><ScrollView contentContainerClassName="mx-auto w-full max-w-3xl gap-6 px-5 py-6 pb-10 md:px-8">
     <Link href="/" className="font-semibold text-brand">{t('providerEntry.home')}</Link><View className="gap-2"><Text className="text-xs font-semibold uppercase tracking-widest text-brand">{provider?.name ?? t('compact.title')}</Text><Text accessibilityRole="header" className="text-3xl font-bold text-ink">{t('compact.title')}</Text><Text className="text-body">{controls.timeNote}</Text></View>
     {details.isLoading ? <ActivityIndicator accessibilityLabel={t('compact.loadingDetails')} color="#0f766e"/> : details.isError ? <View className="gap-2"><Text accessibilityRole="alert" className="text-danger">{details.error.message}</Text><ActionButton secondary label={t('common.retry')} onPress={() => void details.refetch()} /></View> : <>
+    <UpcomingAppointment {...props.upcoming} />
     <CompactBookingControls controls={controls} t={t} disabled={editingDisabled} date={chosenDate} selectedId={selected ? slotId(selected) : null} slotLoading={slots.isLoading} slotError={slots.isError} onRetrySlots={() => void slots.refetch()} onSelectSlot={id => { const slot = slots.data?.slots.find(item => slotId(item) === id); if (slot) void choose(slot); }} />
     {identityId && !fromBookingId ? <View className="gap-3"><Text accessibilityRole="header" className="text-xl font-bold text-ink">{t('bookingContact.title')}</Text>{contacts.isLoading ? <ActivityIndicator /> : contacts.isError ? <ActionButton secondary label={t('bookingContact.retry')} onPress={() => void contacts.refetch()} /> : contacts.data ? <>
       {(['requireCustomerName', 'requireVerifiedPhone', 'requireVerifiedEmail'] as const).filter(key => contacts.data.requirements[key]).map(key => <Text key={key}>{t(`bookingContact.${key}`)}</Text>)}

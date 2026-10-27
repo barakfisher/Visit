@@ -2,7 +2,8 @@ import { View } from 'react-native';
 import { AppText } from './AppText';
 import { ActionButton } from './ActionButton';
 import { useAppLocale } from '@/src/i18n/LocaleContext';
-export type SavedProviderItem = { id: string; businessId: string; available: boolean; provider: { id: string; name: string; location?: string | null; category?: string } };
+import type { SavedProviderItem } from '../src/types/SavedProvider.types';
+export type { SavedProviderItem } from '../src/types/SavedProvider.types';
 export function SavedProviderCard({ item, removing = false, onBook, onRemove }: { item: SavedProviderItem; removing?: boolean; onBook: () => void; onRemove: () => void }) {
   const { t } = useAppLocale();
   return <View testID={`saved-provider-${item.businessId}`} className="gap-3 rounded-card border border-line bg-surface p-4">

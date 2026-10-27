@@ -47,7 +47,7 @@ export async function homeNavigationSmoke({ browser, webUrl, apiUrl, prisma, run
     const booking = await prisma.booking.create({ data: { businessId: targetId, customerId: identity.id, staffId: staff.id, serviceId: service.id, status: 'CONFIRMED', startsAt, endsAt, occupiedFrom: startsAt, occupiedUntil: endsAt, idempotencyKey: `home-${run}` } });
     await page.reload(); const card = page.getByTestId(`saved-provider-${targetId}`); await card.waitFor();
     const upcoming = page.getByTestId(`active-booking-${booking.id}`); await upcoming.waitFor();
-    assert.equal(await upcoming.getByRole('button', { name: 'Reschedule (coming soon)', exact: true }).isDisabled(), true);
+    assert.equal(await upcoming.getByRole('button', { name: 'Reschedule appointment', exact: true }).isEnabled(), true);
     const above = await upcoming.boundingBox(), below = await page.getByRole('heading', { name: 'My Providers', exact: true }).boundingBox(); assert.ok(above && below && above.y < below.y);
     await card.getByRole('button', { name: 'Book appointment', exact: true }).click(); await page.waitForURL(`${webUrl}/booking/${targetId}`);
     await page.goto(webUrl); await card.getByRole('button', { name: 'Remove from my list', exact: true }).click();
