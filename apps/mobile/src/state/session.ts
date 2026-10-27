@@ -1,3 +1,4 @@
+import { useManualDraft } from './ManualBooking.store';
 import { useAgendaDraft } from './ProviderAgenda.store';
 import { useRescheduleAttempt } from './BookingReschedule.store';
 import { useBookingAttempt } from './BookingAttempt.store';
@@ -30,7 +31,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   retryBootstrap: () => set({ bootstrapStatus: 'loading', bootstrapAttempt: get().bootstrapAttempt + 1 }),
   contextVersion: 0,
   invalidateProviderAccess: () => {
-    useAgendaDraft.getState().clear();
+    useAgendaDraft.getState().clear(); useManualDraft.getState().clear();
     queryClient.clear();
     set({ activeBusinessId: null, contextVersion: get().contextVersion + 1 });
   },
@@ -43,20 +44,20 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const draft = useBookingContactDraft.getState().draft;
     if (draft && draft.identityId !== profile.id) useBookingContactDraft.getState().clear();
     const removedBusiness = Boolean(get().profile?.businesses.some(old => !profile.businesses.some(b => b.id === old.id && b.role === old.role)));
-    if (changedIdentity || removedBusiness) { queryClient.clear(); useAgendaDraft.getState().clear(); }
+    if (changedIdentity || removedBusiness) { queryClient.clear(); useAgendaDraft.getState().clear(); useManualDraft.getState().clear(); }
     set({ token, profile, identityId: profile.id, bootstrapStatus: 'ready', ...(changedIdentity || removedBusiness ? { activeBusinessId: null, contextVersion: get().contextVersion + 1 } : {}) });
   },
   resetAuthContext: (token, profile) => {
     const previous = get();
     if (previous.identityId && previous.identityId !== profile.id) throw new Error('The signed-in account changed.');
-    useAgendaDraft.getState().clear();
+    useAgendaDraft.getState().clear(); useManualDraft.getState().clear();
     queryClient.clear();
     set({ token, profile, identityId: profile.id, bootstrapStatus: 'ready', contextVersion: previous.contextVersion + 1, activeBusinessId: profile.businesses.some(business => business.id === previous.activeBusinessId) ? previous.activeBusinessId : null });
   },
   identityId: null,
   activeBusinessId: null,
   setIdentity: (identityId) => {
-    if (identityId !== get().identityId) { useAgendaDraft.getState().clear(); queryClient.clear(); useRescheduleAttempt.getState().set(null); }
+    if (identityId !== get().identityId) { useAgendaDraft.getState().clear(); useManualDraft.getState().clear(); queryClient.clear(); useRescheduleAttempt.getState().set(null); }
     set({ identityId, ...(identityId !== get().identityId ? { activeBusinessId: null, profile: null, token: null, contextVersion: get().contextVersion + 1 } : {}) });
   },
   selectBusiness: (businessId) => {
@@ -64,7 +65,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (previousId === businessId) return;
     if (businessId && !get().profile?.businesses.some((business) => business.id === businessId)) throw new Error('Choose a business from your account.');
     // clear cancels active queries, removes every private prefix and resets mutations.
-    useAgendaDraft.getState().clear();
+    useAgendaDraft.getState().clear(); useManualDraft.getState().clear();
     queryClient.clear();
     set({ activeBusinessId: businessId, contextVersion: get().contextVersion + 1 });
   },
@@ -72,7 +73,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     useRescheduleAttempt.getState().set(null);
     useBookingAttempt.getState().set(null);
     useBookingContactDraft.getState().clear();
-    useAgendaDraft.getState().clear();
+    useAgendaDraft.getState().clear(); useManualDraft.getState().clear();
     queryClient.clear();
     set({ identityId: null, activeBusinessId: null, token: null, profile: null, bootstrapStatus: 'ready', contextVersion: get().contextVersion + 1 });
   },

@@ -96,7 +96,8 @@ test('final consent owns one recoverable booking attempt across both HTTP surfac
       await redis.zrem(key, id);
       assert.equal((await app.inject({ method: 'POST', url: `/v1/bookings/${id}/confirm`, headers: headers(), payload: {} })).statusCode, 409);
       const row = await prisma.booking.findUniqueOrThrow({ where: { id } });
-      await reserveHold(row, 1);
+      assert.ok(row.customerId);
+      await reserveHold({ ...row, customerId: row.customerId }, 1);
       assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id } })).holdExpiresAt?.getTime(), row.holdExpiresAt?.getTime());
       await prisma.booking.update({ where: { id }, data: { holdExpiresAt: new Date(Date.now() - 1) } });
       assert.equal((await commit(payload)).statusCode, 409);
@@ -165,7 +166,7 @@ test('final consent owns one recoverable booking attempt across both HTTP surfac
   } finally {
     await app.close();
     const rows = await prisma.booking.findMany({ where: { businessId: business.id }, select: { id: true, customerId: true } });
-    await Promise.allSettled(rows.map(row => releaseHold(row.id, row.customerId)));
+    await Promise.allSettled(rows.filter(row => row.customerId !== null).map(row => { assert.ok(row.customerId); return releaseHold(row.id, row.customerId); }));
     await prisma.booking.deleteMany({ where: { businessId: business.id } }); await prisma.business.delete({ where: { id: business.id } }); await prisma.identity.deleteMany({ where: { id: { in: people.map(person => person.id) } } });
   }
 });

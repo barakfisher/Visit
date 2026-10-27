@@ -31,9 +31,10 @@ const asError = (error: unknown) => error instanceof Error ? error.message : 'In
 function bookingResponse(booking: Booking) { return { id: booking.id, status: booking.status, startsAt: booking.startsAt.toISOString(), endsAt: booking.endsAt.toISOString(), holdExpiresAt: booking.holdExpiresAt?.toISOString() }; }
 async function ensureReservation(booking: Booking) {
   if (booking.status === 'CONFIRMED') return;
+  if (!booking.customerId) throw notFound();
   if (booking.status !== 'HELD') throw new AppError(409, 'HOLD_EXPIRED', 'This attempt is no longer active. Choose a time again.');
   const staff = await prisma.staff.findUniqueOrThrow({ where: { id: booking.staffId } });
-  try { await reserveHold(booking, staff.parallelCapacity); }
+  try { await reserveHold({ ...booking, customerId: booking.customerId }, staff.parallelCapacity); }
   catch (error) {
     if (error instanceof AppError && error.statusCode === 409) {
       await prisma.booking.updateMany({ where: { id: booking.id, customerId: booking.customerId, status: 'HELD' }, data: { status: 'EXPIRED', holdExpiresAt: null } });
@@ -98,7 +99,7 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
     await assertWorkingHours(business.id, business.timezone, input.staffId, startsAt, occupied);
     if (startsAt.getTime() < now.getTime() + policy.minimumNoticeMinutes * 60_000) throw conflict('The requested time is outside this business’s booking window.');
     const holdExpiresAt = new Date(now.getTime() + 5 * 60_000);
-    const matchesRequest = (candidate: { customerId: string; serviceId: string; staffId: string; startsAt: Date }) => candidate.customerId === identity.id && candidate.serviceId === service.id && candidate.staffId === staffLink.staff.id && candidate.startsAt.getTime() === startsAt.getTime();
+    const matchesRequest = (candidate: { customerId: string | null; serviceId: string; staffId: string; startsAt: Date }) => candidate.customerId === identity.id && candidate.serviceId === service.id && candidate.staffId === staffLink.staff.id && candidate.startsAt.getTime() === startsAt.getTime();
     const prior = await prisma.booking.findUnique({ where: { businessId_idempotencyKey: { businessId: business.id, idempotencyKey: input.idempotencyKey } } });
     if (prior) {
       if (!matchesRequest(prior)) throw conflict('That idempotency key was already used for a different booking request.');

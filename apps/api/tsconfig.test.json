@@ -21,6 +21,7 @@
     "test/support/**/*.ts",
     "scripts/tenant-fixtures.mts",
     "test/upcoming-appointments.test.ts",
-    "test/provider-agenda.test.ts"
+    "test/provider-agenda.test.ts",
+    "test/manual-booking.test.ts"
   ]
 }

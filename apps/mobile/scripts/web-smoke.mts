@@ -1,3 +1,4 @@
+import { manualBookingSmoke } from './manual-booking-smoke';
 import { selectBookingDate, preferBookingTime } from './booking-controls.utils';
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -99,6 +100,7 @@ try {
   const browser = await chromium.launch({ headless: true });
   try {
     const { providerAgendaSmoke } = await import('./provider-agenda-smoke.js');
+    await manualBookingSmoke({ browser, webUrl, apiUrl, prisma, run, businessIds, identityIds });
     await providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run, businessIds, identityIds });
     const { upcomingAppointmentsSmoke } = await import('./upcoming-appointments-smoke.js');
     await upcomingAppointmentsSmoke({ browser, webUrl, apiUrl, prisma, run, businessIds, identityIds });

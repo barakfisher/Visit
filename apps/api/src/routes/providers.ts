@@ -1,3 +1,4 @@
+import { createManualBooking, manualBookingSchema, readManualBookingOptions } from '../repositories/ManualBooking.service.js';
 import { previewSchedule } from '../repositories/ScheduleImpact.service.js';
 import { publicationReadiness, setPublication, withBusinessConfiguration } from '../repositories/publication.js';
 import { reviewProviderApplication } from '../repositories/provider-review.js';
@@ -24,6 +25,18 @@ function mapUniqueConflict(error: unknown): never {
 }
 
 export async function registerProviderRoutes(app: FastifyInstance, { reviewScope = 'live' }: { reviewScope?: string } = {}) {
+  app.get('/v1/provider/businesses/:businessId/manual-booking-options', async request => {
+    const session = await authenticate(request);
+    return readManualBookingOptions(session, businessIdParams.parse(request.params).businessId);
+  });
+  app.post('/v1/provider/businesses/:businessId/manual-bookings', async request => {
+    const session = await authenticate(request);
+    const { businessId } = businessIdParams.parse(request.params);
+    const expected = request.headers['x-visit-expected-identity'];
+    if (expected !== undefined && expected !== session.identity.id) throw conflict('The signed-in account changed.');
+    return createManualBooking(session, businessId, manualBookingSchema.parse(request.body));
+  });
+
   app.get('/v1/provider/businesses/:businessId', async (request) => {
     const params = businessIdParams.safeParse(request.params);
     if (!params.success) throw notFound();

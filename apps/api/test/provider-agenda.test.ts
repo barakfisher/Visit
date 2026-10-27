@@ -52,7 +52,7 @@ test('provider agenda and schedule edits preserve private bookings and occupied 
       assert.deepEqual(day.bookings.map(row => row.id), [`${key}-prior`, `${key}-a`, `${key}-z`]);
       assert.equal(day.business.timezone, 'America/New_York');
       assert.equal(day.fromDate, '2027-03-14'); assert.equal(day.toDate, '2027-03-14');
-      assert.deepEqual(Object.keys(day.bookings[0]!).sort(), ['id', 'revision', 'status', 'startsAt', 'endsAt', 'customer', 'service', 'staff'].sort());
+      assert.deepEqual(Object.keys(day.bookings[0]!).sort(), ['id', 'revision', 'status', 'startsAt', 'endsAt', 'customer', 'service', 'staff', 'source', 'manualReason'].sort());
       const week = await readProviderAgenda(context, '2027-03-17', 7);
       assert.equal(week.fromDate, '2027-03-14'); assert.equal(week.toDate, '2027-03-20'); assert.equal(week.bookings.length, 4);
       await prisma.booking.deleteMany({ where: { businessId: business.id } });
@@ -150,7 +150,7 @@ test('provider agenda and schedule edits preserve private bookings and occupied 
         }
         const reservations = await prisma.booking.findMany({ where: { businessId: business.id, startsAt }, select: { id: true, customerId: true, status: true } });
         assert.equal(reservations.filter(row => row.status === 'HELD').length, created ? 1 : 0);
-        for (const hold of reservations) await releaseHold(hold.id, hold.customerId);
+        for (const hold of reservations) { assert.ok(hold.customerId); await releaseHold(hold.id, hold.customerId); }
         await prisma.booking.deleteMany({ where: { businessId: business.id, startsAt } });
         await saveBusinessAvailability(context, hours('06:00', '18:00'));
       }

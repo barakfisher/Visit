@@ -68,7 +68,11 @@ export async function rescheduleBooking(session: AuthenticatedSession, bookingId
       const localDate = Temporal.Instant.from(startsAt.toISOString()).toZonedDateTimeISO(business.timezone).toPlainDate();
       const horizon = Temporal.Instant.from(now.toISOString()).toZonedDateTimeISO(business.timezone).toPlainDate().add({ days: policy.maximumAdvanceDays });
       if (+startsAt < +now + policy.minimumNoticeMinutes * 60000 || Temporal.PlainDate.compare(localDate, horizon) > 0) throw conflict('The requested time is outside the booking window.');
-      assertCustomerContact(policy, await tx.identity.findUniqueOrThrow({ where: { id: current.customerId } }));
+      if (current.customerId) assertCustomerContact(policy, await tx.identity.findUniqueOrThrow({ where: { id: current.customerId } }));
+      else {
+        if (!businessId || current.source !== 'MANUAL') throw notFound();
+        if ((policy.requireVerifiedPhone || policy.requireVerifiedEmail) && !current.manualReason) throw new AppError(409, 'MANUAL_EXCEPTION_REQUIRED', 'This appointment has no recorded contact exception for the current policy.');
+      }
       const link = await tx.staffService.findUnique({ where: { businessId_staffId_serviceId: { businessId: business.id, staffId: input.staffId, serviceId: current.serviceId } }, include: { staff: true } });
       // Archived services remain manageable using the immutable original service snapshot.
       if (!link?.staff.active) throw notFound();

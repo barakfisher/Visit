@@ -1,4 +1,5 @@
 export const lifecycleEn = {
+  'lifecycle.source.MANUAL': 'Manual entry', 'lifecycle.reason.MANUAL_ENTRY': 'Provider entered the customer details', 'lifecycle.reason.MANUAL_CONTACT_EXCEPTION': 'Audited exception for unverified customer contact',
   'lifecycle.history': 'Appointment history', 'lifecycle.show': 'Show audit history', 'lifecycle.hide': 'Hide audit history', 'lifecycle.empty': 'No appointment history yet.', 'lifecycle.failure': 'The appointment could not be updated. Refresh and try again.', 'lifecycle.loadFailed': 'Audit history could not load.',
   'lifecycle.CONFIRMED': 'Scheduled', 'lifecycle.COMPLETED': 'Completed', 'lifecycle.NO_SHOW': 'No-show', 'lifecycle.CANCELLED': 'Cancelled',
   'lifecycle.complete': 'Mark completed', 'lifecycle.noShow': 'Mark no-show', 'lifecycle.cancel': 'Cancel appointment',
@@ -7,6 +8,7 @@ export const lifecycleEn = {
   'lifecycle.reason.LEGACY_BASELINE': 'Earlier changes and actors were not recorded.', 'lifecycle.reason.FINAL_CONSENT': 'Final booking consent', 'lifecycle.reason.CUSTOMER_REQUEST': 'Customer request', 'lifecycle.reason.PROVIDER_REQUEST': 'Business request', 'lifecycle.reason.APPOINTMENT_FINISHED': 'Appointment finished', 'lifecycle.reason.CUSTOMER_ABSENT': 'Customer absent', 'lifecycle.reason.SYSTEM_CHANGE': 'System change',
 };
 export const lifecycleHe: Record<keyof typeof lifecycleEn, string> = {
+  'lifecycle.source.MANUAL': 'הזנה ידנית', 'lifecycle.reason.MANUAL_ENTRY': 'פרטי הלקוח הוזנו על ידי העסק', 'lifecycle.reason.MANUAL_CONTACT_EXCEPTION': 'חריגה מתועדת עבור פרטי קשר שלא אומתו',
   'lifecycle.history': 'היסטוריית תורים', 'lifecycle.show': 'הצגת היסטוריית שינויים', 'lifecycle.hide': 'הסתרת היסטוריית שינויים', 'lifecycle.empty': 'אין עדיין היסטוריית תורים.', 'lifecycle.failure': 'לא הצלחנו לעדכן את התור. רעננו ונסו שוב.', 'lifecycle.loadFailed': 'לא הצלחנו לטעון את היסטוריית השינויים.',
   'lifecycle.CONFIRMED': 'מתוכנן', 'lifecycle.COMPLETED': 'הושלם', 'lifecycle.NO_SHOW': 'לא הגיע', 'lifecycle.CANCELLED': 'בוטל',
   'lifecycle.complete': 'סימון כהושלם', 'lifecycle.noShow': 'סימון כאי־הגעה', 'lifecycle.cancel': 'ביטול התור',

@@ -38,7 +38,7 @@ export async function changeBookingOutcome(session: AuthenticatedSession, bookin
     await setBookingAudit(tx, session.identity.id, businessId ? 'PROVIDER' : 'CUSTOMER', outcome === 'COMPLETED' ? 'APPOINTMENT_FINISHED' : outcome === 'NO_SHOW' ? 'CUSTOMER_ABSENT' : businessId ? 'PROVIDER_REQUEST' : 'CUSTOMER_REQUEST');
     return tx.booking.update({ where: { id: current.id }, data: { status: outcome, holdExpiresAt: null } });
   });
-  if (outcome === 'CANCELLED') await releaseHold(booking.id, booking.customerId).catch(() => {});
+  if (outcome === 'CANCELLED' && booking.customerId) await releaseHold(booking.id, booking.customerId).catch(() => {});
   return { id: booking.id, status: booking.status, revision: booking.revision };
 }
 

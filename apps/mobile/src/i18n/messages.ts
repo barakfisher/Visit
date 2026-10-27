@@ -1,3 +1,4 @@
+import { manualEn, manualHe } from './manualBooking.utils';
 import { agendaEditEn, agendaEditHe } from './agendaEdit.utils';
 import { upcomingEn, upcomingHe } from './upcomingAppointment.utils';
 import { bookingDetailsEn, bookingDetailsHe } from './bookingDetails.utils';
@@ -7,6 +8,7 @@ import { contactEn, contactHe } from './contactMessages.utils';
 import { setupEn, setupHe } from './setupMessages';
 import { dashboardEn, dashboardHe } from './dashboardMessages';
 export const en = {
+  ...manualEn,
   ...agendaEditEn,
   ...upcomingEn,
   ...setupEn,
@@ -280,6 +282,7 @@ export const en = {
 export type MessageKey = keyof typeof en;
 export type Locale = 'he' | 'en';
 export const he: Record<MessageKey, string> = {
+  ...manualHe,
   ...agendaEditHe,
   ...upcomingHe,
   ...setupHe,
