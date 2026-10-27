@@ -44,6 +44,7 @@ try {
     await page.evaluate(value => { document.documentElement.style.zoom = String(value); }, zoom);
     if (story.includes('navigation')) {
       const trigger = page.getByRole('button', { name: /Open menu|פתיחת תפריט/ });
+      await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label')?.match(/Open menu|פתיחת תפריט/) && document.activeElement.getAttribute('aria-expanded') === 'false');
       await trigger.click();
       await page.getByTestId('menu-panel').waitFor();
       const panel = page.getByTestId('menu-panel');
@@ -56,8 +57,15 @@ try {
       assert.equal(await panel.evaluate(node => node.contains(document.activeElement)), true, `${story}: reverse focus escaped drawer`);
     }
     if (story.includes('interactive-calendar')) {
+      await page.waitForFunction(() => document.querySelector('[data-testid="booking-date-trigger"]')?.getAttribute('aria-label')?.includes('2026-10-29') && !document.querySelector('[data-testid="booking-day-2026-10-29"]'));
       await page.getByTestId('booking-date-trigger').click();
-      await page.getByTestId('booking-day-2026-10-29').waitFor();
+      const day = page.getByTestId('booking-day-2026-10-29');
+      await day.waitFor(); await day.focus();
+      const box = await day.boundingBox();
+      assert.ok(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= width && box.y + box.height <= 1000, `${story}: keyboard-focused date is clipped`);
+      await page.keyboard.press('Escape');
+      assert.equal(await page.getByTestId('booking-date-trigger').evaluate(node => node === document.activeElement), true);
+      await page.getByTestId('booking-date-trigger').click(); await day.focus();
     }
     const contrast = await page.evaluate(() => {
       const scope = document.querySelector('[aria-modal="true"]') ?? document.querySelector('#storybook-root');

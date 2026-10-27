@@ -1,0 +1,12 @@
+
+> visit-scheduling-platform@0.1.0 typecheck
+> npm run typecheck --workspaces --if-present
+
+
+> @visit/api@0.1.0 typecheck
+> tsc --noEmit -p tsconfig.json
+
+
+> @visit/mobile@0.1.0 typecheck
+> tsc --noEmit
+

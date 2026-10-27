@@ -1,0 +1,321 @@
+{
+  "passed": true,
+  "source": {
+    "commit": "a7573a1a60fb83878c7d61e63ba1ea77bb630e6e",
+    "dirty": false
+  },
+  "checks": [
+    {
+      "locale": "home-screen--empty",
+      "width": 320,
+      "zoom": 1,
+      "screenshot": "home-screen--empty-320-zoom-1.png"
+    },
+    {
+      "locale": "home-screen--empty",
+      "width": 390,
+      "zoom": 1,
+      "screenshot": "home-screen--empty-390-zoom-1.png"
+    },
+    {
+      "locale": "home-screen--empty",
+      "width": 1280,
+      "zoom": 1,
+      "screenshot": "home-screen--empty-1280-zoom-1.png"
+    },
+    {
+      "locale": "home-screen--empty",
+      "width": 640,
+      "zoom": 2,
+      "screenshot": "home-screen--empty-640-zoom-2.png"
+    },
+    {
+      "locale": "home-screen--many",
+      "width": 320,
+      "zoom": 1,
+      "screenshot": "home-screen--many-320-zoom-1.png"
+    },
+    {
+      "locale": "home-screen--many",
+      "width": 390,
+      "zoom": 1,
+      "screenshot": "home-screen--many-390-zoom-1.png"
+    },
+    {
+      "locale": "home-screen--many",
+      "width": 1280,
+      "zoom": 1,
+      "screenshot": "home-screen--many-1280-zoom-1.png"
+    },
+    {
+      "locale": "home-screen--many",
+      "width": 640,
+      "zoom": 2,
+      "screenshot": "home-screen--many-640-zoom-2.png"
+    },
+    {
+      "locale": "home-screen--english",
+      "width": 320,
+      "zoom": 1,
+      "screenshot": "home-screen--english-320-zoom-1.png"
+    },
+    {
+      "locale": "home-screen--english",
+      "width": 390,
+      "zoom": 1,
+      "screenshot": "home-screen--english-390-zoom-1.png"
+    },
+    {
+      "locale": "home-screen--english",
+      "width": 1280,
+      "zoom": 1,
+      "screenshot": "home-screen--english-1280-zoom-1.png"
+    },
+    {
+      "locale": "home-screen--english",
+      "width": 640,
+      "zoom": 2,
+      "screenshot": "home-screen--english-640-zoom-2.png"
+    },
+    {
+      "locale": "home-navigation--customer",
+      "width": 320,
+      "zoom": 1,
+      "screenshot": "home-navigation--customer-320-zoom-1.png"
+    },
+    {
+      "locale": "home-navigation--customer",
+      "width": 390,
+      "zoom": 1,
+      "screenshot": "home-navigation--customer-390-zoom-1.png"
+    },
+    {
+      "locale": "home-navigation--customer",
+      "width": 1280,
+      "zoom": 1,
+      "screenshot": "home-navigation--customer-1280-zoom-1.png"
+    },
+    {
+      "locale": "home-navigation--customer",
+      "width": 640,
+      "zoom": 2,
+      "screenshot": "home-navigation--customer-640-zoom-2.png"
+    },
+    {
+      "locale": "home-navigation--approved",
+      "width": 320,
+      "zoom": 1,
+      "screenshot": "home-navigation--approved-320-zoom-1.png"
+    },
+    {
+      "locale": "home-navigation--approved",
+      "width": 390,
+      "zoom": 1,
+      "screenshot": "home-navigation--approved-390-zoom-1.png"
+    },
+    {
+      "locale": "home-navigation--approved",
+      "width": 1280,
+      "zoom": 1,
+      "screenshot": "home-navigation--approved-1280-zoom-1.png"
+    },
+    {
+      "locale": "home-navigation--approved",
+      "width": 640,
+      "zoom": 2,
+      "screenshot": "home-navigation--approved-640-zoom-2.png"
+    },
+    {
+      "locale": "home-navigation--english",
+      "width": 320,
+      "zoom": 1,
+      "screenshot": "home-navigation--english-320-zoom-1.png"
+    },
+    {
+      "locale": "home-navigation--english",
+      "width": 390,
+      "zoom": 1,
+      "screenshot": "home-navigation--english-390-zoom-1.png"
+    },
+    {
+      "locale": "home-navigation--english",
+      "width": 1280,
+      "zoom": 1,
+      "screenshot": "home-navigation--english-1280-zoom-1.png"
+    },
+    {
+      "locale": "home-navigation--english",
+      "width": 640,
+      "zoom": 2,
+      "screenshot": "home-navigation--english-640-zoom-2.png"
+    },
+    {
+      "locale": "booking-compact-controls--available",
+      "width": 320,
+      "zoom": 1,
+      "screenshot": "booking-compact-controls--available-320-zoom-1.png"
+    },
+    {
+      "locale": "booking-compact-controls--available",
+      "width": 390,
+      "zoom": 1,
+      "screenshot": "booking-compact-controls--available-390-zoom-1.png"
+    },
+    {
+      "locale": "booking-compact-controls--available",
+      "width": 1280,
+      "zoom": 1,
+      "screenshot": "booking-compact-controls--available-1280-zoom-1.png"
+    },
+    {
+      "locale": "booking-compact-controls--available",
+      "width": 640,
+      "zoom": 2,
+      "screenshot": "booking-compact-controls--available-640-zoom-2.png"
+    },
+    {
+      "locale": "booking-compact-controls--closed-calendar",
+      "width": 320,
+      "zoom": 1,
+      "screenshot": "booking-compact-controls--closed-calendar-320-zoom-1.png"
+    },
+    {
+      "locale": "booking-compact-controls--closed-calendar",
+      "width": 390,
+      "zoom": 1,
+      "screenshot": "booking-compact-controls--closed-calendar-390-zoom-1.png"
+    },
+    {
+      "locale": "booking-compact-controls--closed-calendar",
+      "width": 1280,
+      "zoom": 1,
+      "screenshot": "booking-compact-controls--closed-calendar-1280-zoom-1.png"
+    },
+    {
+      "locale": "booking-compact-controls--closed-calendar",
+      "width": 640,
+      "zoom": 2,
+      "screenshot": "booking-compact-controls--closed-calendar-640-zoom-2.png"
+    },
+    {
+      "locale": "booking-compact-controls--interactive-calendar",
+      "width": 320,
+      "zoom": 1,
+      "screenshot": "booking-compact-controls--interactive-calendar-320-zoom-1.png"
+    },
+    {
+      "locale": "booking-compact-controls--interactive-calendar",
+      "width": 390,
+      "zoom": 1,
+      "screenshot": "booking-compact-controls--interactive-calendar-390-zoom-1.png"
+    },
+    {
+      "locale": "booking-compact-controls--interactive-calendar",
+      "width": 1280,
+      "zoom": 1,
+      "screenshot": "booking-compact-controls--interactive-calendar-1280-zoom-1.png"
+    },
+    {
+      "locale": "booking-compact-controls--interactive-calendar",
+      "width": 640,
+      "zoom": 2,
+      "screenshot": "booking-compact-controls--interactive-calendar-640-zoom-2.png"
+    },
+    {
+      "locale": "booking-compact-controls--service-selection",
+      "width": 320,
+      "zoom": 1,
+      "screenshot": "booking-compact-controls--service-selection-320-zoom-1.png"
+    },
+    {
+      "locale": "booking-compact-controls--service-selection",
+      "width": 390,
+      "zoom": 1,
+      "screenshot": "booking-compact-controls--service-selection-390-zoom-1.png"
+    },
+    {
+      "locale": "booking-compact-controls--service-selection",
+      "width": 1280,
+      "zoom": 1,
+      "screenshot": "booking-compact-controls--service-selection-1280-zoom-1.png"
+    },
+    {
+      "locale": "booking-compact-controls--service-selection",
+      "width": 640,
+      "zoom": 2,
+      "screenshot": "booking-compact-controls--service-selection-640-zoom-2.png"
+    },
+    {
+      "locale": "booking-advisory-review--hebrew",
+      "width": 320,
+      "zoom": 1,
+      "screenshot": "booking-advisory-review--hebrew-320-zoom-1.png"
+    },
+    {
+      "locale": "booking-advisory-review--hebrew",
+      "width": 390,
+      "zoom": 1,
+      "screenshot": "booking-advisory-review--hebrew-390-zoom-1.png"
+    },
+    {
+      "locale": "booking-advisory-review--hebrew",
+      "width": 1280,
+      "zoom": 1,
+      "screenshot": "booking-advisory-review--hebrew-1280-zoom-1.png"
+    },
+    {
+      "locale": "booking-advisory-review--hebrew",
+      "width": 640,
+      "zoom": 2,
+      "screenshot": "booking-advisory-review--hebrew-640-zoom-2.png"
+    },
+    {
+      "locale": "booking-advisory-review--first-occurrence",
+      "width": 320,
+      "zoom": 1,
+      "screenshot": "booking-advisory-review--first-occurrence-320-zoom-1.png"
+    },
+    {
+      "locale": "booking-advisory-review--first-occurrence",
+      "width": 390,
+      "zoom": 1,
+      "screenshot": "booking-advisory-review--first-occurrence-390-zoom-1.png"
+    },
+    {
+      "locale": "booking-advisory-review--first-occurrence",
+      "width": 1280,
+      "zoom": 1,
+      "screenshot": "booking-advisory-review--first-occurrence-1280-zoom-1.png"
+    },
+    {
+      "locale": "booking-advisory-review--first-occurrence",
+      "width": 640,
+      "zoom": 2,
+      "screenshot": "booking-advisory-review--first-occurrence-640-zoom-2.png"
+    },
+    {
+      "locale": "home-upcoming-appointment--hebrew-long-text",
+      "width": 320,
+      "zoom": 1,
+      "screenshot": "home-upcoming-appointment--hebrew-long-text-320-zoom-1.png"
+    },
+    {
+      "locale": "home-upcoming-appointment--hebrew-long-text",
+      "width": 390,
+      "zoom": 1,
+      "screenshot": "home-upcoming-appointment--hebrew-long-text-390-zoom-1.png"
+    },
+    {
+      "locale": "home-upcoming-appointment--hebrew-long-text",
+      "width": 1280,
+      "zoom": 1,
+      "screenshot": "home-upcoming-appointment--hebrew-long-text-1280-zoom-1.png"
+    },
+    {
+      "locale": "home-upcoming-appointment--hebrew-long-text",
+      "width": 640,
+      "zoom": 2,
+      "screenshot": "home-upcoming-appointment--hebrew-long-text-640-zoom-2.png"
+    }
+  ]
+}
