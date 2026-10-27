@@ -1,7 +1,7 @@
 import { readBookingDetails, readBookingCalendar } from '../repositories/BookingDetails.service.js';
 import { changeBookingOutcome, readBookingHistory, setBookingAudit } from '../repositories/BookingLifecycle.service.js';
 import { reviewedServiceSchema } from '../scheduling/booking-consent.utils.js';
-import type { Prisma, Booking } from '../generated/prisma/client.js';
+import type { Booking } from '../generated/prisma/client.js';
 import { ensureRedisReady } from '../infra/redis.js';
 import { reserveHold, requireHold, releaseHold } from '../scheduling/reservations.js';
 import { assertCustomerContact } from '../security/customer-contact.utils.js';
@@ -12,36 +12,20 @@ import { Temporal } from '@js-temporal/polyfill';
 import { BookingStatus, MembershipRole } from '../generated/prisma/client.js';
 import { prisma } from '../db/client.js';
 import { AppError, conflict, notFound } from '../http/errors.js';
-import { occupiedInterval, assertCapacity, type Interval } from '../scheduling/intervals.js';
+import { occupiedInterval, assertCapacity } from '../scheduling/intervals.js';
 import { localDateTimeToInstant } from '../scheduling/local-time.js';
 import { acquireIntervalLocks } from '../scheduling/redis-slot-lock.js';
 import { authenticate } from '../security/sessions.js';
 import { requireBusinessMembership, requirePublicBusiness } from '../security/tenant-context.js';
-import { containsInterval, workingWindows } from '../scheduling/availability.js';
+import { assertWorkingHours } from '../scheduling/WorkingHours.service.js';
+import { rescheduleBooking, rescheduleInputSchema } from '../repositories/BookingReschedule.service.js';
 import { getBusinessAvailability } from '../repositories/availability.js';
-import { effectiveWindows } from '../scheduling/rules.js';
 import { withBookingTransaction } from '../scheduling/booking-transaction.js';
 import { listCustomerBookings, listProviderBookings } from '../repositories/bookings.js';
 
 const activeStatuses = [BookingStatus.HELD, BookingStatus.CONFIRMED, BookingStatus.COMPLETED, BookingStatus.NO_SHOW];
 const asError = (error: unknown) => error instanceof Error ? error.message : 'Invalid time.';
 
-async function assertWorkingHours(businessId: string, timezone: string, staffId: string, startsAt: Date, occupied: Interval, db: Prisma.TransactionClient = prisma) {
-  const zonedStart = Temporal.Instant.from(startsAt.toISOString()).toZonedDateTimeISO(timezone);
-  const localDate = zonedStart.toPlainDate();
-  const weekday = zonedStart.dayOfWeek % 7;
-  const dateKey = localDate.toString();
-  const [businessOverride, businessHours, staffOverride, staffHours] = await Promise.all([
-    db.scheduleOverride.findFirst({ where: { businessId, date: new Date(`${dateKey}T00:00:00.000Z`) } }),
-    db.businessWeeklyAvailability.findMany({ where: { businessId, weekday } }),
-    db.staffScheduleOverride.findFirst({ where: { businessId, staffId, date: new Date(`${dateKey}T00:00:00.000Z`) } }),
-    db.staffWeeklyAvailability.findMany({ where: { businessId, staffId } }),
-  ]);
-  const businessWindows = effectiveWindows(businessOverride, businessHours);
-  const staffWindows = effectiveWindows(staffOverride, staffHours.length ? staffHours.filter((item) => item.weekday === weekday) : businessWindows);
-  const shared = workingWindows(dateKey, timezone, businessWindows, staffWindows);
-  if (!containsInterval(shared.intervals, occupied)) throw conflict('The appointment and its buffers must fit inside business and provider working hours.');
-}
 
 function bookingResponse(booking: Booking) { return { id: booking.id, status: booking.status, startsAt: booking.startsAt.toISOString(), endsAt: booking.endsAt.toISOString(), holdExpiresAt: booking.holdExpiresAt?.toISOString() }; }
 async function ensureReservation(booking: Booking) {
@@ -202,49 +186,16 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
     return { id: booking.id, status: BookingStatus.CONFIRMED };
   });
 
-  app.post('/v1/bookings/:bookingId/reschedule', async (request) => {
-    const { identity } = await authenticate(request);
-    const params = z.object({ bookingId: z.string().min(1) }).safeParse(request.params);
-    const body = z.object({ staffId: z.string().min(1), startsAt: z.string().datetime({ offset: true }).optional(), localDate: z.string().date().optional(), localTime: z.string().regex(/^\d{2}:\d{2}$/).optional(), utcOffset: z.string().optional() }).safeParse(request.body);
-    if (!params.success || !body.success || (!body.data.startsAt && (!body.data.localDate || !body.data.localTime)) || (body.data.startsAt && (body.data.localDate || body.data.localTime || body.data.utcOffset))) throw new AppError(400, 'VALIDATION_ERROR', 'Choose a provider and a valid appointment time.');
-    const existing = await prisma.booking.findFirst({ where: { id: params.data.bookingId, customerId: identity.id }, include: { business: { include: { bookingPolicy: true } } } });
-    if (!existing || (existing.business.approvalStatus !== 'APPROVED' || existing.business.deletedAt)) throw notFound();
-    if (existing.status !== 'CONFIRMED') throw conflict('This appointment can no longer be rescheduled.');
-    const policy = existing.business.bookingPolicy;
-    if (!policy) throw conflict('This business has not finished setting its booking policy.');
-    if (existing.startsAt.getTime() < Date.now() + policy.rescheduleCutoffMinutes * 60_000) throw conflict('The reschedule cutoff has passed for this appointment.');
-    let startsAt: Date;
-    try { startsAt = body.data.startsAt ? new Date(body.data.startsAt) : localDateTimeToInstant(body.data.localDate!, body.data.localTime!, existing.business.timezone, body.data.utcOffset); }
-    catch (error) { throw new AppError(400, 'INVALID_LOCAL_TIME', asError(error)); }
-    if (startsAt.getUTCSeconds() !== 0 || startsAt.getUTCMilliseconds() !== 0) throw new AppError(400, 'INVALID_LOCAL_TIME', 'Appointment starts must be on a whole minute.');
-    const now = new Date();
-    const startDateInZone = Temporal.Instant.from(startsAt.toISOString()).toZonedDateTimeISO(existing.business.timezone).toPlainDate();
-    const maximumLocalDate = Temporal.Now.zonedDateTimeISO(existing.business.timezone).toPlainDate().add({ days: policy.maximumAdvanceDays });
-    if (startsAt.getTime() < now.getTime() + policy.minimumNoticeMinutes * 60_000 || Temporal.PlainDate.compare(startDateInZone, maximumLocalDate) > 0) throw conflict('The requested time is outside this business’s booking window.');
-    const staffService = await prisma.staffService.findUnique({ where: { businessId_staffId_serviceId: { businessId: existing.businessId, staffId: body.data.staffId, serviceId: existing.serviceId } }, include: { staff: true } });
-    if (!staffService?.staff.active) throw notFound();
-    const endsAt = new Date(startsAt.getTime() + existing.serviceDurationMinutes * 60_000);
-    const occupied = occupiedInterval(startsAt, existing.serviceDurationMinutes, policy.bufferBeforeMinutes, policy.bufferAfterMinutes);
-    await assertWorkingHours(existing.businessId, existing.business.timezone, body.data.staffId, startsAt, occupied);
-    const slotLock = await acquireLocks(existing.businessId, staffService.staff.id, occupied);
-    if (!slotLock.acquired) throw conflict('That time is being booked. Choose another time or retry shortly.');
-    try {
-      const updated = await withBookingTransaction(async (tx) => {
-        await tx.$queryRaw`SELECT id FROM "Business" WHERE id = ${existing.businessId} FOR SHARE`;
-        if (!await tx.business.findFirst({ where: { id: existing.businessId, approvalStatus: 'APPROVED', deletedAt: null }, select: { id: true } })) throw conflict('This business cannot accept rescheduling.');
-        if (await tx.timeBlock.count({ where: { businessId: existing.businessId, staffId: staffService.staff.id, startsAt: { lt: occupied.endsAt }, endsAt: { gt: occupied.startsAt } } })) throw conflict('This provider has blocked this time.');
-        const conflicts = await tx.booking.findMany({ where: { businessId: existing.businessId, staffId: staffService.staff.id, id: { not: existing.id }, OR: [{ status: { in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED, BookingStatus.NO_SHOW] } }, { status: BookingStatus.HELD, holdExpiresAt: { gt: new Date() } }], occupiedFrom: { lt: occupied.endsAt }, occupiedUntil: { gt: occupied.startsAt } }, select: { occupiedFrom: true, occupiedUntil: true } });
-        if (!assertCapacity(occupied, conflicts.map((item) => ({ startsAt: item.occupiedFrom, endsAt: item.occupiedUntil })), staffService.staff.parallelCapacity)) throw conflict('That time was just booked. Choose another time.');
-        await setBookingAudit(tx, identity.id, 'CUSTOMER', 'CUSTOMER_REQUEST');
-        const updated = await tx.booking.updateMany({ where: { id: existing.id, customerId: identity.id, status: BookingStatus.CONFIRMED, revision: existing.revision }, data: { staffId: staffService.staff.id, startsAt, endsAt, occupiedFrom: occupied.startsAt, occupiedUntil: occupied.endsAt } });
-        if (updated.count !== 1) throw conflict('This appointment changed before it could be rescheduled.');
-        return tx.booking.findUniqueOrThrow({ where: { id: existing.id } });
-      });
-      return { id: updated.id, status: updated.status, startsAt: updated.startsAt.toISOString(), endsAt: updated.endsAt.toISOString() };
-    } catch (error) {
-      if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2034') throw conflict('Availability changed. Choose another time and retry.');
-      throw error;
-    } finally { await slotLock.release(); }
+  app.post('/v1/bookings/:bookingId/reschedule', async request => {
+    const session = await authenticate(request);
+    const { bookingId } = z.object({ bookingId: z.string().min(1).max(256) }).parse(request.params);
+    return rescheduleBooking(session, bookingId, rescheduleInputSchema.parse(request.body));
+  });
+
+  app.post('/v1/provider/businesses/:businessId/bookings/:bookingId/reschedule', async request => {
+    const session = await authenticate(request);
+    const { bookingId, businessId } = z.object({ bookingId: z.string().min(1).max(256), businessId: z.string().min(1).max(256) }).parse(request.params);
+    return rescheduleBooking(session, bookingId, rescheduleInputSchema.parse(request.body), businessId);
   });
 
   app.post('/v1/bookings/:bookingId/cancel', async request => {

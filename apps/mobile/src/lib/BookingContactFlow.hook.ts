@@ -1,3 +1,6 @@
+import { useRescheduleAttempt } from '../state/BookingReschedule.store';
+import { commitReschedule } from './BookingReschedule.service';
+import type { RescheduleAttempt } from '../types/BookingReschedule.types';
 import { canDiscardBookingAttempt, isCommittedBookingOutcome } from './BookingAttempt.utils';
 import { randomUUID } from 'expo-crypto';
 import { useBookingAttempt } from '@/src/state/BookingAttempt.store';
@@ -39,7 +42,10 @@ export function useBookingContactFlow() {
   const previousIdentity = useRef(identityId);
   const [name, setName] = useState('');
   const client = useQueryClient();
-  const attempt = useBookingAttempt(state => state.attempt);
+  const bookingAttempt = useBookingAttempt(state => state.attempt);
+  const rescheduleAttempt = useRescheduleAttempt(state => state.attempt);
+  const ownReschedule = rescheduleAttempt?.identityId === identityId && rescheduleAttempt.bookingId === fromBookingId ? rescheduleAttempt : null;
+  const attempt = fromBookingId ? ownReschedule : bookingAttempt;
   const pendingElsewhere = Boolean(attempt && attempt.identityId === identityId && attempt.providerId !== providerId);
   const pendingAttempt = attempt?.identityId === identityId && attempt.providerId === providerId ? attempt : null;
   const contacts = useQuery({ queryKey: ['booking-contact', providerId, identityId, contextVersion], queryFn: () => apiRequest<BookingContactReadiness>(`/api/providers/${providerId}/contact-readiness`), enabled: Boolean(identityId && !fromBookingId), refetchInterval: 10000 });
@@ -61,7 +67,7 @@ export function useBookingContactFlow() {
     catch (reason) { setError(reason instanceof Error ? reason.message : t('compact.nameFailed')); }
     finally { setBusy(false); }
   }
-  const details = useQuery({ queryKey: ['provider', providerId, fromBookingId ?? 'public'], queryFn: () => apiRequest<{ provider: ProviderDetail }>(`/api/${fromBookingId ? `bookings/${fromBookingId}/provider` : `providers/${providerId}`}`) });
+  const details = useQuery({ queryKey: ['provider', identityId, contextVersion, providerId, fromBookingId ?? 'public'], queryFn: () => apiRequest<{ provider: ProviderDetail; revision?: number }>(`/api/${fromBookingId ? `bookings/${fromBookingId}/provider` : `providers/${providerId}`}`) });
   const provider = details.data?.provider;
   useProviderActivation(provider && !fromBookingId ? { businessId: provider.id } : undefined);
   const chosenService = provider?.services.some(service => service.id === serviceId) ? serviceId : !serviceId && provider?.services.length === 1 ? provider.services[0]?.id ?? '' : '';
@@ -69,7 +75,7 @@ export function useBookingContactFlow() {
   const selected = selection?.providerId === providerId && selection.serviceId === chosenService && selection.date === chosenDate ? selection.slot : null;
   function changeService(id: string) { if (operation.current || pendingAttempt) return; sequence.current += 1; setSelection(null); setConflictSlot(null); setError(''); setServiceId(id); }
   function changeDate(value: string) { if (operation.current || pendingAttempt || !validBookingDate(value)) return; sequence.current += 1; setSelection(null); setConflictSlot(null); setError(''); setDate(value); }
-  const slots = useQuery({ queryKey: ['availability', providerId, fromBookingId ?? 'public', chosenService, chosenDate], queryFn: () => apiRequest<{ slots: Slot[] }>(`/api/${fromBookingId ? `bookings/${fromBookingId}` : `providers/${providerId}`}/availability?${new URLSearchParams({ serviceId: chosenService, date: chosenDate })}`), enabled: Boolean(chosenService && /^\d{4}-\d{2}-\d{2}$/.test(chosenDate)), refetchInterval: 2000 });
+  const slots = useQuery({ queryKey: ['availability', identityId, contextVersion, providerId, fromBookingId ?? 'public', chosenService, chosenDate], queryFn: () => apiRequest<{ slots: Slot[] }>(`/api/${fromBookingId ? `bookings/${fromBookingId}` : `providers/${providerId}`}/availability?${new URLSearchParams({ serviceId: chosenService, date: chosenDate })}`), enabled: Boolean(chosenService && /^\d{4}-\d{2}-\d{2}$/.test(chosenDate)), refetchInterval: 2000 });
   useEffect(() => {
     // A fresh availability response may make a previously contested slot bookable again.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -93,15 +99,19 @@ export function useBookingContactFlow() {
     if (!pendingAttempt && !fromBookingId && !reviewed) return;
     operation.current = true;
     const requestId = sequence.current;
-    const isCurrent = () => mounted.current && focusRef.current && sequence.current === requestId && useAuthStore.getState().identityId === identityId;
+    const isCurrent = () => mounted.current && focusRef.current && sequence.current === requestId && useAuthStore.getState().identityId === identityId && useAuthStore.getState().contextVersion === contextVersion;
     setBusy(true); setError('');
     let result: BookingOutcome | null = null;
-    let logical: BookingAttempt | null = pendingAttempt;
+    let logical: BookingAttempt | null = fromBookingId ? null : pendingAttempt;
+    let move: RescheduleAttempt | null = ownReschedule;
     try {
       logical ??= selected && !fromBookingId && reviewed ? { reviewedService: { name: reviewed.name, durationMinutes: reviewed.durationMinutes, priceMinor: reviewed.priceMinor, currency: reviewed.currency }, identityId, providerId, serviceId: chosenService, staffId: selected.staffId, startsAt: selected.startsAt, idempotencyKey: randomUUID() } : null;
-      if (fromBookingId && selected) {
-        const moved = await apiRequest<{ id: string }>(`/v1/bookings/${fromBookingId}/reschedule`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ staffId: selected.staffId, startsAt: selected.startsAt }) });
-        result = { id: moved.id, status: 'CONFIRMED' };
+      if (fromBookingId) {
+        if (!move && selected && reviewed && details.data?.revision !== undefined) {
+          move = { identityId, providerId, bookingId: fromBookingId, expectedRevision: details.data.revision, serviceId: chosenService, staffId: selected.staffId, startsAt: selected.startsAt, idempotencyKey: randomUUID(), reviewedService: { name: reviewed.name, durationMinutes: reviewed.durationMinutes, priceMinor: reviewed.priceMinor, currency: reviewed.currency } };
+          useRescheduleAttempt.getState().set(move);
+        }
+        if (move) result = await commitReschedule(move);
       } else if (logical) {
         useBookingAttempt.getState().set(logical);
         const recovered = pendingAttempt ? await recoverBooking(logical) : null;
@@ -115,16 +125,16 @@ export function useBookingContactFlow() {
         catch { /* Preserve the attempt key while the committed outcome is uncertain. */ }
       }
       if (!result && isCurrent()) {
-        if (terminal || fromBookingId && reason instanceof ApiError && reason.status === 409) {
-          useBookingAttempt.getState().set(null); setSelection(null);
+        if (terminal || fromBookingId && reason instanceof ApiError && [400, 401, 404, 409].includes(reason.status)) {
+          if (fromBookingId) useRescheduleAttempt.getState().set(null); else useBookingAttempt.getState().set(null); setSelection(null);
           if (selected) setConflictSlot(slotId(selected));
           setError(reason instanceof Error ? reason.message : t('bookingCommit.conflict')); await contacts.refetch(); await details.refetch(); await slots.refetch();
         } else setError(t('bookingCommit.uncertain'));
       }
     } finally {
-      if (isCommittedBookingOutcome(result) && result && isCurrent()) {
-        useBookingAttempt.getState().set(null);
-        await Promise.allSettled([client.invalidateQueries({ queryKey: ['consumer', 'active'] }), client.invalidateQueries({ queryKey: ['me', 'bookings'] })]);
+      if (result && (isCommittedBookingOutcome(result) || Boolean(fromBookingId && result.status === 'CANCELLED')) && isCurrent()) {
+        if (fromBookingId) useRescheduleAttempt.getState().set(null); else useBookingAttempt.getState().set(null);
+        await Promise.allSettled([client.invalidateQueries({ predicate: query => ['consumer', 'me', 'booking-details', 'appointment-history', 'provider', 'availability', 'booking-calendar'].includes(String(query.queryKey[0])) })]);
         if (isCurrent()) { if (result.status === 'CONFIRMED') router.replace({ pathname: '/confirmation/[bookingId]', params: { bookingId: result.id } }); else router.replace('/appointments'); }
       }
       operation.current = false;

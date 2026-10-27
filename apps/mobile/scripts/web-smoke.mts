@@ -364,13 +364,37 @@ try {
     capture = page;
     await page.goto(`${webUrl}/booking/${businessIds[0]}?serviceId=${service.id}&date=${date}&fromBookingId=${hold.holdId}`);
     await preferBookingTime(page, '14:00');
+    const originalAppointment = await prisma.booking.findUniqueOrThrow({ where: { id: hold.holdId } });
+    const movesBefore = await prisma.bookingReschedule.count({ where: { bookingId: hold.holdId } });
     await page.getByRole('button', { name: /14:00 · Alex North/ }).click();
+    assert.deepEqual(await prisma.booking.findUniqueOrThrow({ where: { id: hold.holdId } }), originalAppointment);
+    assert.equal(await prisma.bookingReschedule.count({ where: { bookingId: hold.holdId } }), movesBefore);
+    let lostMoveResponse = false;
+    const moveKeys: string[] = [];
+    await page.route(`**/v1/bookings/${hold.holdId}/reschedule`, async route => {
+      const input: { idempotencyKey: string; finalConsent: boolean } = route.request().postDataJSON();
+      assert.equal(input.finalConsent, true); moveKeys.push(input.idempotencyKey);
+      if (!lostMoveResponse) {
+        lostMoveResponse = true;
+        const response = await route.fetch(); assert.equal(response.status(), 200, await response.text());
+        await route.abort();
+      } else await route.continue();
+    });
     await page.getByRole('button', { name: 'Confirm reschedule' }).click();
+    await page.getByRole('alert').waitFor();
+    assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: hold.holdId } })).startsAt.toISOString(), `${date}T14:00:00.000Z`);
+    await page.getByRole('button', { name: 'Check or retry this booking', exact: true }).click();
     await page.getByRole('heading', { name: 'You’re all set' }).waitFor();
+    assert.equal(moveKeys.length, 2); assert.equal(moveKeys[0], moveKeys[1]);
+    assert.equal(await prisma.bookingReschedule.count({ where: { bookingId: hold.holdId } }), movesBefore + 1);
+    assert.equal(await prisma.bookingNotification.count({ where: { bookingId: hold.holdId, kind: 'BOOKING_RESCHEDULED' } }), 1);
     await page.goto(`${webUrl}/appointments`);
     const currentBooking = page.locator(`[data-testid="active-booking-${hold.holdId}"]:visible`);
     await currentBooking.waitFor();
     await currentBooking.scrollIntoViewIfNeeded();
+    page.once('dialog', dialog => dialog.dismiss());
+    await currentBooking.getByRole('button', { name: 'Cancel', exact: true }).click();
+    assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: hold.holdId } })).status, 'CONFIRMED');
     page.once('dialog', (dialog) => dialog.accept());
     const cancelled = page.waitForResponse((response) => response.url().endsWith(`/${hold.holdId}/cancel`) && response.status() === 200);
     await currentBooking.getByRole('button', { name: 'Cancel', exact: true }).click(); await cancelled;

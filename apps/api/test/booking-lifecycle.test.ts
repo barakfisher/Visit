@@ -102,14 +102,14 @@ test('appointment lifecycle is authorized, append-only, idempotent and capacity 
     });
     await t.test('reschedule records exact old/new instants and a duplicate unchanged move creates no event', async () => {
       const booking = await create(), startsAt = new Date(+booking.startsAt + 7 * 86400000).toISOString();
-      const request = { method: 'POST' as const, url: `/v1/bookings/${booking.id}/reschedule`, headers: headers(customer.id), payload: { staffId: staff.id, startsAt } };
+      const request = { method: 'POST' as const, url: `/v1/bookings/${booking.id}/reschedule`, headers: headers(customer.id), payload: { finalConsent: true, expectedRevision: 0, idempotencyKey: randomUUID(), staffId: staff.id, startsAt } };
       const response = await app.inject(request); assert.equal(response.statusCode, 200, response.body);
       const audit = await events(booking.id); assert.equal(audit.length, 2); assert.equal(audit[1]?.oldStartsAt?.toISOString(), booking.startsAt.toISOString()); assert.equal(audit[1]?.newStartsAt.toISOString(), startsAt); assert.equal(audit[1]?.kind, 'RESCHEDULED'); assert.equal(audit[1]?.actorIdentityId, customer.id);
       assert.equal((await app.inject(request)).statusCode, 200); assert.equal((await events(booking.id)).length, 2);
     });
     await t.test('customer cancel versus reschedule preserves one revision; provisional holds never enter history', async () => {
       const booking = await create(), startsAt = new Date(+booking.startsAt + 7 * 86400000).toISOString();
-      const race = await Promise.all([app.inject({ method: 'POST', url: `/v1/bookings/${booking.id}/cancel`, headers: headers(customer.id), payload: { expectedRevision: 0 } }), app.inject({ method: 'POST', url: `/v1/bookings/${booking.id}/reschedule`, headers: headers(customer.id), payload: { staffId: staff.id, startsAt } })]);
+      const race = await Promise.all([app.inject({ method: 'POST', url: `/v1/bookings/${booking.id}/cancel`, headers: headers(customer.id), payload: { expectedRevision: 0 } }), app.inject({ method: 'POST', url: `/v1/bookings/${booking.id}/reschedule`, headers: headers(customer.id), payload: { finalConsent: true, expectedRevision: 0, idempotencyKey: randomUUID(), staffId: staff.id, startsAt } })]);
       assert.deepEqual(race.map(reply => reply.statusCode).sort(), [200, 409]);
       const audit = await events(booking.id); assert.equal(audit.length, 2); assert.equal(audit[1]?.actorIdentityId, customer.id); assert.equal(audit[1]?.source, 'CUSTOMER');
       const held = await create(false, true);
