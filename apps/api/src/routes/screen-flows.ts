@@ -1,3 +1,4 @@
+import { readProviderAgenda, createAgendaBlock, deleteAgendaBlock, timeBlockSchema } from '../repositories/ProviderAgenda.service.js';
 import { runBookingAttempt } from '../scheduling/booking-attempts.service.js';
 import { reviewedServiceSchema } from '../scheduling/booking-consent.utils.js';
 import { publicBusinessWhere } from '../security/business-eligibility.js';
@@ -6,22 +7,17 @@ import { requireOwnedReschedule } from '../security/tenant-context.js';
 import { getBusinessAvailability, getBusinessBookingCalendar } from '../repositories/availability.js';
 import type { FastifyInstance, FastifyRequest, HTTPMethods } from 'fastify';
 import { z } from 'zod';
-import { Temporal } from '@js-temporal/polyfill';
 import { parseService } from '../repositories/services.js';
-import { bookingServiceSnapshot } from '../repositories/bookings.js';
 import { prisma } from '../db/client.js';
 import { authenticate } from '../security/sessions.js';
 import { requirePublicBusiness, requireBusinessMembership } from '../security/tenant-context.js';
 import { AppError, conflict, notFound } from '../http/errors.js';
 import { requireHold, releaseHold } from '../scheduling/reservations.js';
-import { acquireIntervalLocks } from '../scheduling/redis-slot-lock.js';
-import { localDateTimeToInstant } from '../scheduling/local-time.js';
-import { withBookingTransaction } from '../scheduling/booking-transaction.js';
 import { listCustomerBookings } from '../repositories/bookings.js';
 
 // Compatibility boundary: reuse the existing validated, tenant-scoped v1 handlers.
 async function invoke(app: FastifyInstance, request: FastifyRequest, method: HTTPMethods, url: string, payload?: unknown) {
-  const response = await app.inject({ method, url, headers: { ...(request.headers.origin ? { origin: request.headers.origin } : {}), ...(request.headers['sec-fetch-site'] ? { 'sec-fetch-site': request.headers['sec-fetch-site'] } : {}), ...(request.headers.authorization ? { authorization: request.headers.authorization } : {}), ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}), 'x-visit-client': request.headers['x-visit-client'] as string ?? 'web' }, ...(payload !== undefined ? { payload: payload as Record<string, unknown> } : {}) });
+  const response = await app.inject({ method, url, headers: { ...(request.headers['x-visit-schedule-preview'] ? { 'x-visit-schedule-preview': request.headers['x-visit-schedule-preview'] } : {}), ...(request.headers.origin ? { origin: request.headers.origin } : {}), ...(request.headers['sec-fetch-site'] ? { 'sec-fetch-site': request.headers['sec-fetch-site'] } : {}), ...(request.headers.authorization ? { authorization: request.headers.authorization } : {}), ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}), 'x-visit-client': request.headers['x-visit-client'] as string ?? 'web' }, ...(payload !== undefined ? { payload: payload as Record<string, unknown> } : {}) });
   const body = response.json();
   if (response.statusCode >= 400) throw new AppError(response.statusCode, body.error?.code ?? 'REQUEST_FAILED', body.error?.message ?? 'Request failed.', body.error?.fields);
   return body;
@@ -130,47 +126,22 @@ export async function registerScreenFlows(app: FastifyInstance) {
     await releaseHold(holdId, identity.id);
     return { released: true };
   });
-  app.get('/api/provider/agenda', async (request) => {
-    const query = z.object({ businessId: z.string().optional(), date: z.string().date() }).parse(request.query);
-    const { businessId, business } = await providerContext(request, query.businessId);
-    const day = Temporal.PlainDate.from(query.date);
-    const startsAt = new Date(Number(day.toZonedDateTime({ timeZone: business.timezone, plainTime: '00:00' }).epochMilliseconds));
-    const endsAt = new Date(Number(day.add({ days: 1 }).toZonedDateTime({ timeZone: business.timezone, plainTime: '00:00' }).epochMilliseconds));
-    const [bookings, blocks, staff] = await Promise.all([
-      prisma.booking.findMany({ where: { businessId, status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'] }, events: { some: {} }, startsAt: { gte: startsAt, lt: endsAt } }, include: { staff: { select: { displayName: true } } }, orderBy: { startsAt: 'asc' } }),
-      prisma.timeBlock.findMany({ where: { businessId, startsAt: { lt: endsAt }, endsAt: { gt: startsAt } }, include: { staff: { select: { displayName: true } } }, orderBy: { startsAt: 'asc' } }),
-      prisma.staff.findMany({ where: { businessId, active: true }, select: { id: true, displayName: true } }),
-    ]);
-    const revenue: Record<string, number> = {};
-    bookings.forEach((booking) => { if (['CONFIRMED', 'COMPLETED'].includes(booking.status) && booking.serviceCurrency && booking.servicePriceMinor !== null) revenue[booking.serviceCurrency] = (revenue[booking.serviceCurrency] ?? 0) + booking.servicePriceMinor; });
-    return { business: { id: business.id, name: business.name, timezone: business.timezone }, bookings: bookings.map(booking => ({ ...booking, customer: { displayName: booking.customerName, phone: booking.customerPhone, email: booking.customerEmail }, service: bookingServiceSnapshot(booking) })), blocks, staff, summary: { appointments: bookings.filter(booking => booking.status !== 'CANCELLED').length, revenue } };
+  app.get('/api/provider/agenda', async request => {
+    const { businessId, date, days } = z.strictObject({ businessId: z.string().optional(), date: z.string().date(), days: z.enum(['1', '7']).default('1') }).parse(request.query);
+    const context = await providerContext(request, businessId);
+    return readProviderAgenda(await requireBusinessMembership(context.identity.id, context.businessId, ['OWNER', 'MANAGER']), date, days === '7' ? 7 : 1);
   });
   app.post('/api/provider/block-time', async (request, reply) => {
-    const input = z.object({ businessId: z.string().optional(), staffId: z.string(), date: z.string().date(), startLocal: z.string().regex(/^\d{2}:\d{2}$/), endLocal: z.string().regex(/^\d{2}:\d{2}$/), reason: z.string().max(200).optional() }).parse(request.body);
-    const { businessId, business } = await providerContext(request, input.businessId);
-    const staff = await prisma.staff.findFirst({ where: { id: input.staffId, businessId, active: true } });
-    if (!staff) throw notFound();
-    let startsAt: Date, endsAt: Date;
-    try { startsAt = localDateTimeToInstant(input.date, input.startLocal, business.timezone); endsAt = localDateTimeToInstant(input.date, input.endLocal, business.timezone); } catch { throw new AppError(400, 'VALIDATION_ERROR', 'Choose valid, unambiguous local times.'); }
-    if (endsAt <= startsAt) throw new AppError(400, 'VALIDATION_ERROR', 'The end must follow the start.');
-    const lock = await acquireIntervalLocks(businessId, staff.id, { startsAt, endsAt });
-    if (!lock.acquired) throw conflict('This time is being booked. Retry shortly.');
-    try {
-      const block = await withBookingTransaction(async (tx) => {
-        if (await tx.booking.count({ where: { businessId, staffId: staff.id, occupiedFrom: { lt: endsAt }, occupiedUntil: { gt: startsAt }, OR: [{ status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW'] } }, { status: 'HELD', holdExpiresAt: { gt: new Date() } }] } })) throw conflict('This break overlaps an appointment or active hold.');
-        return tx.timeBlock.create({ data: { businessId, staffId: staff.id, startsAt, endsAt, reason: input.reason ?? null } });
-      });
-      reply.code(201); return block;
-    } catch (error) { if (typeof error === 'object' && error && 'code' in error && error.code === 'P2034') throw conflict('Availability changed. Try again.'); throw error; }
-    finally { await lock.release(); }
+    const session = await authenticate(request), input = timeBlockSchema.parse(request.body);
+    const { businessId } = await providerContext(request, input.businessId);
+    const result = await createAgendaBlock(await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']), input, session);
+    reply.code(201); return result;
   });
-  app.delete('/api/provider/block-time/:blockId', async (request) => {
-    const query = z.object({ businessId: z.string().optional() }).parse(request.query);
-    const { businessId } = await providerContext(request, query.businessId);
-    const { blockId } = request.params as { blockId: string };
-    const result = await prisma.timeBlock.deleteMany({ where: { id: blockId, businessId } });
-    if (!result.count) throw notFound();
-    return { deleted: true };
+  app.delete('/api/provider/block-time/:blockId', async request => {
+    const session = await authenticate(request);
+    const { businessId } = await providerContext(request, z.object({ businessId: z.string().optional() }).parse(request.query).businessId);
+    const { blockId } = z.object({ blockId: z.string().min(1) }).parse(request.params);
+    return deleteAgendaBlock(await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']), blockId, session);
   });
   app.post('/api/provider/services', async (request, reply) => {
     const { businessId, identity } = await providerContext(request, (request.query as { businessId?: string }).businessId);

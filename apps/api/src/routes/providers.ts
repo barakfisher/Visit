@@ -1,3 +1,4 @@
+import { previewSchedule } from '../repositories/ScheduleImpact.service.js';
 import { publicationReadiness, setPublication, withBusinessConfiguration } from '../repositories/publication.js';
 import { reviewProviderApplication } from '../repositories/provider-review.js';
 import { PILOT_TIMEZONE, providerSharePath } from '@visit/contracts';
@@ -190,12 +191,19 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
     return getBusinessAvailability(context);
   });
 
+  app.post('/v1/provider/businesses/:businessId/availability-rules/preview', async request => {
+    const { businessId, staffId } = z.object({ businessId: z.string().min(1), staffId: z.string().min(1).optional() }).parse(request.params);
+    const session = await authenticate(request);
+    return previewSchedule(await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']), request.body, staffId, session);
+  });
+
   app.put('/v1/provider/businesses/:businessId/availability-rules', async (request) => {
     const params = businessIdParams.safeParse(request.params);
     if (!params.success) throw notFound();
-    const { identity } = await authenticate(request);
+    const session = await authenticate(request);
+    const { identity } = session;
     const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
-    return saveBusinessAvailability(context, request.body as Parameters<typeof saveBusinessAvailability>[1]);
+    return saveBusinessAvailability(context, request.body, z.string().regex(/^[a-f0-9]{64}$/).optional().parse(request.headers['x-visit-schedule-preview']), session);
   });
 
   app.get('/v1/provider/businesses/:businessId/staff', async (request) => {
@@ -216,12 +224,19 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
     return createBusinessStaff(context, body.data);
   });
 
+  app.post('/v1/provider/businesses/:businessId/staff/:staffId/availability-rules/preview', async request => {
+    const { businessId, staffId } = z.object({ businessId: z.string().min(1), staffId: z.string().min(1).optional() }).parse(request.params);
+    const session = await authenticate(request);
+    return previewSchedule(await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']), request.body, staffId, session);
+  });
+
   app.put('/v1/provider/businesses/:businessId/staff/:staffId/availability-rules', async (request) => {
     const params = z.object({ businessId: z.string().min(1), staffId: z.string().min(1) }).safeParse(request.params);
     if (!params.success) throw notFound();
-    const { identity } = await authenticate(request);
+    const session = await authenticate(request);
+    const { identity } = session;
     const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
-    return saveStaffAvailability(context, params.data.staffId, request.body as Parameters<typeof saveStaffAvailability>[2]);
+    return saveStaffAvailability(context, params.data.staffId, request.body, z.string().regex(/^[a-f0-9]{64}$/).optional().parse(request.headers['x-visit-schedule-preview']), session);
   });
   app.get('/v1/provider/businesses/:businessId/staff/:staffId/availability-rules', async request => {
     const { businessId, staffId } = z.strictObject({ businessId: z.string().min(1), staffId: z.string().min(1) }).parse(request.params);

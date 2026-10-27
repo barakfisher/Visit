@@ -1,3 +1,5 @@
+import { assertSafeSchedule, fenceScheduleSession } from './ScheduleImpact.service.js';
+import type { AuthenticatedSession } from '../security/sessions.js';
 import { withBusinessConfiguration } from './publication.js';
 import { prisma } from '../db/client.js';
 import { DEFAULT_BOOKING_POLICY, parseAvailabilityRules, parseBookingPolicy } from '../scheduling/rules.js';
@@ -66,15 +68,16 @@ export async function getBusinessAvailability(context: AuthorizedBusinessContext
   return { weekly, overrides };
 }
 
-export async function saveBusinessAvailability(context: AuthorizedBusinessContext, input: AvailabilityRules) {
+export async function saveBusinessAvailability(context: AuthorizedBusinessContext, input: unknown, expectedToken?: string, session?: AuthenticatedSession) {
   await validateBusinessContext(context, managers);
   const businessId = context.businessId;
   const business = await prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { timezone: true } });
-  input = parseAvailabilityRules(input, business.timezone);
-  const weekly = input.weekly.flatMap(day => day.intervals.map(hours => ({ businessId, weekday: day.weekday, startLocal: hours.startLocal, endLocal: hours.endLocal })));
-  const overrides = input.overrides.map(day => ({ businessId, date: new Date(`${day.date}T00:00:00.000Z`), isOpen: day.isOpen, startLocal: day.isOpen ? day.startLocal! : null, endLocal: day.isOpen ? day.endLocal! : null }));
+  const rules = parseAvailabilityRules(input, business.timezone);
+  const weekly = rules.weekly.flatMap(day => day.intervals.map(hours => ({ businessId, weekday: day.weekday, startLocal: hours.startLocal, endLocal: hours.endLocal })));
+  const overrides = rules.overrides.map(day => ({ businessId, date: new Date(`${day.date}T00:00:00.000Z`), isOpen: day.isOpen, startLocal: day.isOpen ? day.startLocal! : null, endLocal: day.isOpen ? day.endLocal! : null }));
   await withBusinessConfiguration(context, async tx => {
-    await tx.$queryRaw`SELECT id FROM "Business" WHERE id = ${businessId} FOR UPDATE`;
+    await fenceScheduleSession(tx, session);
+    await assertSafeSchedule(tx, businessId, rules, undefined, expectedToken);
     await tx.businessWeeklyAvailability.deleteMany({ where: { businessId } });
     await tx.scheduleOverride.deleteMany({ where: { businessId } });
     if (weekly.length) await tx.businessWeeklyAvailability.createMany({ data: weekly });
@@ -109,16 +112,17 @@ export async function createBusinessStaff(context: AuthorizedBusinessContext, in
   });
 }
 
-export async function saveStaffAvailability(context: AuthorizedBusinessContext, staffId: string, input: AvailabilityRules) {
+export async function saveStaffAvailability(context: AuthorizedBusinessContext, staffId: string, input: unknown, expectedToken?: string, session?: AuthenticatedSession) {
   await validateBusinessContext(context, managers);
   const businessId = context.businessId;
   if (!await prisma.staff.findFirst({ where: { id: staffId, businessId }, select: { id: true } })) throw notFound();
   const business = await prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { timezone: true } });
-  input = parseAvailabilityRules(input, business.timezone);
-  const weekly = input.weekly.flatMap(day => day.intervals.map(hours => ({ businessId, staffId, weekday: day.weekday, startLocal: hours.startLocal, endLocal: hours.endLocal })));
-  const overrides = input.overrides.map(day => ({ businessId, staffId, date: new Date(`${day.date}T00:00:00.000Z`), isOpen: day.isOpen, startLocal: day.isOpen ? day.startLocal! : null, endLocal: day.isOpen ? day.endLocal! : null }));
+  const rules = parseAvailabilityRules(input, business.timezone);
+  const weekly = rules.weekly.flatMap(day => day.intervals.map(hours => ({ businessId, staffId, weekday: day.weekday, startLocal: hours.startLocal, endLocal: hours.endLocal })));
+  const overrides = rules.overrides.map(day => ({ businessId, staffId, date: new Date(`${day.date}T00:00:00.000Z`), isOpen: day.isOpen, startLocal: day.isOpen ? day.startLocal! : null, endLocal: day.isOpen ? day.endLocal! : null }));
   await withBusinessConfiguration(context, async tx => {
-    await tx.$queryRaw`SELECT id FROM "Business" WHERE id = ${businessId} FOR UPDATE`;
+    await fenceScheduleSession(tx, session);
+    await assertSafeSchedule(tx, businessId, rules, staffId, expectedToken);
     await tx.staffWeeklyAvailability.deleteMany({ where: { businessId, staffId } });
     await tx.staffScheduleOverride.deleteMany({ where: { businessId, staffId } });
     if (weekly.length) await tx.staffWeeklyAvailability.createMany({ data: weekly });

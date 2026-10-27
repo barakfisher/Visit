@@ -16,7 +16,8 @@
 - [x] 6e. VIS-28 — persisted owned success/details, revision-checked calendar and deduplicated confirmation intent; persisted-booking-success.md records 235 API / 60 foundation / 71 Storybook, full exported-web, typecheck/lint and JavaScript export evidence.
 - [x] 6f. VIS-30 — authorized atomic rescheduling, idempotent cancellation and event-scoped notification intent; atomic-booking-operations.md records 244 API / 63 foundation / 71 Storybook, full exported-web, typecheck/lint and JavaScript export evidence.
 - [x] 6g. VIS-29 — owned deterministic Home/contextual appointments with details, policy-aware reschedule/cancel, separate states and booking/availability invalidation; home-appointments.md records 251 API / 65 foundation / 80 Storybook, full exported-web, typecheck/lint and JavaScript export evidence.
-- [ ] 7. Finish VIS-18/VIS-38 operations and integrated VIS-11/VIS-14/VIS-17/VIS-20 evidence plus CI/staging/native/operational release gates.
+- [x] 6h. VIS-18 — business-local daily/weekly provider agenda, protected schedule previews and atomic conflict revalidation; provider-agenda.md records 262 API / 68 foundation / 91 Storybook, full exported-web, typecheck/lint and JavaScript export evidence.
+- [ ] 7. Finish VIS-38 operations and integrated VIS-11/VIS-14/VIS-17/VIS-20 evidence plus CI/staging/native/operational release gates.
 - [ ] Deferred: VIS-48 NLP assistant, after pilot validation.
 
 Tests accompany each implementation. Only active work is In Progress; completed local code is not proof of real native or external-provider execution. Follow explicit dependency edges and preserve the user-approved native release gate. No additional blocking product decision was identified before starting.
