@@ -12,6 +12,7 @@ export function useAppointments() {
   const { t, locale } = useAppLocale(), client = useQueryClient();
   const identity = useAuthStore(state => state.identityId), contextVersion = useAuthStore(state => state.contextVersion);
   const [error, setError] = useState('');
+  const [busyBookingId, setBusyBookingId] = useState<string | null>(null);
   const pending = useRef(false), mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const bookings = useQuery({ queryKey: ['consumer', 'active', identity, contextVersion], queryFn: () => apiRequest<{ bookings: HistoricalAppointment[] }>('/api/consumer/bookings/active'), enabled: Boolean(identity) });
@@ -21,17 +22,17 @@ export function useAppointments() {
     const current = bookings.data?.bookings.find(item => item.id === booking.id);
     if (!current) return;
     const scope = { identityId: identity, contextVersion, activeBusinessId: useAuthStore.getState().activeBusinessId };
-    pending.current = true;
+    pending.current = true; setBusyBookingId(booking.id);
     try {
       if (!await confirmAppointmentCancellation()) return;
       if (!canContinueAppointmentAction(scope, useAuthStore.getState(), mounted.current)) return;
       setError('');
       await apiRequest(`/v1/bookings/${encodeURIComponent(booking.id)}/cancel`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedRevision: current.revision }) });
       if (!canContinueAppointmentAction(scope, useAuthStore.getState(), mounted.current)) return;
-      await client.invalidateQueries({ predicate: query => ['consumer', 'me', 'appointment-history'].includes(String(query.queryKey[0])) });
+      await client.invalidateQueries({ predicate: query => ['consumer', 'me', 'appointment-history', 'booking-details', 'provider', 'availability', 'booking-calendar'].includes(String(query.queryKey[0])) });
     } catch { if (canContinueAppointmentAction(scope, useAuthStore.getState(), mounted.current)) { setError(t('lifecycle.failure')); await bookings.refetch(); } }
-    finally { pending.current = false; }
+    finally { pending.current = false; if (mounted.current) setBusyBookingId(null); }
   }
   function reschedule(booking: ActiveBooking) { router.push({ pathname: '/booking/[providerId]', params: { providerId: booking.business.id, serviceId: booking.service.id, fromBookingId: booking.id } }); }
-  return { t, locale, identity, error, bookings, history, cancel, reschedule };
+  return { t, locale, identity, error, busyBookingId, bookings, history, cancel, reschedule };
 }

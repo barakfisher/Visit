@@ -112,7 +112,7 @@ export async function bookingSuccessSmoke({ browser, webUrl, apiUrl, prisma, run
     await detailsView.getByText('האישור תועד ב־Visit. לא נשלחה הודעת SMS או WhatsApp.', { exact: true }).waitFor();
     assert.equal(await detailsView.getByRole('button', { name: 'הוספה ליומן (.ics)', exact: true }).count(), 0);
     assert.equal(await page.locator('html').getAttribute('dir'), 'rtl');
-    assert.equal(await prisma.bookingNotification.count({ where: { businessId: business.id } }), noticeCount);
+    assert.equal(await prisma.bookingNotification.count({ where: { businessId: business.id } }), noticeCount + 2);
     console.log('PASS: persisted owned confirmation reload/download, delayed/error/foreign/held success guards, stack-focus cancellation refetch, cancellation reload, notification deduplication and Hebrew RTL.');
   } finally { await context.close(); }
 }

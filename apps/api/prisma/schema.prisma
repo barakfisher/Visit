@@ -321,6 +321,7 @@ model BookingPolicy {
 }
 
 model Booking {
+  reschedules BookingReschedule[]
   revision Int @default(0)
   events BookingEvent[]
   customerName String?
@@ -583,5 +584,15 @@ model BookingNotification {
   kind String @default("BOOKING_CONFIRMED")
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   event BookingEvent @relation(fields: [businessId, bookingId, eventId], references: [businessId, bookingId, id], onDelete: Cascade, onUpdate: Restrict)
-  @@unique([businessId, bookingId])
+  @@index([businessId, bookingId])
+}
+
+model BookingReschedule {
+  id String @id @default(cuid())
+  bookingId String
+  idempotencyKey String
+  fingerprint String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  @@unique([bookingId, idempotencyKey])
 }

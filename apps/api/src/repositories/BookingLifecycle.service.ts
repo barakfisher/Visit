@@ -33,6 +33,7 @@ export async function changeBookingOutcome(session: AuthenticatedSession, bookin
     if (current.status !== 'CONFIRMED' && !(outcome === 'CANCELLED' && current.status === 'HELD')) throw conflict('This appointment can no longer change status.');
     const now = new Date();
     if (outcome !== 'CANCELLED' && current.endsAt > now) throw conflict('Wait until the appointment has ended before recording its outcome.');
+    if (!businessId && current.status === 'CONFIRMED' && !current.business.bookingPolicy) throw conflict('This business has not configured its cancellation policy.');
     if (!businessId && current.status === 'CONFIRMED' && current.startsAt.getTime() < now.getTime() + (current.business.bookingPolicy?.cancellationCutoffMinutes ?? 0) * 60000) throw conflict('The cancellation cutoff has passed for this appointment.');
     await setBookingAudit(tx, session.identity.id, businessId ? 'PROVIDER' : 'CUSTOMER', outcome === 'COMPLETED' ? 'APPOINTMENT_FINISHED' : outcome === 'NO_SHOW' ? 'CUSTOMER_ABSENT' : businessId ? 'PROVIDER_REQUEST' : 'CUSTOMER_REQUEST');
     return tx.booking.update({ where: { id: current.id }, data: { status: outcome, holdExpiresAt: null } });

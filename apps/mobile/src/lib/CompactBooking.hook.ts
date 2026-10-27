@@ -1,3 +1,4 @@
+import { useAuthStore } from '../state/auth';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAppLocale } from '../i18n/LocaleContext';
@@ -8,17 +9,18 @@ import { addBookingDays, availableBookingSlots, bookingMonthCells, bookingSlotId
 import type { CompactBookingInput } from '../types/CompactBooking.types';
 import { formatMoney } from '../types/flows';
 export function useCompactBooking(input: CompactBookingInput) {
+  const identityId = useAuthStore(state => state.identityId), contextVersion = useAuthStore(state => state.contextVersion);
   const { locale, t, direction } = useAppLocale(), language = intlLocale(locale);
   const [sheet, setSheet] = useState<'service' | 'calendar' | null>(null);
   const [monthChoice, setMonthChoice] = useState({ scope: '', month: '' });
   const [preferred, setPreferred] = useState(''), [pageOffset, setPageOffset] = useState<number | null>(null);
   const [searching, setSearching] = useState(false), [searchNotice, setSearchNotice] = useState('');
   const search = useRef<AbortController | null>(null), sequence = useRef(0);
-  const scope = `${input.providerId}:${input.fromBookingId ?? ''}:${input.serviceId}:${input.date}`;
+  const scope = `${identityId}:${contextVersion}:${input.providerId}:${input.fromBookingId ?? ''}:${input.serviceId}:${input.date}`;
   const today = input.provider ? localDate(input.provider.timezone) : '';
   const fallbackMonth = (validBookingDate(input.date) ? input.date : today).slice(0, 7);
   const month = monthChoice.scope === scope ? monthChoice.month : fallbackMonth;
-  const calendar = useQuery({ queryKey: ['booking-calendar', input.providerId, input.fromBookingId ?? 'public', input.serviceId, month], queryFn: ({ signal }) => readBookingCalendar(input.providerId, input.serviceId, `${month}-01`, 31, input.fromBookingId, signal), enabled: Boolean(input.provider && input.serviceId && /^\d{4}-\d{2}$/.test(month)), staleTime: 10000 });
+  const calendar = useQuery({ queryKey: ['booking-calendar', identityId, contextVersion, input.providerId, input.fromBookingId ?? 'public', input.serviceId, month], queryFn: ({ signal }) => readBookingCalendar(input.providerId, input.serviceId, `${month}-01`, 31, input.fromBookingId, signal), enabled: Boolean(input.provider && input.serviceId && /^\d{4}-\d{2}$/.test(month)), staleTime: 10000 });
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSearching(false); setPageOffset(null);
@@ -46,7 +48,7 @@ export function useCompactBooking(input: CompactBookingInput) {
       while (from <= maximum) {
         const remaining = Math.round((+new Date(`${maximum}T12:00Z`) - +new Date(`${from}T12:00Z`)) / 86400000) + 1;
         const result = await readBookingCalendar(input.providerId, input.serviceId, from, Math.min(31, remaining), input.fromBookingId, controller.signal);
-        if (controller.signal.aborted || current !== sequence.current) return;
+        if (controller.signal.aborted || current !== sequence.current || useAuthStore.getState().identityId !== identityId || useAuthStore.getState().contextVersion !== contextVersion) return;
         const found = result.days.find(day => day.available && day.date >= result.today && day.date <= result.maximumDate);
         if (found) { input.onDate(found.date); setPageOffset(null); return; }
         from = addBookingDays(from, 31);

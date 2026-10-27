@@ -1,3 +1,4 @@
+import { useRescheduleAttempt } from './BookingReschedule.store';
 import { useBookingAttempt } from './BookingAttempt.store';
 import { useBookingContactDraft } from './BookingContactDraft.store';
 import type { AuthProfile } from '../types/flows';
@@ -35,6 +36,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   profile: null,
   setAuth: (token, profile) => {
     const changedIdentity = profile.id !== get().identityId;
+    if (useRescheduleAttempt.getState().attempt?.identityId !== profile.id) useRescheduleAttempt.getState().set(null);
     if (useBookingAttempt.getState().attempt?.identityId !== profile.id) useBookingAttempt.getState().set(null);
     const draft = useBookingContactDraft.getState().draft;
     if (draft && draft.identityId !== profile.id) useBookingContactDraft.getState().clear();
@@ -51,7 +53,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   identityId: null,
   activeBusinessId: null,
   setIdentity: (identityId) => {
-    if (identityId !== get().identityId) queryClient.clear();
+    if (identityId !== get().identityId) { queryClient.clear(); useRescheduleAttempt.getState().set(null); }
     set({ identityId, ...(identityId !== get().identityId ? { activeBusinessId: null, profile: null, token: null, contextVersion: get().contextVersion + 1 } : {}) });
   },
   selectBusiness: (businessId) => {
@@ -63,6 +65,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set({ activeBusinessId: businessId, contextVersion: get().contextVersion + 1 });
   },
   clear: () => {
+    useRescheduleAttempt.getState().set(null);
     useBookingAttempt.getState().set(null);
     useBookingContactDraft.getState().clear();
     queryClient.clear();

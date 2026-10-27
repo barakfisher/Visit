@@ -44,7 +44,7 @@ export async function registerScreenFlows(app: FastifyInstance) {
     const { bookingId } = z.object({ bookingId: z.string().min(1) }).parse(request.params);
     const { context, serviceId, booking } = await requireOwnedReschedule(await authenticate(request), bookingId);
     const provider = await prisma.business.findUniqueOrThrow({ where: { id: context.businessId }, select: { id: true, name: true, timezone: true, location: true, category: true, services: { where: { id: serviceId } }, weeklyAvailability: true, scheduleOverrides: true, bookingPolicy: true } });
-    return { provider: { ...provider, services: provider.services.map(service => ({ ...service, name: booking.serviceName, durationMinutes: booking.serviceDurationMinutes, priceMinor: booking.servicePriceMinor, currency: booking.serviceCurrency })) } };
+    return { revision: booking.revision, provider: { ...provider, services: provider.services.map(service => ({ ...service, name: booking.serviceName, durationMinutes: booking.serviceDurationMinutes, priceMinor: booking.servicePriceMinor, currency: booking.serviceCurrency })) } };
   });
   app.get('/api/bookings/:bookingId/availability', async request => {
     const { bookingId } = z.object({ bookingId: z.string().min(1) }).parse(request.params);

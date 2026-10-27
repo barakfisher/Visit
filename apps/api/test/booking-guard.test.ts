@@ -113,7 +113,7 @@ test('database capacity guard is authoritative without Redis, including direct w
         assert.equal(await prisma.booking.count({ where: { businessId: business.id, staffId: staff.id } }), 0);
       } finally { await app.close(); }
     });
-    await t.test('reschedule can reuse capacity from an expired hold without Redis coordination', async () => {
+    await t.test('reschedule can reuse capacity from an expired hold with owned Redis coordination', async () => {
       const staff = await resource();
       const original = await prisma.booking.create({ data: input(staff.id) });
       await prisma.booking.create({ data: { ...input(staff.id, 60), status: 'HELD', holdExpiresAt: new Date(Date.now() - 1000) } });
@@ -123,7 +123,7 @@ test('database capacity guard is authoritative without Redis, including direct w
       // Internal test seam bypasses Redis; database/application guards still apply.
       await registerBookingRoutes(app, { acquireLocks: async () => ({ acquired: true, release: async () => true }) });
       try {
-        const response = await app.inject({ method: 'POST', url: `/v1/bookings/${original.id}/reschedule`, headers: { authorization: `Bearer ${token}` }, payload: { staffId: staff.id, startsAt: `${day}T10:00:00Z` } });
+        const response = await app.inject({ method: 'POST', url: `/v1/bookings/${original.id}/reschedule`, headers: { authorization: `Bearer ${token}` }, payload: { finalConsent: true, expectedRevision: 0, idempotencyKey: randomUUID(), staffId: staff.id, startsAt: `${day}T10:00:00Z` } });
         assert.equal(response.statusCode, 200);
         assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: original.id } })).startsAt.toISOString(), `${day}T10:00:00.000Z`);
       } finally { await app.close(); }

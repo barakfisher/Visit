@@ -61,7 +61,7 @@ test('publication readiness and public/owned paths preserve lifecycle across set
       assert.equal((await app.inject({ url: `/api/bookings/${confirmedId}/provider`, headers: foreign.headers })).statusCode, 404);
       assert.equal((await app.inject({ url: `/api/bookings/${confirmedId}/provider`, headers: owner.headers })).statusCode, 200);
       assert.equal((await app.inject({ url: `/api/bookings/${confirmedId}/availability?date=${date}`, headers: owner.headers })).statusCode, 200);
-      const moved = await app.inject({ method: 'POST', url: `/v1/bookings/${confirmedId}/reschedule`, headers: owner.headers, payload: { staffId, startsAt: at('11:00') } }); assert.equal(moved.statusCode, 200, moved.body);
+      const moved = await app.inject({ method: 'POST', url: `/v1/bookings/${confirmedId}/reschedule`, headers: owner.headers, payload: { finalConsent: true, expectedRevision: before.revision, idempotencyKey: randomUUID(), staffId, startsAt: at('11:00') } }); assert.equal(moved.statusCode, 200, moved.body);
       assert.ok((await app.inject({ url: '/v1/me/bookings', headers: owner.headers })).json().bookings.some((b: { id: string }) => b.id === confirmedId));
       assert.equal((await publish(true)).statusCode, 200);
       assert.equal((await app.inject({ method: 'POST', url: `/v1/bookings/${heldId}/confirm`, headers: owner.headers })).statusCode, 409);

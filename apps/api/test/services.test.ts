@@ -80,7 +80,7 @@ test('service CRUD and booking snapshots stay scoped and preserve history on bot
       await prisma.booking.delete({ where: { id: spoofed.id } });
     });
     await t.test('existing appointments reschedule using reserved duration after catalog duration changes', async () => {
-      const response = await app.inject({ method: 'POST', url: `/v1/bookings/${bookingId}/reschedule`, headers, payload: { staffId: staff.id, startsAt: `${date}T11:00:00Z` } });
+      const response = await app.inject({ method: 'POST', url: `/v1/bookings/${bookingId}/reschedule`, headers, payload: { finalConsent: true, expectedRevision: (await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } })).revision, idempotencyKey: randomUUID(), staffId: staff.id, startsAt: `${date}T11:00:00Z` } });
       assert.equal(response.statusCode, 200, response.body);
       assert.equal(response.json().endsAt, `${date}T11:30:00.000Z`);
     });

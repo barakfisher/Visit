@@ -145,7 +145,7 @@ test('tenant repositories and both HTTP surfaces enforce scope, ownership and cu
       assert.equal((await app.inject({ url: `${base(b!.id)}/bookings`, headers: headers(0) })).statusCode, 403);
       assert.equal((await app.inject({ url: `/api/provider/agenda?businessId=${b!.id}&date=${date}`, headers: headers(0) })).statusCode, 403);
       for (const action of ['confirm', 'cancel', 'reschedule']) {
-        assert.equal((await app.inject({ method: 'POST', url: `/v1/bookings/${bookingB.id}/${action}`, headers: headers(0), payload: action === 'reschedule' ? { staffId: staffB!.id, startsAt: `${date}T14:00:00Z` } : {} })).statusCode, 404);
+        assert.equal((await app.inject({ method: 'POST', url: `/v1/bookings/${bookingB.id}/${action}`, headers: headers(0), payload: action === 'reschedule' ? { finalConsent: true, expectedRevision: 0, idempotencyKey: randomUUID(), staffId: staffB!.id, startsAt: `${date}T14:00:00Z` } : {} })).statusCode, 404);
       }
       assert.equal((await app.inject({ method: 'POST', url: `${base(a!.id)}/bookings/${bookingB.id}/cancel`, headers: headers(0) })).statusCode, 404);
       assert.equal((await app.inject({ method: 'POST', url: '/api/bookings/confirm', headers: headers(0), payload: { holdId: bookingB.id } })).statusCode, 404);

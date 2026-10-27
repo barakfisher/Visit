@@ -59,7 +59,7 @@ test('repeatable isolated fixtures cover both directions of foundation HTTP tena
         }
         assert.equal((await app.inject({ method: 'POST', url: '/api/provider/block-time', headers: f.headers(owner), payload: { businessId: own.id, staffId: foreignStaff.id, date: f.date, startLocal: '14:00', endLocal: '14:30' } })).statusCode, 404);
         assert.equal((await app.inject({ method: 'DELETE', url: `/api/provider/block-time/${foreignBlock.id}?businessId=${own.id}`, headers: f.headers(owner) })).statusCode, 404);
-        for (const action of ['confirm', 'cancel', 'reschedule']) assert.equal((await app.inject({ method: 'POST', url: `/v1/bookings/${foreignBooking.id}/${action}`, headers: f.headers(owner), payload: action === 'reschedule' ? { staffId: resource.id, startsAt: `${f.date}T15:00:00Z` } : {} })).statusCode, 404);
+        for (const action of ['confirm', 'cancel', 'reschedule']) assert.equal((await app.inject({ method: 'POST', url: `/v1/bookings/${foreignBooking.id}/${action}`, headers: f.headers(owner), payload: action === 'reschedule' ? { finalConsent: true, expectedRevision: 0, idempotencyKey: randomUUID(), staffId: resource.id, startsAt: `${f.date}T15:00:00Z` } : {} })).statusCode, 404);
         assert.equal((await app.inject({ method: 'POST', url: `${base}/bookings/${foreignBooking.id}/cancel`, headers: f.headers(owner), payload: {} })).statusCode, 404);
         assert.equal((await app.inject({ method: 'POST', url: '/api/bookings/confirm', headers: f.headers(owner), payload: { holdId: foreignBooking.id } })).statusCode, 404);
         // Release is deliberately non-enumerating/idempotent; it cannot cancel another identity's booking.
