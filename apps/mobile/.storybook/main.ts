@@ -16,7 +16,7 @@ const config: StorybookConfig = {
   async viteFinal(config) {
     return mergeConfig(config, {
       oxc: { jsx: { importSource: 'nativewind' } },
-      optimizeDeps: { include: ['nativewind/jsx-runtime', 'nativewind/jsx-dev-runtime', 'react-native-css-interop/dist/runtime/web/api'] },
+      optimizeDeps: { exclude: ['react-native-safe-area-context'], include: ['nativewind/jsx-runtime', 'nativewind/jsx-dev-runtime', 'react-native-css-interop/dist/runtime/web/api'] },
       // Isolated stories never inherit production credentials or the development API.
       define: { 'process.env.EXPO_PUBLIC_API_URL': JSON.stringify('https://storybook.invalid') },
       resolve: { extensions: ['.web.tsx', '.web.ts', '.web.js', '.tsx', '.ts', '.jsx', '.js', '.json'], alias: [{ find: /^react-native$/, replacement: 'react-native-web' }, { find: '@', replacement: fileURLToPath(new URL('..', import.meta.url)) }] },

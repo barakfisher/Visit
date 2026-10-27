@@ -25,19 +25,19 @@ export function CompactBookingControls({ controls: c, t, disabled, date, selecte
     </View> : null}
     <Modal transparent visible={c.sheet !== null} animationType="none" accessibilityLabel={t(c.sheet === 'service' ? 'compact.chooseService' : 'compact.chooseDate')} onRequestClose={c.close}>
       <View style={[styles.overlay, { direction: c.direction }]}>
-        <View accessibilityViewIsModal style={styles.panel}>
+        <ScrollView accessibilityViewIsModal style={styles.panel} contentContainerStyle={styles.panelContent}>
           <AppText accessibilityRole="header" className="text-xl font-bold text-ink">{t(c.sheet === 'service' ? 'compact.chooseService' : 'compact.chooseDate')}</AppText>
           <ActionButton secondary label={t('compact.close')} onPress={c.close} />
           {c.sheet === 'service' ? <ScrollView contentContainerStyle={styles.choices}>{c.choices.map(choice => <Pressable key={choice.id} accessibilityRole="button" accessibilityState={{ selected: choice.selected }} aria-pressed={choice.selected} onPress={() => c.selectService(choice.id)} className={`min-h-14 gap-1 rounded-control border px-4 py-3 ${choice.selected ? 'border-brand bg-brand-soft' : 'border-line'}`}><AppText className="font-semibold text-ink">{choice.label}</AppText><AppText className="text-sm text-body">{choice.summary}</AppText></Pressable>)}</ScrollView> : <>
             <View className="flex-row items-center gap-2"><View className="flex-1"><ActionButton secondary label={t('compact.previousMonth')} disabled={c.calendarLoading || !c.canPreviousMonth} onPress={c.previousMonth} /></View><AppText testID="booking-calendar-month" accessibilityLabel={c.month} className="flex-1 text-center font-semibold text-ink">{c.monthTitle}</AppText><View className="flex-1"><ActionButton secondary label={t('compact.nextMonth')} disabled={c.calendarLoading || !c.canNextMonth} onPress={c.nextMonth} /></View></View>
             {c.calendarLoading ? <ActivityIndicator accessibilityLabel={t('compact.loadingCalendar')} /> : null}
-            {c.calendarError ? <View className="gap-2"><AppText accessibilityRole="alert" className="text-danger">{t('compact.calendarFailed')}</AppText><ActionButton secondary label={t('common.retry')} onPress={c.retryCalendar} /></View> : <View accessibilityLabel={c.monthTitle}>
+            {c.calendarError ? <View className="gap-2"><AppText accessibilityRole="alert" className="text-danger">{t('compact.calendarFailed')}</AppText><ActionButton secondary label={t('common.retry')} onPress={c.retryCalendar} /></View> : <ScrollView horizontal accessibilityLabel={c.monthTitle}><View style={styles.calendar}>
               <View className="flex-row">{c.weekdays.map((label, index) => <AppText key={index} style={styles.weekday} className="text-xs text-muted">{label}</AppText>)}</View>
               <View className="flex-row flex-wrap">{c.cells.map((cell, index) => <View key={cell?.date ?? `blank-${index}`} style={styles.cell}>{cell ? <Pressable testID={`booking-day-${cell.date}`} accessibilityRole="button" accessibilityLabel={cell.label} accessibilityState={{ disabled: !cell.available || c.calendarLoading, selected: cell.selected }} aria-pressed={cell.selected} disabled={!cell.available || c.calendarLoading} onPress={() => c.selectDate(cell.date)} className={`min-h-11 items-center justify-center rounded-control border ${!cell.available ? 'border-transparent bg-canvas' : cell.selected ? 'border-brand bg-brand-soft' : 'border-line bg-surface'}`}><AppText className={cell.available ? 'font-semibold text-brand' : 'text-muted'}>{cell.day}</AppText></Pressable> : <View style={styles.blank} />}</View>)}</View>
-            </View>}
+            </View></ScrollView>}
             <AppText className="text-sm text-muted">{t('compact.calendarHelp')}</AppText>
           </>}
-        </View>
+        </ScrollView>
       </View>
     </Modal>
   </View>;
