@@ -13,7 +13,7 @@
 - [x] 6b. VIS-26 — final-consent reservation/commit and durable owned attempt recovery; final-consent-booking.md records 204 API / 41 foundation / 55 Storybook, full exported-web, typecheck/lint and JavaScript export evidence.
 - [x] 6c. VIS-24 — compact service/calendar/nearby-time advisory review; compact-booking.md records 208 API / 51 foundation / 60 Storybook, full exported-web, typecheck/lint and JavaScript export evidence.
 - [x] 6d. VIS-39 — appointment lifecycle and immutable audit; appointment-lifecycle.md records 223 API / 58 foundation / 65 Storybook, full exported-web, typecheck/lint and JavaScript export evidence.
-- [ ] 6e. VIS-28 — persisted success; VIS-12/VIS-26/VIS-39 prerequisites are implemented. Follow actual Linear prerequisites.
+- [x] 6e. VIS-28 — persisted owned success/details, revision-checked calendar and deduplicated confirmation intent; persisted-booking-success.md records 235 API / 60 foundation / 71 Storybook, full exported-web, typecheck/lint and JavaScript export evidence.
 - [ ] 7. Finish VIS-30/VIS-29/VIS-18/VIS-38 operations and integrated VIS-11/VIS-14/VIS-17/VIS-20 evidence plus CI/staging/native/operational release gates.
 - [ ] Deferred: VIS-48 NLP assistant, after pilot validation.
 

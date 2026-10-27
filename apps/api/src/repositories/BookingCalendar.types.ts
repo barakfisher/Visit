@@ -1,0 +1,1 @@
+export type CalendarAppointment = { id: string; startsAt: string; endsAt: string; revision: number; updatedAt: string; business: { name: string; timezone: string }; service: { name: string }; staff: { displayName: string } };
