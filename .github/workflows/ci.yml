@@ -53,7 +53,8 @@ jobs:
       - run: npm run lint
       - run: npm run test --workspace @visit/api
       - run: npx playwright install --with-deps chromium
-      - run: npm run build-storybook --workspace @visit/mobile
+      - run: npm run test:foundation --workspace @visit/mobile
+      - run: npm run test:vis11 --workspace @visit/mobile
       - run: npm run test-storybook --workspace @visit/mobile
       - run: npm run export:web --workspace @visit/mobile
       - run: npm run test:web --workspace @visit/mobile
@@ -62,4 +63,12 @@ jobs:
         with:
           name: web-smoke-failure-screenshot
           path: apps/mobile/test-results/*.png
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vis11-storybook-${{ github.sha }}
+          path: |
+            apps/mobile/storybook-static/
+            apps/mobile/test-results/vis11/
           if-no-files-found: ignore
