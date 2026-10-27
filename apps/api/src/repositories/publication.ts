@@ -58,8 +58,8 @@ async function expireBusinessHolds(tx: Prisma.TransactionClient, businessId: str
   await tx.booking.updateMany({ where: { businessId, status: 'HELD' }, data: { status: 'EXPIRED', holdExpiresAt: null } });
   return holds;
 }
-async function releaseExpired(holds: { id: string; customerId: string }[]) {
-  await Promise.allSettled(holds.map(hold => releaseHold(hold.id, hold.customerId)));
+async function releaseExpired(holds: { id: string; customerId: string | null }[]) {
+  await Promise.allSettled(holds.flatMap(hold => hold.customerId ? [releaseHold(hold.id, hold.customerId)] : []));
 }
 export async function withBusinessConfiguration<T>(context: AuthorizedBusinessContext, work: (tx: Prisma.TransactionClient) => Promise<T>) {
   await validateBusinessContext(context, ['OWNER', 'MANAGER']);
@@ -70,7 +70,7 @@ export async function withBusinessConfiguration<T>(context: AuthorizedBusinessCo
     // hours/blocks instead of continuing on a snapshot taken before the edit.
     await tx.business.update({ where: { id: context.businessId }, data: { updatedAt: new Date() } });
     const current = await tx.business.findUniqueOrThrow({ where: { id: context.businessId }, select: { publishedAt: true } });
-    let expired: { id: string; customerId: string }[] = [];
+    let expired: { id: string; customerId: string | null }[] = [];
     if (current.publishedAt && Object.keys((await publicationReadiness(tx, context.businessId)).blockers).some(field => !['profile', 'timezone'].includes(field))) {
       await tx.business.update({ where: { id: context.businessId }, data: { publishedAt: null } });
       expired = await expireBusinessHolds(tx, context.businessId);

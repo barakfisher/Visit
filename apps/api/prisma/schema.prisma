@@ -45,6 +45,8 @@ enum ChallengePurpose {
 }
 
 model Identity {
+  manualAttempts ManualBookingAttempt[]
+  manualBookings Booking[] @relation("ManualBookingActor")
   bookingAttempts BookingAttempt[]
   displayName String?
   accessEventsActed BusinessAccessEvent[] @relation("AccessActor")
@@ -81,6 +83,7 @@ model Identity {
 }
 
 model Business {
+  manualAttempts ManualBookingAttempt[]
   bookingAttempts BookingAttempt[]
   accessEvents BusinessAccessEvent[]
   invitations BusinessInvitation[]
@@ -321,6 +324,11 @@ model BookingPolicy {
 }
 
 model Booking {
+  source String @default("CUSTOMER")
+  enteredByIdentityId String?
+  enteredBy Identity? @relation("ManualBookingActor", fields: [enteredByIdentityId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  manualReason String?
+  manualFingerprint String?
   reschedules BookingReschedule[]
   revision Int @default(0)
   events BookingEvent[]
@@ -332,7 +340,7 @@ model Booking {
   customerContactCapturedAt DateTime? @db.Timestamptz(3)
   id              String        @id @default(cuid())
   businessId      String
-  customerId      String
+  customerId      String?
   staffId         String
   serviceId       String
   startsAt        DateTime
@@ -349,7 +357,7 @@ model Booking {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   business        Business      @relation(fields: [businessId], references: [id], onDelete: Restrict)
-  customer        Identity      @relation("CustomerBookings", fields: [customerId], references: [id], onDelete: Restrict)
+  customer        Identity?      @relation("CustomerBookings", fields: [customerId], references: [id], onDelete: Restrict)
   staff           Staff         @relation(fields: [businessId, staffId], references: [businessId, id], onDelete: Restrict)
   service         Service       @relation(fields: [businessId, serviceId], references: [businessId, id], onDelete: Restrict)
 
@@ -595,4 +603,18 @@ model BookingReschedule {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade, onUpdate: Restrict)
   @@unique([bookingId, idempotencyKey])
+}
+
+model ManualBookingAttempt {
+  id String @id @default(cuid())
+  businessId String
+  actorId String
+  idempotencyKey String
+  fingerprint String
+  status String @default("PENDING")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  actor Identity @relation(fields: [actorId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  @@unique([businessId, idempotencyKey])
 }

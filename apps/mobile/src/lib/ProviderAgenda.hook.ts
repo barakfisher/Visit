@@ -1,3 +1,4 @@
+import { useManualBooking } from './ManualBooking.hook';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIsFocused, useRouter } from 'expo-router';
@@ -23,6 +24,7 @@ export function useProviderAgenda(): ProviderAgendaView {
   useEffect(() => { focusRef.current = focused; }, [focused]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; useAgendaDraft.getState().clear(); }; }, []);
   const day = stored.date || todayInTimezone(business.timezone), validDate = validBookingDate(day);
+  const manual = useManualBooking(business, day);
   const agenda = useQuery({ queryKey: ['provider', business.id, 'agenda', identity, version, day, stored.mode], queryFn: ({ signal }) => readProviderAgenda(business.id, day, stored.mode, signal), enabled: validDate && focused, refetchInterval: 10000, staleTime: 0 });
   function update(patch: Partial<AgendaDraft>) { if (!operation.current) { setFeedback(''); useAgendaDraft.getState().update(scope, patch); } }
   function capture() {
@@ -49,7 +51,7 @@ export function useProviderAgenda(): ProviderAgendaView {
     const isCurrent = capture();
     try { if (isCurrent()) await openAgendaContact(phone, mode); } catch { if (isCurrent()) setFeedback(t(mode === 'call' ? 'dashboard.callFailure' : 'dashboard.whatsappFailure')); }
   }
-  return { business, profile, t, day, validDate, retry: () => { if (validDate && focused) void agenda.refetch(); }, draft: stored, agenda: { data: agenda.data, isError: agenda.isError, isLoading: agenda.isLoading }, busy, feedback: !validDate ? t('agendaEdit.invalidDate') : feedback, update,
+  return { manual, business, profile, t, day, validDate, retry: () => { if (validDate && focused) void agenda.refetch(); }, draft: stored, agenda: { data: agenda.data, isError: agenda.isError, isLoading: agenda.isLoading }, busy, feedback: !validDate ? t('agendaEdit.invalidDate') : feedback, update,
     selectBusiness: (id: string) => { if (id !== business.id && !operation.current) { useSessionStore.getState().selectBusiness(id); router.replace({ pathname: '/provider/dashboard', params: { businessId: id } }); } },
     previous: () => { if (validDate) update({ date: addBookingDays(day, stored.mode === 'week' ? -7 : -1) }); }, next: () => { if (validDate) update({ date: addBookingDays(day, stored.mode === 'week' ? 7 : 1) }); },
     when: (instant: string) => `${stored.mode === 'week' ? `${appointmentDate(instant, business.timezone, locale)} · ` : ''}${appointmentTime(instant, business.timezone, locale)}`,

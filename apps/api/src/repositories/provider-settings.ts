@@ -55,7 +55,7 @@ export async function saveBusinessPolicy(context: AuthorizedBusinessContext, inp
     const policy = await tx.bookingPolicy.upsert({ where: { businessId: context.businessId }, create: { ...data, businessId: context.businessId }, update: data });
     return { policy, expired };
   });
-  await Promise.allSettled(result.expired.map(hold => releaseHold(hold.id, hold.customerId)));
+  await Promise.allSettled(result.expired.flatMap(hold => hold.customerId ? [releaseHold(hold.id, hold.customerId)] : []));
   return result.policy;
 }
 
@@ -164,7 +164,7 @@ export async function updateBusinessStaff(context: AuthorizedBusinessContext, st
       }
       return { staff, expired };
     });
-    await Promise.allSettled(result.expired.map(h => releaseHold(h.id, h.customerId)));
+    await Promise.allSettled(result.expired.flatMap(h => h.customerId ? [releaseHold(h.id, h.customerId)] : []));
     return result.staff;
   } catch (error) { if (isDatabaseCapacityError(error)) throw conflict('Capacity cannot be lower than existing appointments or active holds.'); throw error; }
 }
