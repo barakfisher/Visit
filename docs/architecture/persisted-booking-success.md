@@ -44,3 +44,9 @@ From `apps/api`, run `../../node_modules/.bin/tsc -p tsconfig.test.json --noEmit
 Fresh QA session `/root/vis28_qa` added unit and database-backed browser coverage. Its isolated 16-test run and mobile typecheck/lint passed. The developer runs the integrated database/browser suites sequentially; the audit did not claim independent device execution.
 
 Fresh security session `/root/vis28_security` reviewed ownership/session validation, minimal projections, status/revision checks, ICS injection/path handling, atomic/deduplicated/immutable notification records, safe auth returns and asynchronous scope guards. Its navigation-focus freshness finding was fixed by unmounting content on blur and forcing fresh reads on remount. Final static review reported no outstanding concrete vulnerabilities. No live messaging, deployment or billing changes are included; native/device gates remain VIS-2 → VIS-43 → VIS-25.
+
+## Commit and hosted check evidence
+
+Implementation: `153a6f28514714f5d7ae41ba54223481068f2779`. [PR #14](https://github.com/barakfisher/Visit/pull/14).
+
+Hosted CI did not execute: [run 40460489299](https://github.com/barakfisher/Visit/actions/runs/40460489299), job `122043642050`, failed before startup with zero steps. Its annotation states that recent account payments failed or the spending limit must be increased. Local checks above passed; hosted CI is not claimed to pass. No billing change or administrative merge bypass was performed.
