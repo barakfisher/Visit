@@ -18,8 +18,8 @@
 - [x] 6g. VIS-29 — owned deterministic Home/contextual appointments with details, policy-aware reschedule/cancel, separate states and booking/availability invalidation; home-appointments.md records 251 API / 65 foundation / 80 Storybook, full exported-web, typecheck/lint and JavaScript export evidence.
 - [x] 6h. VIS-18 — business-local daily/weekly provider agenda, protected schedule previews and atomic conflict revalidation; provider-agenda.md records 262 API / 68 foundation / 91 Storybook, full exported-web, typecheck/lint and JavaScript export evidence.
 - [x] 6i. VIS-38 — provider-entered guest appointments with unverified tenant contact snapshots, audited exceptions and authoritative idempotent scheduling; manual-appointments.md records 272 API / 71 foundation / 102 Storybook, full exported-web, typecheck/lint and JavaScript export evidence.
-- [x] 7a. VIS-11 — independent Storybook/isolated styled browser acceptance; evidence in storybook-validation.md. Native/live release gates remain separate.
-- [ ] 7b. Finish integrated VIS-14/VIS-17/VIS-20 evidence plus CI/staging/native/operational release gates.
+- [ ] 7a. VIS-11 — first Storybook/isolated styled browser slice merged (PR #19, evidence in storybook-validation.md); open items are listed on the Linear issue. Native/live release gates remain separate.
+- [ ] 7b. Finish integrated VIS-14/VIS-17/VIS-20 evidence plus CI/staging/native/operational release gates. VIS-14 golden path merged (PR #20, evidence in docs/evidence/vis14); remaining slices are listed in docs/handoffs/2026-10-28-vis14.md.
 - [ ] Deferred: VIS-48 NLP assistant, after pilot validation.
 
 Tests accompany each implementation. Only active work is In Progress; completed local code is not proof of real native or external-provider execution. Follow explicit dependency edges and preserve the user-approved native release gate. No additional blocking product decision was identified before starting.
