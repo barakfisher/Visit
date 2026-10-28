@@ -88,17 +88,28 @@ export async function bookingResilienceSmoke({ browser, webUrl, apiUrl, prisma, 
     }
     assert.ok(!(await freeSlots(date)).some(free => free.startsAt === slot.startsAt));
   }
-  // "Leaves nothing behind": no live hold or extra confirmed booking, and no Redis hold record or capacity member.
+  // "Leaves nothing behind": no live hold or extra confirmed booking, and no Redis hold record or capacity member that
+  // is not a confirmed booking. Capacity members are read from Redis itself, so an entry without a database row fails too.
   async function assertNothingHeld(customerId: string, confirmed: number) {
     assert.equal(await prisma.booking.count({ where: { businessId: business.businessId, customerId, status: 'HELD' } }), 0);
     assert.equal(await prisma.booking.count({ where: { businessId: business.businessId, customerId, status: 'CONFIRMED' } }), confirmed);
-    const own = await prisma.booking.findMany({ where: { businessId: business.businessId, customerId, status: { not: 'CONFIRMED' } }, select: { id: true } });
+    const committed = new Set((await prisma.booking.findMany({ where: { businessId: business.businessId, status: 'CONFIRMED' }, select: { id: true } })).map(booking => booking.id));
     const capacityKeys: string[] = [];
     for await (const batch of redis.scanStream({ match: `visit:reservation:${business.businessId}:*` })) capacityKeys.push(...(batch as string[]));
-    for (const { id } of own) {
+    for (const key of capacityKeys) for (const member of await redis.zrange(key, 0, -1)) assert.ok(committed.has(member), `capacity member ${member} in ${key} is not a confirmed booking`);
+    for (const { id } of await prisma.booking.findMany({ where: { businessId: business.businessId, customerId, status: { not: 'CONFIRMED' } }, select: { id: true } })) {
       assert.equal(await redis.exists(`visit:hold:${id}`), 0, `hold record remains for ${id}`);
-      for (const key of capacityKeys) assert.equal(await redis.zscore(key, id), null, `capacity member remains for ${id} in ${key}`);
     }
+  }
+  // Back at selection: the review is gone and another bookable time is offered on the same screen.
+  async function assertBackAtSelection(page: Page, date: string, lost: Slot) {
+    await reviewCard(page).waitFor({ state: 'hidden' });
+    await slotButton(page, lost).waitFor({ state: 'hidden' });
+    const other = (await freeSlots(date)).find(slot => slot.startsAt !== lost.startsAt && slot.localTime !== lost.localTime);
+    assert.ok(other, 'no other free slot on this date');
+    await preferBookingTime(page, other.localTime);
+    await slotButton(page, other).first().waitFor();
+    return other;
   }
   const commitResponse = (page: Page) => page.waitForResponse(response => response.url() === `${apiUrl}${COMMIT_PATH}` && response.request().method() === 'POST');
   async function errorCode(response: Response) { return ((await response.json()) as ApiFailure).error.code; }
@@ -108,11 +119,10 @@ export async function bookingResilienceSmoke({ browser, webUrl, apiUrl, prisma, 
     assert.equal(booked.length, 1);
     return booked[0]!;
   }
-  // D: after losing, the same customer books another free time and gets exactly one booking for it.
-  async function bookAnotherTime(page: Page, t: (key: Parameters<typeof translate>[1]) => string, customerId: string, date: string, lost: Slot) {
-    const next = (await freeSlots(date)).find(slot => slot.startsAt !== lost.startsAt);
-    assert.ok(next, 'no other free slot to recover with');
-    await review(page, t, date, next);
+  // D: after losing, the customer picks another offered time on the same screen and gets exactly one booking for it.
+  async function bookAnotherTime(page: Page, t: (key: Parameters<typeof translate>[1]) => string, customerId: string, next: Slot) {
+    await slotButton(page, next).first().click();
+    await reviewCard(page).waitFor();
     await confirmButton(page, t).click();
     await expectConfirmation(page, customerId, next);
     await assertNothingHeld(customerId, 1);
@@ -141,9 +151,8 @@ export async function bookingResilienceSmoke({ browser, webUrl, apiUrl, prisma, 
     await fillSlot('en', date, slot);
     // Waits on the message, not on the refresh interval (a tuning value).
     await shopper.page.getByText(shopper.t('compact.changed'), { exact: true }).filter({ visible: true }).waitFor();
-    await reviewCard(shopper.page).waitFor({ state: 'hidden' });
-    await slotButton(shopper.page, slot).waitFor({ state: 'hidden' });
     await shopper.page.screenshot({ path: path.join(evidence, 'stale-review-en-mobile.png'), fullPage: true });
+    await assertBackAtSelection(shopper.page, date, slot);
     await assertNothingHeld(shopper.id, 0);
     assert.equal(await prisma.bookingAttempt.count({ where: { businessId: business.businessId, customerId: shopper.id } }), 0);
     console.log('PASS: VIS-14 a slot taken during review is cleared by the availability refresh; the customer returns to selection with nothing held.');
@@ -167,13 +176,13 @@ export async function bookingResilienceSmoke({ browser, webUrl, apiUrl, prisma, 
     const response = await refused; assert.equal(response.status(), 409); assert.equal(await errorCode(response), 'CONFLICT');
     // The customer reads the refusal in their own language (VIS-14 acceptance), not the server's diagnostic text.
     await shopper.page.getByRole('alert').filter({ visible: true, hasText: shopper.t('bookingCommit.conflict') }).waitFor();
-    await reviewCard(shopper.page).waitFor({ state: 'hidden' });
     // The stale snapshot still lists the slot as available; the app must exclude it anyway.
     await slotButton(shopper.page, slot).waitFor({ state: 'hidden' });
     await shopper.page.screenshot({ path: path.join(evidence, 'stale-confirm-he-mobile.png'), fullPage: true });
-    await assertNothingHeld(shopper.id, 0);
     await shopper.page.unrouteAll({ behavior: 'wait' });
-    await bookAnotherTime(shopper.page, shopper.t, shopper.id, date, slot);
+    const next = await assertBackAtSelection(shopper.page, date, slot);
+    await assertNothingHeld(shopper.id, 0);
+    await bookAnotherTime(shopper.page, shopper.t, shopper.id, next);
     console.log('PASS: VIS-14 confirming a stale review is refused with a conflict, the slot is excluded, nothing is held, and the customer books another time.');
   }
 
@@ -195,9 +204,9 @@ export async function bookingResilienceSmoke({ browser, webUrl, apiUrl, prisma, 
       await shopper.page.screenshot({ path: path.join(evidence, 'outage-uncertain-en-mobile.png'), fullPage: true });
     } finally { await redis.connect(); }
     await shopper.page.getByRole('button', { name: shopper.t('bookingCommit.retry'), exact: true }).filter({ visible: true }).click();
-    await expectConfirmation(shopper.page, shopper.id, slot);
+    const booked = await expectConfirmation(shopper.page, shopper.id, slot);
     await shopper.page.screenshot({ path: path.join(evidence, 'outage-retried-en-mobile.png'), fullPage: true });
-    assert.equal(keys.length, 2); assert.equal(keys[0], keys[1]);
+    assert.equal(keys.length, 2); assert.equal(keys[0], keys[1]); assert.equal(booked.idempotencyKey, keys[0]);
     await assertNothingHeld(shopper.id, 1);
     console.log('PASS: VIS-14 a real reservation outage returns 503, keeps the attempt uncertain with nothing saved, and the same-key retry commits once.');
   }
@@ -220,6 +229,7 @@ export async function bookingResilienceSmoke({ browser, webUrl, apiUrl, prisma, 
     await shopper.page.screenshot({ path: path.join(evidence, 'lost-request-uncertain-he-mobile.png'), fullPage: true });
     await shopper.page.getByRole('button', { name: shopper.t('bookingCommit.retry'), exact: true }).filter({ visible: true }).click();
     const booked = await expectConfirmation(shopper.page, shopper.id, slot);
+    await shopper.page.screenshot({ path: path.join(evidence, 'lost-request-retried-he-mobile.png'), fullPage: true });
     assert.equal(keys.length, 2); assert.equal(keys[0], keys[1]); assert.equal(booked.idempotencyKey, keys[0]);
     await shopper.page.unrouteAll({ behavior: 'wait' });
     await assertNothingHeld(shopper.id, 1);
