@@ -22,6 +22,8 @@ const BOOKABLE_DAYS_AHEAD = 4;
 const REVIEW_REASON = 'Verified pilot lifecycle application and ownership evidence.';
 const evidence = path.resolve('test-results/vis14');
 
+// What the resilience smoke needs to book on the business this lifecycle onboarded.
+export type PilotBusiness = { businessId: string; businessName: string; serviceId: string; bookableDate: string };
 type Deps = { browser: Browser; webUrl: string; apiUrl: string; prisma: typeof Prisma; redis: typeof Redis; run: string; identityIds: string[]; businessIds: string[] };
 
 // Offset of a time zone at an instant, from ICU's "GMT+02:00" style name.
@@ -50,7 +52,7 @@ async function redisKeys(redis: typeof Redis, pattern: string) {
   return keys;
 }
 
-export async function pilotLifecycleSmoke({ browser, webUrl, apiUrl, prisma, redis, run, identityIds, businessIds }: Deps) {
+export async function pilotLifecycleSmoke({ browser, webUrl, apiUrl, prisma, redis, run, identityIds, businessIds }: Deps): Promise<PilotBusiness> {
   const contexts: BrowserContext[] = [], errors: string[] = [];
   await mkdir(evidence, { recursive: true });
   async function newContext(locale: Locale, timezoneId?: string) {
@@ -79,7 +81,7 @@ export async function pilotLifecycleSmoke({ browser, webUrl, apiUrl, prisma, red
   const syntheticPhone = () => `+1555${randomInt(1000000, 9999999)}`;
 
   try {
-    await lifecycle();
+    return await lifecycle();
   } catch (error) {
     // Keep what every open page showed at the moment of failure before the contexts close.
     let index = 0;
@@ -87,7 +89,7 @@ export async function pilotLifecycleSmoke({ browser, webUrl, apiUrl, prisma, red
     throw error;
   } finally { await Promise.all(contexts.map(context => context.close())); }
 
-  async function lifecycle() {
+  async function lifecycle(): Promise<PilotBusiness> {
     // 1. A new identity applies through login's provider path and keeps customer access.
     const en = (key: Parameters<typeof translate>[1]) => translate('en', key);
     const providerContext = await newContext('en'), provider = await newPage(providerContext);
@@ -253,5 +255,6 @@ export async function pilotLifecycleSmoke({ browser, webUrl, apiUrl, prisma, red
     assert.equal(await prisma.booking.count({ where: { businessId: business.id, status: 'CONFIRMED' } }), 2);
     assert.deepEqual(errors, []);
     console.log('PASS: VIS-14 provider agenda shows both committed bookings with service, verified customer contact and expected revenue.');
+    return { businessId: business.id, businessName, serviceId: setup.serviceId, bookableDate };
   }
 }

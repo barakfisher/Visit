@@ -131,7 +131,8 @@ export function useBookingContactFlow() {
         if (terminal || fromBookingId && reason instanceof ApiError && [400, 401, 404, 409].includes(reason.status)) {
           if (fromBookingId) useRescheduleAttempt.getState().set(null); else useBookingAttempt.getState().set(null); setSelection(null);
           if (selected) setConflictSlot(slotId(selected));
-          setError(reason instanceof Error ? reason.message : t('bookingCommit.conflict')); await contacts.refetch(); await details.refetch(); await slots.refetch();
+          // Server messages are English diagnostics; the customer reads the refusal in the app's language.
+          setError(t(reason instanceof ApiError && reason.code === 'CUSTOMER_CONTACT_REQUIRED' ? 'bookingContact.help' : 'bookingCommit.conflict')); await contacts.refetch(); await details.refetch(); await slots.refetch();
         } else setError(t('bookingCommit.uncertain'));
       }
     } finally {
