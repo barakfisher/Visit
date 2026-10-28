@@ -2,7 +2,7 @@
   "passed": true,
   "command": "npm run test:web --workspace @visit/mobile",
   "source": {
-    "commit": "4763d2129a92db3c78b0423687b9feb95c77c269",
+    "commit": "3ec4fe2e5c6a3bfe69d5aec91c582ac5fb948e20",
     "dirty": false
   },
   "database": "visit_test",
@@ -21,7 +21,7 @@
     "PASS: VIS-14 a real reservation outage returns 503, keeps the attempt uncertain with nothing saved, and the same-key retry commits once.",
     "PASS: VIS-14 a request lost before the server leaves nothing saved; the same-key retry commits once.",
     "PASS: VIS-14 a same-turn double activation of Confirm sends one request and creates one booking.",
-    "PASS: VIS-14 the same request delivered twice at once creates one booking (ATTEMPT_PENDING, 200).",
+    "PASS: VIS-14 the same request delivered twice at once creates one booking (200, ATTEMPT_PENDING).",
     "PASS: VIS-14 (recorded finding) one customer confirming the same time from two tabs gets two overlapping bookings while places remain; no hold is left behind."
   ],
   "screenshots": [
@@ -30,6 +30,7 @@
     "confirmation-he-mobile.png",
     "home-en-mobile.png",
     "home-he-mobile.png",
+    "lost-request-retried-he-mobile.png",
     "lost-request-uncertain-he-mobile.png",
     "outage-retried-en-mobile.png",
     "outage-uncertain-en-mobile.png",
