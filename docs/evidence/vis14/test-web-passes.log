@@ -27,6 +27,13 @@ PASS: VIS-14 provider set up Asia/Jerusalem business with required verified phon
 PASS: VIS-14 en customer opened the shared link, signed in, saved once, reviewed 10:00 Israel time with no hold, confirmed once and sees it on Home.
 PASS: VIS-14 he customer opened the shared link, signed in, saved once, reviewed 11:00 Israel time with no hold, confirmed once and sees it on Home.
 PASS: VIS-14 provider agenda shows both committed bookings with service, verified customer contact and expected revenue.
+PASS: VIS-14 a slot taken during review is cleared by the availability refresh; the customer returns to selection with nothing held.
+PASS: VIS-14 confirming a stale review is refused with a conflict, the slot is excluded, nothing is held, and the customer books another time.
+PASS: VIS-14 a real reservation outage returns 503, keeps the attempt uncertain with nothing saved, and the same-key retry commits once.
+PASS: VIS-14 a request lost before the server leaves nothing saved; the same-key retry commits once.
+PASS: VIS-14 a same-turn double activation of Confirm sends one request and creates one booking.
+PASS: VIS-14 the same request delivered twice at once creates one booking (200, ATTEMPT_PENDING).
+PASS: VIS-14 (recorded finding) one customer confirming the same time from two tabs gets two overlapping bookings while places remain; no hold is left behind.
 PASS: linked PWA manifest/icons, network-only shell and no-store API response policy.
 PASS: Hebrew default/RTL, LTR phone input, language switching and guest preference persistence at mobile/desktop sizes.
 PASS: expired access refreshes through the HttpOnly cookie without ordinary token storage.

@@ -135,7 +135,10 @@ try {
     await homeNavigationSmoke({ browser, webUrl, apiUrl, prisma, run, identityIds, businessIds });
     const { pilotLifecycleSmoke } = await import('./pilot-lifecycle-smoke.js');
     // Its three UI phone sign-ins share the loopback IP budget with later suites; restore it afterwards.
-    await pilotLifecycleSmoke({ browser, webUrl, apiUrl, prisma, redis, run, identityIds, businessIds });
+    const pilotBusiness = await pilotLifecycleSmoke({ browser, webUrl, apiUrl, prisma, redis, run, identityIds, businessIds });
+    await resetLocalSignInLimits();
+    const { bookingResilienceSmoke } = await import('./booking-resilience-smoke.js');
+    await bookingResilienceSmoke({ browser, webUrl, apiUrl, prisma, redis, identityIds, business: pilotBusiness, resetSignInLimits: resetLocalSignInLimits });
     await resetLocalSignInLimits();
     const localization = await browser.newContext({ viewport: { width: 390, height: 844 } }); contexts.push(localization);
     const localePage = await localization.newPage(); capture = localePage;
