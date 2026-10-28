@@ -1,0 +1,44 @@
+PASS: manual guest appointment review, required audited exception, pending guard, committed lost-response recovery without duplicate/identity/notification, capacity conflict with retained details, and Hebrew RTL mobile/desktop.
+PASS: local daily/weekly agenda, loading/error/retry/empty, schedule impact no-write conflict, active hold protection, stale review refusal, pending commit, declined/failed/successful provider cancellation and Hebrew RTL.
+PASS: owned deterministic Home/contextual appointment, independent loading/error/empty providers, details/multiple actions, reschedule reorder, declined/failed/pending cancellation, unpublished access and Hebrew long-content flow.
+PASS: provider completion/no-show/cancellation and immutable audit, future outcome guard, owned persisted customer history without saved provider, service snapshots and Hebrew RTL on traveler devices.
+PASS: persisted owned confirmation reload/download, delayed/error/foreign/held success guards, stack-focus cancellation refetch, cancellation reload, notification deduplication and Hebrew RTL.
+PASS: compact sole-service auto-selection, Hebrew RTL calendar/Escape, closed dates, bounded next date, six-slot preference/paging, invalid time, calendar retry and advisory zero writes across traveler timezone/mobile/desktop.
+PASS: required booking name/email, no hold during synthetic verification, retained choices, lost-response recovery and immutable operational snapshot.
+PASS: delayed final response leaves Home focused; re-entering booking recovers the same committed attempt.
+PASS: protected hydration, explicit workspace choice, URL authority, discarded drafts, live membership revocation, retained customer identity, session expiry and safe sign-in recovery.
+PASS: private invite creation, scrubbed explicit consent, verified recipient, manager limits, revocation, audited ownership review and Hebrew team UI.
+PASS: provider registration reuses one identity; phone cooldown/expiry/server throttle and double-submit/profile recovery; email return context survives a new tab.
+PASS: clean approved business configures profile/catalog/staff/weekly hours/exceptions/policy through UI, survives a lost creation acknowledgement without duplicates, publishes and exports an independently decoded canonical QR.
+PASS: business setup -> readiness -> publish -> direct public detail -> unpublish through the provider UI.
+PASS: unified business application, admin-only reasoned review, applicant refresh/fallback, intended membership and unpublished state.
+PASS: anonymous shared link -> phone login -> one identity-owned save -> booking; repeat scans, safe previews, offline/retry, cross-device list/remove and account-change rejection.
+PASS: Google code/PKCE browser login, scrubbed handoff, explicit preview, profile outage/mismatch recovery without replay.
+PASS: Google provider-entry intent resumes with the same identity.
+PASS: Google shared-provider intent saves to the existing unified identity and continues to booking.
+PASS: linked-method settings, verified contact replacement/profile recovery, other-device revocation, explicit removal/last-method protection and Hebrew RTL.
+PASS: Google email conflict does not merge; existing-method authentication and explicit linking preserve identity.
+PASS: Google cancellation, invalid claims and malformed callback fail safely without sessions. No Google network requests.
+PASS: Home bootstrap/empty/saved/offline states, scoped removal, legacy redirects, no tabs/directory, customer/application/multi-business menu, explicit mode choice, focus trap/return and Hebrew RTL.
+PASS: VIS-14 new identity applied from the login provider path, sees pending review and keeps customer Home.
+PASS: VIS-14 administrator approved with a recorded reason; the applicant gains business membership.
+PASS: clean approved business configures profile/catalog/staff/weekly hours/exceptions/policy through UI, survives a lost creation acknowledgement without duplicates, publishes and exports an independently decoded canonical QR.
+PASS: VIS-14 provider set up Asia/Jerusalem business with required verified phone; link denied until publish, then shared by copy and QR.
+PASS: VIS-14 en customer opened the shared link, signed in, saved once, reviewed 10:00 Israel time with no hold, confirmed once and sees it on Home.
+PASS: VIS-14 he customer opened the shared link, signed in, saved once, reviewed 11:00 Israel time with no hold, confirmed once and sees it on Home.
+PASS: VIS-14 provider agenda shows both committed bookings with service, verified customer contact and expected revenue.
+PASS: linked PWA manifest/icons, network-only shell and no-store API response policy.
+PASS: Hebrew default/RTL, LTR phone input, language switching and guest preference persistence at mobile/desktop sizes.
+PASS: expired access refreshes through the HttpOnly cookie without ordinary token storage.
+PASS: advisory review with zero writes, final-consent commit, confirmation and calendar export.
+PASS: provider login lands Home; explicit dashboard navigation, agenda verification and manual break.
+PASS: business switching discards delayed old-workspace responses, clears drafts, and leaves browser caches/private storage empty.
+PASS: service create/edit/archive/restore/delete, exact prices, failed draft recovery, immutable agenda details and Hebrew mobile editor.
+PASS: two simultaneous browser contexts produce exactly one winner, one conflict, and a removed stale slot.
+PASS: fragment link is scrubbed, opening does not authenticate, and profile outage recovery does not replay it.
+PASS: email fallback completes authentication and routes Home.
+PASS: authenticated language preference persists on the server and restores with fresh browser storage.
+PASS: cross-origin logout is denied, outage preserves session, successful logout clears cookie and revokes only its login family.
+PASS: America/New_York fold labels and confirmation preserve the second exact instant on a traveling device.
+PASS: Asia/Jerusalem fold labels and confirmation preserve the second exact instant on a traveling device.
+PASS: reschedule, cancellation, and no browser runtime exceptions.

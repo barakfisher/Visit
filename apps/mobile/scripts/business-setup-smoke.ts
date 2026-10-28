@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import jsQR from 'jsqr';
 import type { Page, BrowserContext } from 'playwright';
+// The catalog this setup flow creates through the UI; journeys that book it assert against these values.
+export const SETUP_SERVICE = { name: 'Pilot consultation', durationMinutes: 30, price: 100, currency: 'ILS' } as const;
+export const SETUP_STAFF_NAME = 'Pilot expert edited';
 export async function configureBusinessSmoke({ page, context, webUrl, apiUrl, businessId }: { page: Page; context: BrowserContext; webUrl: string; apiUrl: string; businessId: string }) {
   const base = `${apiUrl}/v1/provider/businesses/${businessId}`;
   await page.goto(`${webUrl}/provider/${businessId}`);
@@ -21,16 +24,16 @@ export async function configureBusinessSmoke({ page, context, webUrl, apiUrl, bu
   await page.getByRole('button', { name: 'Save business details', exact: true }).click(); assert.equal((await profileSaved).status(), 200);
   await page.getByTestId('setup-section-services').click();
   const form = page.getByTestId('service-form');
-  await form.getByRole('textbox', { name: 'Service name', exact: true }).fill('Pilot consultation');
-  await form.getByRole('textbox', { name: 'Duration in minutes', exact: true }).fill('30');
-  await form.getByRole('textbox', { name: 'Price', exact: true }).fill('100');
-  await form.getByRole('button', { name: 'ILS', exact: true }).click();
+  await form.getByRole('textbox', { name: 'Service name', exact: true }).fill(SETUP_SERVICE.name);
+  await form.getByRole('textbox', { name: 'Duration in minutes', exact: true }).fill(String(SETUP_SERVICE.durationMinutes));
+  await form.getByRole('textbox', { name: 'Price', exact: true }).fill(String(SETUP_SERVICE.price));
+  await form.getByRole('button', { name: SETUP_SERVICE.currency, exact: true }).click();
   const serviceCreated = page.waitForResponse(r => r.url() === `${base}/services` && r.request().method() === 'POST');
   await form.getByRole('button', { name: 'Add service', exact: true }).click(); const response = await serviceCreated; assert.equal(response.status(), 201); const serviceId = (await response.json()).id;
   await page.getByTestId('setup-section-staff').click();
   await page.getByRole('textbox', { name: 'Staff display name', exact: true }).fill('Pilot expert');
   await page.getByRole('textbox', { name: 'Simultaneous appointments', exact: true }).fill('2');
-  await page.getByRole('checkbox', { name: 'Select service: Pilot consultation', exact: true }).click();
+  await page.getByRole('checkbox', { name: `Select service: ${SETUP_SERVICE.name}`, exact: true }).click();
   let lostAcknowledgement = true, firstStaffId = '';
   await page.route(`${base}/staff`, async route => {
     if (route.request().method() === 'POST' && lostAcknowledgement) { lostAcknowledgement = false; const created = await route.fetch(); assert.equal(created.status(), 201); firstStaffId = (await created.json()).id; await route.abort(); } else await route.continue();
@@ -40,10 +43,10 @@ export async function configureBusinessSmoke({ page, context, webUrl, apiUrl, bu
   await page.getByRole('button', { name: 'Add staff member', exact: true }).click(); const staffResponse = await staffCreated; assert.equal(staffResponse.status(), 201); const staffId = (await staffResponse.json()).id; assert.equal(staffId, firstStaffId);
   const staff = page.getByTestId(`setup-staff-${staffId}`); await staff.waitFor();
   await staff.getByRole('button', { name: 'Edit staff member: Pilot expert', exact: true }).click();
-  await staff.getByRole('textbox', { name: 'Staff display name', exact: true }).fill('Pilot expert edited');
+  await staff.getByRole('textbox', { name: 'Staff display name', exact: true }).fill(SETUP_STAFF_NAME);
   const staffSaved = page.waitForResponse(r => r.url() === `${base}/staff/${staffId}` && r.request().method() === 'PATCH');
   await staff.getByRole('button', { name: 'Save staff member', exact: true }).click(); assert.equal((await staffSaved).status(), 200);
-  await staff.getByRole('button', { name: 'Edit staff hours: Pilot expert edited', exact: true }).click();
+  await staff.getByRole('button', { name: `Edit staff hours: ${SETUP_STAFF_NAME}`, exact: true }).click();
   await staff.getByRole('button', { name: 'Add date exception', exact: true }).click();
   const closedDate = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
   await staff.getByRole('textbox', { name: 'Exception date 1 (YYYY-MM-DD)', exact: true }).fill(closedDate);

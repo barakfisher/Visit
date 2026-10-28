@@ -4,7 +4,7 @@ import { z } from "zod";
 
 dotenv.config({ path: "../../.env" });
 
-const schema = z.object({
+const settings = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   TRUSTED_PROXY_CIDRS: z.string().default("").refine(value => value.split(',').map(entry => entry.trim()).filter(Boolean).every(entry => {
     const [address, prefix, extra] = entry.split('/');
@@ -31,7 +31,11 @@ const schema = z.object({
   GOOGLE_CALLBACK_URL: z.preprocess(value => value === '' ? undefined : value, z.string().url().optional()),
   GOOGLE_NATIVE_RETURN_URL: z.preprocess(value => value === '' ? undefined : value, z.string().url().optional()),
   PLATFORM_ADMIN_EMAILS: z.string().default(""), // Legacy bootstrap hint; public authentication never grants ADMIN.
-}).superRefine((value, context) => {
+});
+// Every configurable key; the browser test harness assigns each one so .env can never fill a gap in its configuration.
+export const environmentKeys = Object.keys(settings.shape);
+
+const schema = settings.superRefine((value, context) => {
   try {
     const appUrl = new URL(value.WEB_APP_URL);
     if (!['http:', 'https:'].includes(appUrl.protocol) || appUrl.username || appUrl.password || appUrl.pathname !== '/' || appUrl.search || appUrl.hash || (value.NODE_ENV === 'production' && appUrl.protocol !== 'https:')) context.addIssue({ code: 'custom', path: ['WEB_APP_URL'], message: 'Use a web origin, with HTTPS in production.' });

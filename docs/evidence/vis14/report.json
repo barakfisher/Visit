@@ -1,0 +1,29 @@
+{
+  "passed": true,
+  "command": "VISIT_TEST_WEB_PORT=8083 npm run test:web --workspace @visit/mobile",
+  "source": {
+    "commit": "970ed5f2f63f996895c72f27ff6e2193d638ef27",
+    "dirty": false
+  },
+  "database": "visit_test",
+  "redisDatabase": 1,
+  "exitCode": 0,
+  "passLines": 44,
+  "vis14": [
+    "PASS: VIS-14 new identity applied from the login provider path, sees pending review and keeps customer Home.",
+    "PASS: VIS-14 administrator approved with a recorded reason; the applicant gains business membership.",
+    "PASS: VIS-14 provider set up Asia/Jerusalem business with required verified phone; link denied until publish, then shared by copy and QR.",
+    "PASS: VIS-14 en customer opened the shared link, signed in, saved once, reviewed 10:00 Israel time with no hold, confirmed once and sees it on Home.",
+    "PASS: VIS-14 he customer opened the shared link, signed in, saved once, reviewed 11:00 Israel time with no hold, confirmed once and sees it on Home.",
+    "PASS: VIS-14 provider agenda shows both committed bookings with service, verified customer contact and expected revenue."
+  ],
+  "screenshots": [
+    "agenda-en-mobile.png",
+    "confirmation-en-mobile.png",
+    "confirmation-he-mobile.png",
+    "home-en-mobile.png",
+    "home-he-mobile.png",
+    "review-en-mobile.png",
+    "review-he-mobile.png"
+  ]
+}
