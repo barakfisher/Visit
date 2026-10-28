@@ -1,21 +1,28 @@
 {
   "passed": true,
-  "command": "VISIT_TEST_WEB_PORT=8083 npm run test:web --workspace @visit/mobile",
+  "command": "npm run test:web --workspace @visit/mobile",
   "source": {
-    "commit": "970ed5f2f63f996895c72f27ff6e2193d638ef27",
+    "commit": "4763d2129a92db3c78b0423687b9feb95c77c269",
     "dirty": false
   },
   "database": "visit_test",
   "redisDatabase": 1,
   "exitCode": 0,
-  "passLines": 44,
+  "passLines": 51,
   "vis14": [
     "PASS: VIS-14 new identity applied from the login provider path, sees pending review and keeps customer Home.",
     "PASS: VIS-14 administrator approved with a recorded reason; the applicant gains business membership.",
     "PASS: VIS-14 provider set up Asia/Jerusalem business with required verified phone; link denied until publish, then shared by copy and QR.",
     "PASS: VIS-14 en customer opened the shared link, signed in, saved once, reviewed 10:00 Israel time with no hold, confirmed once and sees it on Home.",
     "PASS: VIS-14 he customer opened the shared link, signed in, saved once, reviewed 11:00 Israel time with no hold, confirmed once and sees it on Home.",
-    "PASS: VIS-14 provider agenda shows both committed bookings with service, verified customer contact and expected revenue."
+    "PASS: VIS-14 provider agenda shows both committed bookings with service, verified customer contact and expected revenue.",
+    "PASS: VIS-14 a slot taken during review is cleared by the availability refresh; the customer returns to selection with nothing held.",
+    "PASS: VIS-14 confirming a stale review is refused with a conflict, the slot is excluded, nothing is held, and the customer books another time.",
+    "PASS: VIS-14 a real reservation outage returns 503, keeps the attempt uncertain with nothing saved, and the same-key retry commits once.",
+    "PASS: VIS-14 a request lost before the server leaves nothing saved; the same-key retry commits once.",
+    "PASS: VIS-14 a same-turn double activation of Confirm sends one request and creates one booking.",
+    "PASS: VIS-14 the same request delivered twice at once creates one booking (ATTEMPT_PENDING, 200).",
+    "PASS: VIS-14 (recorded finding) one customer confirming the same time from two tabs gets two overlapping bookings while places remain; no hold is left behind."
   ],
   "screenshots": [
     "agenda-en-mobile.png",
@@ -23,7 +30,13 @@
     "confirmation-he-mobile.png",
     "home-en-mobile.png",
     "home-he-mobile.png",
+    "lost-request-uncertain-he-mobile.png",
+    "outage-retried-en-mobile.png",
+    "outage-uncertain-en-mobile.png",
     "review-en-mobile.png",
-    "review-he-mobile.png"
+    "review-he-mobile.png",
+    "stale-confirm-he-mobile.png",
+    "stale-review-en-mobile.png",
+    "two-tabs-both-confirmed-en-mobile.png"
   ]
 }
