@@ -99,7 +99,10 @@ const check: NonNullable<Story['play']> = async ({ canvas, args }) => {
   future.focus();
   await userEvent.keyboard('{Enter}');
   await expect(future).toHaveAttribute('aria-pressed', 'true');
-  if (calendar.scrollWidth > calendar.clientWidth) await expect(Math.abs(calendar.scrollLeft)).toBeGreaterThan(0);
+  // The whole date is visible, wherever the strip had to scroll (if at all) to show it.
+  const strip = calendar.getBoundingClientRect(); const date = future.getBoundingClientRect(); const report = JSON.stringify({ strip, date });
+  await expect(date.left, report).toBeGreaterThanOrEqual(strip.left - 1);
+  await expect(date.right, report).toBeLessThanOrEqual(strip.right + 1);
 };
 export const HebrewCompact: Story = { play: check };
 export const EnglishCompact: Story = { args: { locale: 'en' }, play: check };
@@ -107,3 +110,23 @@ export const HebrewMobile: Story = { args: { width: 390 }, play: check };
 export const EnglishMobile: Story = { args: { locale: 'en', width: 390 }, play: check };
 export const HebrewDesktop: Story = { args: { width: 960 }, play: check };
 export const EnglishDesktop: Story = { args: { locale: 'en', width: 960 }, play: check };
+
+// Chromium scrolls a focused element only when it is entirely out of view, so a date that is partly cut off at the
+// strip's edge would stay cut off. Clip one on purpose (font metrics differ per OS) and focus it.
+const clippedDateFocus: NonNullable<Story['play']> = async ({ canvas, args }) => {
+  const calendar = canvas.getByLabelText(translate(args.locale, 'ui.dates'));
+  const date = canvas.getByRole('button', { name: /5, 2026/ });
+  const box = () => ({ strip: calendar.getBoundingClientRect(), date: date.getBoundingClientRect() });
+  const before = box();
+  calendar.scrollLeft += before.date.left - before.strip.left + before.date.width / 2;
+  const clipped = box();
+  await expect(clipped.date.left, JSON.stringify(clipped)).toBeLessThan(clipped.strip.left - 1);
+  await expect(clipped.date.right, JSON.stringify(clipped)).toBeGreaterThan(clipped.strip.left);
+  date.focus();
+  await expect(date).toHaveFocus();
+  const revealed = box();
+  await expect(revealed.date.left, JSON.stringify(revealed)).toBeGreaterThanOrEqual(revealed.strip.left - 1);
+  await expect(revealed.date.right, JSON.stringify(revealed)).toBeLessThanOrEqual(revealed.strip.right + 1);
+};
+export const HebrewClippedDateFocus: Story = { args: { width: 390 }, play: clippedDateFocus };
+export const EnglishClippedDateFocus: Story = { args: { locale: 'en', width: 390 }, play: clippedDateFocus };
