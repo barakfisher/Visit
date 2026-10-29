@@ -1,7 +1,10 @@
-import { ScrollView } from 'react-native';
+import { Platform, ScrollView } from 'react-native';
 import { useAppLocale } from '@/src/i18n/LocaleContext';
 import { AppText as Text } from './AppText';
 import { Control } from './Control';
+// Chromium scrolls a focused element only when it is entirely hidden; a date cut off at the strip's edge would stay
+// partly hidden from a keyboard user, so reveal the whole date.
+const revealOnFocus = Platform.OS === 'web' ? { onFocus: (event: { currentTarget: unknown }) => (event.currentTarget as HTMLElement).scrollIntoView({ block: 'nearest', inline: 'nearest' }) } : {};
 export type CalendarDay = { id: string; label: string; dateLabel: string; accessibilityLabel: string; disabled?: boolean };
 export function HorizontalCalendarBar({ days, selectedId, onSelect }: { days: CalendarDay[]; selectedId?: string; onSelect?: (id: string) => void }) {
   const { t, direction } = useAppLocale();
@@ -10,7 +13,7 @@ export function HorizontalCalendarBar({ days, selectedId, onSelect }: { days: Ca
       const selected = day.id === selectedId;
       const status = day.disabled ? t('ui.closed') : selected ? `✓ ${t('ui.selected')}` : '';
       return <Control key={day.id} accessibilityRole="button" accessibilityLabel={`${day.label}${day.dateLabel}${status}, ${day.accessibilityLabel}`}
-        aria-pressed={selected} accessibilityState={{ selected, disabled: !!day.disabled }} disabled={day.disabled} onPress={() => onSelect?.(day.id)}
+        aria-pressed={selected} accessibilityState={{ selected, disabled: !!day.disabled }} disabled={day.disabled} {...revealOnFocus} onPress={() => onSelect?.(day.id)}
         className={`min-w-20 items-center gap-1 rounded-control border px-3 py-3 ${day.disabled ? 'border-control-line bg-canvas' : selected ? 'border-brand bg-brand' : 'border-control-line bg-surface active:border-brand'}`}>
         <Text style={{ textAlign: 'center' }} className={`text-sm font-medium ${selected && !day.disabled ? 'text-white' : 'text-muted'}`}>{day.label}</Text>
         <Text style={{ textAlign: 'center' }} className={`text-lg font-semibold ${selected && !day.disabled ? 'text-white' : 'text-ink'}`}>{day.dateLabel}</Text>
