@@ -99,7 +99,11 @@ const check: NonNullable<Story['play']> = async ({ canvas, args }) => {
   future.focus();
   await userEvent.keyboard('{Enter}');
   await expect(future).toHaveAttribute('aria-pressed', 'true');
-  if (calendar.scrollWidth > calendar.clientWidth) await expect(Math.abs(calendar.scrollLeft)).toBeGreaterThan(0);
+  // Assert the date is inside the visible strip, not that the strip scrolled: a row that overflows by a few pixels
+  // (font metrics differ per OS) can already show the date, and then scrolling would be wrong.
+  const strip = calendar.getBoundingClientRect(); const date = future.getBoundingClientRect();
+  await expect(date.left).toBeGreaterThanOrEqual(strip.left - 1);
+  await expect(date.right).toBeLessThanOrEqual(strip.right + 1);
 };
 export const HebrewCompact: Story = { play: check };
 export const EnglishCompact: Story = { args: { locale: 'en' }, play: check };
