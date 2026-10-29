@@ -96,14 +96,16 @@ const check: NonNullable<Story['play']> = async ({ canvas, args }) => {
   const calendar = canvas.getByLabelText(t('ui.dates'));
   // Keyboard focus brings a far-future date into view in both RTL and LTR.
   const future = canvas.getByRole('button', { name: /12, 2026/ });
+  const geometry = () => { const s = calendar.getBoundingClientRect(), d = future.getBoundingClientRect(); return { stripLeft: s.left, stripRight: s.right, dateLeft: d.left, dateRight: d.right, scrollLeft: calendar.scrollLeft, scrollWidth: calendar.scrollWidth, clientWidth: calendar.clientWidth }; };
   future.focus();
+  const focused = geometry();
   await userEvent.keyboard('{Enter}');
   await expect(future).toHaveAttribute('aria-pressed', 'true');
   // Assert the date is inside the visible strip, not that the strip scrolled: a row that overflows by a few pixels
   // (font metrics differ per OS) can already show the date, and then scrolling would be wrong.
-  const strip = calendar.getBoundingClientRect(); const date = future.getBoundingClientRect();
-  await expect(date.left).toBeGreaterThanOrEqual(strip.left - 1);
-  await expect(date.right).toBeLessThanOrEqual(strip.right + 1);
+  const selected = geometry(); const report = JSON.stringify({ focused, selected });
+  await expect(selected.dateLeft, report).toBeGreaterThanOrEqual(selected.stripLeft - 1);
+  await expect(selected.dateRight, report).toBeLessThanOrEqual(selected.stripRight + 1);
 };
 export const HebrewCompact: Story = { play: check };
 export const EnglishCompact: Story = { args: { locale: 'en' }, play: check };
