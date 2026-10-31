@@ -6,7 +6,7 @@ const meta = { globals: { locale: 'he' }, title: 'Home/Screen', component: Home,
   t: key => translate('he', key), identity: 'synthetic-customer', bootstrapping: false,
   upcoming: { state: 'hidden', heading: '', loadingLabel: '', error: '', retryLabel: '', appointment: null, additionalLabel: '', detailsLabel: '', cancelLabel: '', rescheduleLabel: '', busy: false, onRetry: fn(), onDetails: fn(), onAll: fn(), onCancel: fn(), onReschedule: fn() },
   providersState: 'ready', providers: [], hasMore: false, loadingMore: false, removingId: null, removeError: false,
-  onSignIn: fn(), onAppointments: fn(), onRetryProviders: fn(), onMore: fn(), onBook: fn(), onRemove: fn(),
+  onAppointments: fn(), onRetryProviders: fn(), onMore: fn(), onBook: fn(), onRemove: fn(),
 } } satisfies Meta<typeof Home>;
 export default meta;
 type Story = StoryObj<typeof meta>;
