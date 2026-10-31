@@ -145,6 +145,8 @@ export async function appointmentRetentionSmoke(deps: Deps) {
       await rescheduleButton(owner, owner.page).click();
       const refusal = await refusedMove; assert.equal(refusal.status(), 409); assert.equal(await errorCode(refusal), 'CONFLICT');
       await alert(owner.page, owner.t('bookingCommit.conflict')).waitFor();
+      // The action settles back to its labelled state once the screen has refetched (it shows a spinner meanwhile).
+      await rescheduleButton(owner, owner.page).waitFor();
       await owner.page.screenshot({ path: path.join(evidence, `reschedule-conflict-${locale}-mobile.png`), fullPage: true });
       await owner.page.unrouteAll({ behavior: 'wait' });
       const kept = await booking(id);
@@ -215,6 +217,7 @@ export async function appointmentRetentionSmoke(deps: Deps) {
       // An unpublished business is not public: the commit answers as for any business that cannot be booked.
       const response = await reply; assert.equal(response.status(), 404); assert.equal(await errorCode(response), 'NOT_FOUND');
       await alert(page, shopper.t('bookingCommit.conflict')).waitFor();
+      await confirmButton(page, shopper.t).waitFor();
       await page.screenshot({ path: path.join(evidence, `unpublished-during-review-${shopper === en ? 'en' : 'he'}-mobile.png`), fullPage: true });
     }
     await assertNothingHeld(en.id, 1); await assertNothingHeld(he.id, 1);
@@ -304,6 +307,7 @@ export async function appointmentRetentionSmoke(deps: Deps) {
       await rescheduleButton(owner, move).click();
       const moveReply = await moveRefused; assert.equal(moveReply.status(), 409); assert.equal(await errorCode(moveReply), RESCHEDULE_CUTOFF);
       await alert(move, owner.t('lifecycle.rescheduleCutoff')).waitFor();
+      await rescheduleButton(owner, move).waitFor();
       await move.screenshot({ path: path.join(evidence, `cutoff-reschedule-refused-${locale}-mobile.png`), fullPage: true });
       // A fresh Home no longer offers either action inside the window.
       await home.reload(); await homeCard(home, id).waitFor();
