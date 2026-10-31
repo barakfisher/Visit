@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import type { Browser, Page } from 'playwright';
+import type { Browser, Locator, Page } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
 import type { redis as Redis } from '../../api/src/infra/redis.js';
 import { translate } from '../src/i18n/messages';
@@ -36,6 +36,8 @@ export async function appointmentRetentionSmoke(deps: Deps) {
   const homeCard = (page: Page, id: string) => page.getByTestId(`active-booking-${id}`).filter({ visible: true });
   const savedCard = (page: Page) => page.getByTestId(`saved-provider-${business.businessId}`).filter({ visible: true });
   const alert = (page: Page, text: string) => page.getByRole('alert').filter({ visible: true, hasText: text });
+  // Every message a refused screen shows is the app's own copy in its language, never a server diagnostic.
+  const alertsAre = async (page: Page, expected: string[]) => assert.deepEqual((await page.getByRole('alert').filter({ visible: true }).allInnerTexts()).map(text => text.trim()).sort(), [...expected].sort());
   const used = new Set<string>();
   // A date on which this business has no booking at all, so earlier suites' bookings and buffers shape none of its slots.
   async function freshDate() {
@@ -65,6 +67,8 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     await reviewCard(page).waitFor();
   }
   const rescheduleButton = (owner: PilotCustomer, page: Page) => page.getByRole('button', { name: owner.t('compact.reschedule'), exact: true }).filter({ visible: true });
+  // A busy action keeps its accessible name on the spinner; only its visible label shows that it has settled.
+  const settled = (button: Locator, label: string) => button.getByText(label, { exact: true }).waitFor();
   const rescheduleResponse = (page: Page, bookingId: string) => page.waitForResponse(response => response.url() === `${apiUrl}/v1/bookings/${bookingId}/reschedule` && response.request().method() === 'POST');
   const cancelResponse = (page: Page, bookingId: string) => page.waitForResponse(response => response.url() === `${apiUrl}/v1/bookings/${bookingId}/cancel` && response.request().method() === 'POST');
   async function rescheduleFromHome(owner: PilotCustomer, bookingId: string, date: string, slot: Slot) {
@@ -146,7 +150,7 @@ export async function appointmentRetentionSmoke(deps: Deps) {
       const refusal = await refusedMove; assert.equal(refusal.status(), 409); assert.equal(await errorCode(refusal), 'CONFLICT');
       await alert(owner.page, owner.t('bookingCommit.conflict')).waitFor();
       // The action settles back to its labelled state once the screen has refetched (it shows a spinner meanwhile).
-      await rescheduleButton(owner, owner.page).waitFor();
+      await settled(rescheduleButton(owner, owner.page), owner.t('compact.reschedule'));
       await owner.page.screenshot({ path: path.join(evidence, `reschedule-conflict-${locale}-mobile.png`), fullPage: true });
       await owner.page.unrouteAll({ behavior: 'wait' });
       const kept = await booking(id);
@@ -217,7 +221,9 @@ export async function appointmentRetentionSmoke(deps: Deps) {
       // An unpublished business is not public: the commit answers as for any business that cannot be booked.
       const response = await reply; assert.equal(response.status(), 404); assert.equal(await errorCode(response), 'NOT_FOUND');
       await alert(page, shopper.t('bookingCommit.conflict')).waitFor();
-      await confirmButton(page, shopper.t).waitFor();
+      await settled(confirmButton(page, shopper.t), shopper.t('compact.confirm'));
+      // The refetched business is no longer public, so the screen says it is not accepting bookings.
+      await alertsAre(page, [shopper.t('providers.unavailable'), shopper.t('bookingCommit.conflict')]);
       await page.screenshot({ path: path.join(evidence, `unpublished-during-review-${shopper === en ? 'en' : 'he'}-mobile.png`), fullPage: true });
     }
     await assertNothingHeld(en.id, 1); await assertNothingHeld(he.id, 1);
@@ -307,7 +313,9 @@ export async function appointmentRetentionSmoke(deps: Deps) {
       await rescheduleButton(owner, move).click();
       const moveReply = await moveRefused; assert.equal(moveReply.status(), 409); assert.equal(await errorCode(moveReply), RESCHEDULE_CUTOFF);
       await alert(move, owner.t('lifecycle.rescheduleCutoff')).waitFor();
-      await rescheduleButton(owner, move).waitFor();
+      await settled(rescheduleButton(owner, move), owner.t('compact.reschedule'));
+      // The refetched reschedule screen is refused for the same reason, and says so in the customer's language.
+      await alertsAre(move, [owner.t('lifecycle.rescheduleCutoff'), owner.t('lifecycle.rescheduleCutoff')]);
       await move.screenshot({ path: path.join(evidence, `cutoff-reschedule-refused-${locale}-mobile.png`), fullPage: true });
       // A fresh Home no longer offers either action inside the window.
       await home.reload(); await homeCard(home, id).waitFor();

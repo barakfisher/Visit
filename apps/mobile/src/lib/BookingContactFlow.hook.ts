@@ -15,7 +15,7 @@ import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest, ApiError } from '@/src/lib/api';
-import { appointmentRefusalKey } from './AppointmentLifecycle.utils';
+import { appointmentRefusalKey, bookingLoadRefusalKey } from './AppointmentLifecycle.utils';
 import { localDate } from './appointmentTime';
 import { useCompactBooking } from './CompactBooking.hook';
 import { bookingSlotId, validBookingDate } from './CompactBooking.utils';
@@ -167,7 +167,9 @@ export function useBookingContactFlow() {
     durationAndPrice: `${reviewedService.durationMinutes} ${t('bookingCommit.minutes')} · ${formatMoney(reviewedService.priceMinor, reviewedService.currency)}`,
     cancellation: t('bookingCommit.cancel', { minutes: provider.bookingPolicy?.cancellationCutoffMinutes ?? 0 }),
   } : null;
+  const detailsFailure = details.error instanceof ApiError ? details.error : null;
+  const detailsError = details.isError ? t(bookingLoadRefusalKey(detailsFailure?.code, detailsFailure?.status)) : '';
   const reauthReturnTo = `/booking/${providerId}?${new URLSearchParams({ serviceId: chosenService, date: chosenDate })}`;
   function saveReauthDraft() { if (identityId) useBookingContactDraft.getState().save({ identityId, providerId, serviceId: chosenService, date: chosenDate, selected }); }
-  return { upcoming, controls, review, reauthReturnTo, saveReauthDraft, locale, t, providerId, fromBookingId, serviceId, date, selected, busy, editingDisabled: busy || Boolean(pendingAttempt), pendingAttempt, pendingElsewhere, notice, error, conflictSlot, identityId, details, provider, chosenService, chosenDate, slots, contacts, name, setName, setServiceId, setDate, setNotice, reset, choose, confirm, saveName };
+  return { upcoming, controls, review, reauthReturnTo, saveReauthDraft, locale, t, providerId, fromBookingId, serviceId, date, selected, busy, editingDisabled: busy || Boolean(pendingAttempt), pendingAttempt, pendingElsewhere, notice, error, detailsError, conflictSlot, identityId, details, provider, chosenService, chosenDate, slots, contacts, name, setName, setServiceId, setDate, setNotice, reset, choose, confirm, saveName };
 }

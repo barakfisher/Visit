@@ -18,3 +18,8 @@ export const CANCELLATION_CUTOFF = 'CANCELLATION_CUTOFF';
 export function appointmentRefusalKey(code: string | undefined) {
   return code === CANCELLATION_CUTOFF ? 'lifecycle.cancelCutoff' as const : code === RESCHEDULE_CUTOFF ? 'lifecycle.rescheduleCutoff' as const : null;
 }
+// A booking screen that cannot load says why in the app's language: a cutoff, a business that is not bookable
+// (not found or unpublished answer alike), or a plain load failure. The server's diagnostic is never shown.
+export function bookingLoadRefusalKey(code: string | undefined, status: number | undefined) {
+  return appointmentRefusalKey(code) ?? (status === 404 ? 'providers.unavailable' as const : 'compact.detailsFailed' as const);
+}
