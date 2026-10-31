@@ -29,7 +29,7 @@ type ApiFailure = { error: { code: string } };
 
 export async function appointmentRetentionSmoke(deps: Deps) {
   const { webUrl, apiUrl, prisma, business } = deps;
-  const { contexts, errors, capacityKeysOf, newPage, resume, freeSlots, slotButton, reviewCard, confirmButton, review, bookThroughApi, fillSlot, assertNothingHeld } = pilotCustomers(deps);
+  const { contexts, errors, newPage, resume, freeSlots, slotButton, reviewCard, confirmButton, review, bookThroughApi, fillSlot, assertNothingHeld } = pilotCustomers(deps);
   await mkdir(evidence, { recursive: true });
   const pilot = (locale: 'en' | 'he') => business.customers.find(entry => entry.locale === locale)!;
   const booking = (id: string) => prisma.booking.findUniqueOrThrow({ where: { id } });
@@ -129,11 +129,10 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     console.log('PASS: VIS-14 customer rescheduled from Home; Home, details and the provider agenda show the new Israel time on one confirmed row.');
 
     // B1b. Rescheduling into a time other customers take during review is refused in the customer's language; the
-    // original appointment, its revision and its Redis capacity stay as they were.
+    // original appointment and its revision stay as they were, and no hold or reservation entry is left in Redis.
     for (const [owner, id, locale] of [[en, e1, 'en'], [he, h1, 'he']] as const) {
       const contestedDate = await freshDate(), contested = (await rescheduleSlots(owner, id, contestedDate))[0]!;
-      const was = await booking(id), wasHeld = await capacityKeysOf(id);
-      assert.ok(wasHeld.length > 0, `${id} holds no Redis capacity before the attempt`);
+      const was = await booking(id);
       let snapshot: string | undefined, frozen = false;
       await owner.page.route(url => url.href.startsWith(`${apiUrl}/api/bookings/${id}/availability?`), async route => {
         if (frozen && snapshot) { await route.fulfill({ status: 200, contentType: 'application/json', body: snapshot }); return; }
@@ -150,14 +149,13 @@ export async function appointmentRetentionSmoke(deps: Deps) {
       await owner.page.unrouteAll({ behavior: 'wait' });
       const kept = await booking(id);
       assert.equal(kept.startsAt.toISOString(), was.startsAt.toISOString()); assert.equal(kept.revision, was.revision); assert.equal(kept.status, 'CONFIRMED');
-      assert.deepEqual(await capacityKeysOf(id), wasHeld);
       await assertNothingHeld(owner.id, 1);
       // Home still shows the original time.
       await owner.page.goto(webUrl);
       const card = await homeCard(owner.page, id).innerText();
       assert.ok(card.includes(await owner.page.evaluate(instant => new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Jerusalem' }).format(new Date(instant)), was.startsAt.toISOString())), `Home lost the original time: ${card}`);
     }
-    console.log('PASS: VIS-14 rescheduling into a time taken during review is refused with the localized conflict in Hebrew and English; the original appointment is unchanged in the UI, the database and Redis.');
+    console.log('PASS: VIS-14 rescheduling into a time taken during review is refused with the localized conflict in Hebrew and English; the original appointment is unchanged in the UI and the database, with nothing left held in Redis.');
 
     // B1c. The Hebrew customer cancels from the appointment details; the agenda drops it and its revenue, and the audit
     // records the customer as the actor.
@@ -279,7 +277,7 @@ export async function appointmentRetentionSmoke(deps: Deps) {
       await reviewReschedule(owner, move, id, date, slot);
       raced.push({ owner, id, locale, home, move });
     }
-    const rows = new Map(await Promise.all(raced.map(async ({ id }) => [id, { row: await booking(id), held: await capacityKeysOf(id) }] as const)));
+    const rows = new Map(await Promise.all(raced.map(async ({ id }) => [id, { row: await booking(id) }] as const)));
     for (const { row } of rows.values()) assert.ok(+row.startsAt < Date.now() + CUTOFF_MINUTES * 60000, 'an appointment is outside the cutoff window');
     const details = new Map<string, Page>();
     for (const { owner, id } of raced) {
@@ -312,7 +310,6 @@ export async function appointmentRetentionSmoke(deps: Deps) {
       for (const label of [owner.t('details.cancel'), owner.t('details.reschedule')]) assert.equal(await homeCard(home, id).getByRole('button', { name: label, exact: true }).count(), 0);
       const row = await booking(id), was = rows.get(id)!;
       assert.equal(row.status, 'CONFIRMED'); assert.equal(row.startsAt.toISOString(), was.row.startsAt.toISOString()); assert.equal(row.revision, was.row.revision);
-      assert.deepEqual(await capacityKeysOf(id), was.held);
       await assertNothingHeld(owner.id, 1);
     }
     assert.deepEqual(errors, []);

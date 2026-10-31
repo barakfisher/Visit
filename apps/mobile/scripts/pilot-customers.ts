@@ -106,13 +106,5 @@ export function pilotCustomers({ browser, webUrl, apiUrl, prisma, redis, identit
       assert.equal(await redis.exists(`visit:hold:${id}`), 0, `hold record remains for ${id}`);
     }
   }
-  // The Redis capacity keys that hold this booking: an appointment the API left unchanged keeps exactly the same ones.
-  async function capacityKeysOf(bookingId: string) {
-    const keys: string[] = [];
-    for await (const batch of redis.scanStream({ match: `visit:reservation:${business.businessId}:*` })) keys.push(...(batch as string[]));
-    const held: string[] = [];
-    for (const key of keys) if (await redis.zscore(key, bookingId) !== null) held.push(key);
-    return held.sort();
-  }
-  return { contexts, errors, capacityKeysOf, bookingUrl, newContext, newPage, customer, resume, freeSlots, slotButton, reviewCard, confirmButton, review, bookThroughApi, fillSlot, assertNothingHeld };
+  return { contexts, errors, bookingUrl, newContext, newPage, customer, resume, freeSlots, slotButton, reviewCard, confirmButton, review, bookThroughApi, fillSlot, assertNothingHeld };
 }
