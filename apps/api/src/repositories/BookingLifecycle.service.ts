@@ -1,6 +1,6 @@
 import type { Prisma } from '../generated/prisma/client.js';
 import { prisma } from '../db/client.js';
-import { conflict, notFound, unauthenticated } from '../http/errors.js';
+import { cancellationCutoff, conflict, notFound, unauthenticated } from '../http/errors.js';
 import { validateAuthenticatedSession, type AuthenticatedSession } from '../security/sessions.js';
 import { requireBusinessMembership } from '../security/tenant-context.js';
 import { withBookingTransaction } from '../scheduling/booking-transaction.js';
@@ -34,7 +34,7 @@ export async function changeBookingOutcome(session: AuthenticatedSession, bookin
     const now = new Date();
     if (outcome !== 'CANCELLED' && current.endsAt > now) throw conflict('Wait until the appointment has ended before recording its outcome.');
     if (!businessId && current.status === 'CONFIRMED' && !current.business.bookingPolicy) throw conflict('This business has not configured its cancellation policy.');
-    if (!businessId && current.status === 'CONFIRMED' && current.startsAt.getTime() < now.getTime() + (current.business.bookingPolicy?.cancellationCutoffMinutes ?? 0) * 60000) throw conflict('The cancellation cutoff has passed for this appointment.');
+    if (!businessId && current.status === 'CONFIRMED' && current.startsAt.getTime() < now.getTime() + (current.business.bookingPolicy?.cancellationCutoffMinutes ?? 0) * 60000) throw cancellationCutoff();
     await setBookingAudit(tx, session.identity.id, businessId ? 'PROVIDER' : 'CUSTOMER', outcome === 'COMPLETED' ? 'APPOINTMENT_FINISHED' : outcome === 'NO_SHOW' ? 'CUSTOMER_ABSENT' : businessId ? 'PROVIDER_REQUEST' : 'CUSTOMER_REQUEST');
     return tx.booking.update({ where: { id: current.id }, data: { status: outcome, holdExpiresAt: null } });
   });

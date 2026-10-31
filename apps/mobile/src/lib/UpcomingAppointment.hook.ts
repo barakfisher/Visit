@@ -7,7 +7,8 @@ import { useAppLocale } from '../i18n/LocaleContext';
 import { readUpcomingAppointment } from './UpcomingAppointment.service';
 import { cancelDetailedBooking } from './BookingDetails.service';
 import { confirmAppointmentCancellation } from './bookingActions';
-import { canContinueAppointmentAction } from './AppointmentLifecycle.utils';
+import { appointmentRefusalKey, canContinueAppointmentAction } from './AppointmentLifecycle.utils';
+import { ApiError } from './api';
 import { appointmentDate, appointmentTime, timePolicyNote } from './appointmentTime';
 import { isBookingQuery } from './BookingQueries.utils';
 import type { UpcomingAppointmentView } from '../types/UpcomingAppointment.types';
@@ -46,8 +47,8 @@ export function useUpcomingAppointment(businessId?: string, enabled = true): Upc
       if (!await confirmAppointmentCancellation({ title: t('upcoming.cancelTitle'), message: t('upcoming.cancelMessage'), keep: t('upcoming.keep'), cancel: t('details.cancel') }) || !isCurrent()) return;
       await cancelDetailedBooking(booking.id, booking.revision);
       if (isCurrent()) await Promise.allSettled([client.invalidateQueries({ predicate: query => isBookingQuery(query.queryKey) })]);
-    } catch {
-      if (isCurrent()) { setFailure({ scope: scopeKey, id: booking.id, message: t('upcoming.failure') }); await query.refetch(); }
+    } catch (reason) {
+      if (isCurrent()) { setFailure({ scope: scopeKey, id: booking.id, message: t(appointmentRefusalKey(reason instanceof ApiError ? reason.code : undefined) ?? 'upcoming.failure') }); await query.refetch(); }
     } finally { operation.current = false; if (mounted.current) setBusy(false); }
   }
   return { state: !identity || !enabled || !focused ? 'hidden' : query.isPending || query.isFetching ? 'loading' : query.isError ? 'error' : booking ? 'ready' : 'hidden',

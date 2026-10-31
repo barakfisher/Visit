@@ -11,3 +11,10 @@ export function appointmentOutcomeDelay(endsAt: string, now: number): number | n
   if (!Number.isFinite(end) || !Number.isFinite(now) || end <= now) return null;
   return Math.min(end - now + 1, 2147483647);
 }
+// API refusal codes for a customer's own appointment inside the business's change window.
+export const RESCHEDULE_CUTOFF = 'RESCHEDULE_CUTOFF';
+export const CANCELLATION_CUTOFF = 'CANCELLATION_CUTOFF';
+// A cutoff refusal gets copy that says why; anything else keeps the caller's own fallback.
+export function appointmentRefusalKey(code: string | undefined) {
+  return code === CANCELLATION_CUTOFF ? 'lifecycle.cancelCutoff' as const : code === RESCHEDULE_CUTOFF ? 'lifecycle.rescheduleCutoff' as const : null;
+}

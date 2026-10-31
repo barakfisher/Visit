@@ -1,9 +1,8 @@
 import { publicBusinessWhere } from './business-eligibility.js';
 import { validateAuthenticatedSession, type AuthenticatedSession } from './sessions.js';
-import { conflict } from '../http/errors.js';
 import { MembershipRole, MembershipStatus } from '../generated/prisma/client.js';
 import { prisma } from '../db/client.js';
-import { forbidden, notFound } from '../http/errors.js';
+import { conflict, forbidden, notFound, rescheduleCutoff } from '../http/errors.js';
 
 const contextBrand: unique symbol = Symbol('AuthorizedBusinessContext');
 const publicContextBrand: unique symbol = Symbol('PublicBusinessContext');
@@ -72,7 +71,8 @@ export async function validatePublicBusinessContext(context: PublicBusinessConte
 async function validateOwnedReschedule(bookingId: string, customerId: string) {
   const booking = await prisma.booking.findFirst({ where: { id: bookingId, customerId, status: 'CONFIRMED', business: { approvalStatus: 'APPROVED', deletedAt: null } }, include: { business: { include: { bookingPolicy: true } } } });
   if (!booking) throw notFound();
-  if (!booking.business.bookingPolicy || booking.startsAt.getTime() < Date.now() + booking.business.bookingPolicy.rescheduleCutoffMinutes * 60000) throw conflict('The reschedule cutoff has passed.');
+  if (!booking.business.bookingPolicy) throw conflict('This business has not configured its booking policy.');
+  if (booking.startsAt.getTime() < Date.now() + booking.business.bookingPolicy.rescheduleCutoffMinutes * 60000) throw rescheduleCutoff();
   return booking;
 }
 export async function requireOwnedReschedule(actor: AuthenticatedSession, bookingId: string) {

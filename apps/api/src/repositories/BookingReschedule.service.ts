@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Temporal } from '@js-temporal/polyfill';
 import { z } from 'zod';
 import { prisma } from '../db/client.js';
-import { AppError, conflict, notFound, unauthenticated } from '../http/errors.js';
+import { AppError, conflict, notFound, rescheduleCutoff, unauthenticated } from '../http/errors.js';
 import { validateAuthenticatedSession, type AuthenticatedSession } from '../security/sessions.js';
 import { assertCustomerContact } from '../security/customer-contact.utils.js';
 import { withBookingTransaction } from '../scheduling/booking-transaction.js';
@@ -64,7 +64,7 @@ export async function rescheduleBooking(session: AuthenticatedSession, bookingId
       if (business.approvalStatus !== 'APPROVED' || business.deletedAt) throw notFound();
       if (!policy) throw conflict('This business has not configured its booking policy.');
       const now = new Date();
-      if (+current.startsAt < +now + policy.rescheduleCutoffMinutes * 60000) throw conflict('The reschedule cutoff has passed.');
+      if (+current.startsAt < +now + policy.rescheduleCutoffMinutes * 60000) throw rescheduleCutoff();
       const localDate = Temporal.Instant.from(startsAt.toISOString()).toZonedDateTimeISO(business.timezone).toPlainDate();
       const horizon = Temporal.Instant.from(now.toISOString()).toZonedDateTimeISO(business.timezone).toPlainDate().add({ days: policy.maximumAdvanceDays });
       if (+startsAt < +now + policy.minimumNoticeMinutes * 60000 || Temporal.PlainDate.compare(localDate, horizon) > 0) throw conflict('The requested time is outside the booking window.');

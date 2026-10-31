@@ -15,6 +15,7 @@ import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest, ApiError } from '@/src/lib/api';
+import { appointmentRefusalKey } from './AppointmentLifecycle.utils';
 import { localDate } from './appointmentTime';
 import { useCompactBooking } from './CompactBooking.hook';
 import { bookingSlotId, validBookingDate } from './CompactBooking.utils';
@@ -131,9 +132,10 @@ export function useBookingContactFlow() {
         if (terminal || fromBookingId && reason instanceof ApiError && [400, 401, 404, 409].includes(reason.status)) {
           if (fromBookingId) useRescheduleAttempt.getState().set(null); else useBookingAttempt.getState().set(null); setSelection(null);
           if (selected) setConflictSlot(slotId(selected));
-          // A new booking's refusal is shown in the app's language; reschedule refusals (cutoff, revision) still carry
-          // their specific server reason until they get their own localized copy.
-          setError(fromBookingId ? (reason instanceof Error ? reason.message : t('bookingCommit.conflict')) : t(reason instanceof ApiError && reason.code === 'CUSTOMER_CONTACT_REQUIRED' ? 'bookingContact.help' : 'bookingCommit.conflict')); await contacts.refetch(); await details.refetch(); await slots.refetch();
+          // Refusals are shown in the app's language, never as the server's diagnostic. A reschedule cutoff says why,
+          // so a customer past it is not told to choose another time.
+          const code = reason instanceof ApiError ? reason.code : undefined;
+          setError(t(appointmentRefusalKey(code) ?? (code === 'CUSTOMER_CONTACT_REQUIRED' ? 'bookingContact.help' : 'bookingCommit.conflict'))); await contacts.refetch(); await details.refetch(); await slots.refetch();
         } else setError(t('bookingCommit.uncertain'));
       }
     } finally {
