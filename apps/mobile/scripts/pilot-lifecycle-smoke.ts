@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomInt } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import type { Browser, BrowserContext, Page } from 'playwright';
+import type { BrowserSession } from './pilot-customers';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
 import type { redis as Redis } from '../../api/src/infra/redis.js';
 import { translate, type Locale } from '../src/i18n/messages';
@@ -22,8 +23,8 @@ const BOOKABLE_DAYS_AHEAD = 4;
 const REVIEW_REASON = 'Verified pilot lifecycle application and ownership evidence.';
 const evidence = path.resolve('test-results/vis14');
 
-// What the resilience smoke needs to book on the business this lifecycle onboarded.
-export type PilotBusiness = { businessId: string; businessName: string; serviceId: string; bookableDate: string };
+// What the suites that continue on this business need: its identity, and its provider's and customers' signed-in browsers.
+export type PilotBusiness = { businessId: string; businessName: string; serviceId: string; bookableDate: string; slug: string; providerSession: BrowserSession; customers: { locale: Locale; session: BrowserSession; bookingId: string }[] };
 type Deps = { browser: Browser; webUrl: string; apiUrl: string; prisma: typeof Prisma; redis: typeof Redis; run: string; identityIds: string[]; businessIds: string[] };
 
 // Offset of a time zone at an instant, from ICU's "GMT+02:00" style name.
@@ -229,7 +230,7 @@ export async function pilotLifecycleSmoke({ browser, webUrl, apiUrl, prisma, red
       await page.getByTestId(`active-booking-${booking.id}`).waitFor();
       await page.screenshot({ path: path.join(evidence, `home-${locale}-mobile.png`), fullPage: true });
       console.log(`PASS: VIS-14 ${locale} customer opened the shared link, signed in, saved once, reviewed ${time} Israel time with no hold, confirmed once and sees it on Home.`);
-      return { booking, phone };
+      return { booking, phone, session: await context.storageState() };
     }
     const english = await customerJourney('en', '10:00');
     const hebrew = await customerJourney('he', '11:00');
@@ -255,6 +256,7 @@ export async function pilotLifecycleSmoke({ browser, webUrl, apiUrl, prisma, red
     assert.equal(await prisma.booking.count({ where: { businessId: business.id, status: 'CONFIRMED' } }), 2);
     assert.deepEqual(errors, []);
     console.log('PASS: VIS-14 provider agenda shows both committed bookings with service, verified customer contact and expected revenue.');
-    return { businessId: business.id, businessName, serviceId: setup.serviceId, bookableDate };
+    const customers = [{ locale: 'en' as const, ...english }, { locale: 'he' as const, ...hebrew }].map(({ locale, booking, session }) => ({ locale, session, bookingId: booking.id }));
+    return { businessId: business.id, businessName, serviceId: setup.serviceId, bookableDate, slug, providerSession: await providerContext.storageState(), customers };
   }
 }

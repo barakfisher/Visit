@@ -32,8 +32,15 @@ PASS: VIS-14 confirming a stale review is refused with a conflict, the slot is e
 PASS: VIS-14 a real reservation outage returns 503, keeps the attempt uncertain with nothing saved, and the same-key retry commits once.
 PASS: VIS-14 a request lost before the server leaves nothing saved; the same-key retry commits once.
 PASS: VIS-14 a same-turn double activation of Confirm sends one request and creates one booking.
-PASS: VIS-14 the same request delivered twice at once creates one booking (200, ATTEMPT_PENDING).
+PASS: VIS-14 the same request delivered twice at once creates one booking (ATTEMPT_PENDING, 200).
 PASS: VIS-14 (recorded finding) one customer confirming the same time from two tabs gets two overlapping bookings while places remain; no hold is left behind.
+PASS: VIS-14 customer rescheduled from Home; Home, details and the provider agenda show the new Israel time on one confirmed row.
+PASS: VIS-14 rescheduling into a time taken during review is refused with the localized conflict in Hebrew and English; the original appointment is unchanged in the UI and the database, with nothing left held in Redis.
+PASS: VIS-14 Hebrew customer cancelled from details; the agenda drops it and its revenue, and the audit names the customer.
+PASS: VIS-14 saved lists and appointments stay per customer; removing the provider keeps the appointment manageable and leaves the other customer's save.
+PASS: VIS-14 unpublish during review refuses confirm in Hebrew and English with nothing written; saved entries show unavailable, existing appointments open, cancel and reschedule, and new bookings stay refused.
+PASS: VIS-14 republish makes the saved entry bookable; the customer refused during review books once and existing appointments are unchanged.
+PASS: VIS-14 inside the cutoff, cancel (Home and details) and reschedule are refused with their own localized reason in Hebrew and English, the appointment is unchanged, and a fresh Home no longer offers them.
 PASS: linked PWA manifest/icons, network-only shell and no-store API response policy.
 PASS: Hebrew default/RTL, LTR phone input, language switching and guest preference persistence at mobile/desktop sizes.
 PASS: expired access refreshes through the HttpOnly cookie without ordinary token storage.
@@ -49,3 +56,4 @@ PASS: cross-origin logout is denied, outage preserves session, successful logout
 PASS: America/New_York fold labels and confirmation preserve the second exact instant on a traveling device.
 PASS: Asia/Jerusalem fold labels and confirmation preserve the second exact instant on a traveling device.
 PASS: reschedule, cancellation, and no browser runtime exceptions.
+PASS: cleanup left no test businesses, bookings, saved providers, identities or reservation keys.

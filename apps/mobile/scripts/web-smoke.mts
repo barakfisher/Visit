@@ -71,6 +71,7 @@ async function openBooking(page: Page, businessId: string, serviceId: string) {
   await page.getByRole('heading', { name: 'Available appointments' }).waitFor();
   await page.getByRole('button', { name: /Alex North/ }).first().waitFor();
 }
+let suitePassed = false;
 try {
   await available(3001); await available(webPort); await mkdir(diagnostics, { recursive: true });
   if (redis.status === 'wait') await redis.connect();
@@ -139,6 +140,9 @@ try {
     await resetLocalSignInLimits();
     const { bookingResilienceSmoke } = await import('./booking-resilience-smoke.js');
     await bookingResilienceSmoke({ browser, webUrl, apiUrl, prisma, redis, identityIds, business: pilotBusiness, resetSignInLimits: resetLocalSignInLimits });
+    await resetLocalSignInLimits();
+    const { appointmentRetentionSmoke } = await import('./appointment-retention-smoke.js');
+    await appointmentRetentionSmoke({ browser, webUrl, apiUrl, prisma, redis, identityIds, business: pilotBusiness, resetSignInLimits: resetLocalSignInLimits });
     await resetLocalSignInLimits();
     const localization = await browser.newContext({ viewport: { width: 390, height: 844 } }); contexts.push(localization);
     const localePage = await localization.newPage(); capture = localePage;
@@ -526,6 +530,7 @@ try {
 
     assert.deepEqual(pageErrors, []);
     console.log('PASS: reschedule, cancellation, and no browser runtime exceptions.');
+    suitePassed = true;
   } catch (error) { if (capture) { console.error((await capture.locator('body').innerText()).slice(0, 3500)); await capture.screenshot({ path: path.join(diagnostics, 'web-smoke-failure.png'), fullPage: true }).catch(() => {}); } throw error; }
   finally { await Promise.all(contexts.map((context) => context.close())); await browser.close(); }
 } finally {
@@ -539,5 +544,12 @@ try {
   await prisma.savedProvider.deleteMany({ where: { identityId: { in: identityIds }, businessId: { in: businessIds } } });
   await prisma.business.deleteMany({ where: { id: { in: businessIds } } });
   await prisma.identity.deleteMany({ where: { id: { in: identityIds } } });
-  await Promise.allSettled([redis.quit(), prisma.$disconnect()]);
+  // A passing run leaves none of its rows or reservation keys behind (checked only then, so it never hides a failure).
+  try { if (suitePassed) {
+    const reservationKeys: string[] = [];
+    for (const id of businessIds) for await (const batch of redis.scanStream({ match: `visit:reservation:${id}:*` })) reservationKeys.push(...batch);
+    const left = { businesses: await prisma.business.count({ where: { id: { in: businessIds } } }), bookings: await prisma.booking.count({ where: { businessId: { in: businessIds } } }), savedProviders: await prisma.savedProvider.count({ where: { businessId: { in: businessIds } } }), identities: await prisma.identity.count({ where: { id: { in: identityIds } } }), reservationKeys: reservationKeys.length };
+    assert.deepEqual(left, { businesses: 0, bookings: 0, savedProviders: 0, identities: 0, reservationKeys: 0 });
+    console.log('PASS: cleanup left no test businesses, bookings, saved providers, identities or reservation keys.');
+  } } finally { await Promise.allSettled([redis.quit(), prisma.$disconnect()]); }
 }

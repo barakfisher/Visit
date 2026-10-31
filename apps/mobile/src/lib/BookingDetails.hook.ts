@@ -8,7 +8,7 @@ import { ApiError } from './api';
 import { readBookingDetails, readBookingCalendar, cancelDetailedBooking } from './BookingDetails.service';
 import { shareBookingCalendar } from './BookingCalendar.service';
 import { hasConfirmedBooking, parseBookingDetailsId } from './BookingDetails.utils';
-import { canContinueAppointmentAction } from './AppointmentLifecycle.utils';
+import { appointmentRefusalKey, canContinueAppointmentAction } from './AppointmentLifecycle.utils';
 import { confirmAppointmentCancellation } from './bookingActions';
 import { appointmentDate, appointmentTime, timePolicyNote } from './appointmentTime';
 import { formatMoney } from '../types/flows';
@@ -41,7 +41,7 @@ export function useBookingDetails(mode: 'confirmation' | 'details'): BookingDeta
       if (!await confirmAppointmentCancellation() || !isCurrent()) return;
       await cancelDetailedBooking(booking.id, booking.revision);
       if (isCurrent()) await Promise.allSettled([details.refetch(), client.invalidateQueries({ predicate: query => isBookingQuery(query.queryKey) })]);
-    } catch { if (isCurrent()) { setError(t('lifecycle.failure')); await details.refetch(); } }
+    } catch (reason) { if (isCurrent()) { setError(t(appointmentRefusalKey(reason instanceof ApiError ? reason.code : undefined) ?? 'lifecycle.failure')); await details.refetch(); } }
     finally { operation.current = false; if (mounted.current) setBusy(false); }
   }
   const failure = !id ? t('details.unavailable') : bootstrap === 'error' ? t('details.failure') : details.isError ? details.error instanceof ApiError && [401, 404].includes(details.error.status) ? t('details.unavailable') : t('details.failure') : '';

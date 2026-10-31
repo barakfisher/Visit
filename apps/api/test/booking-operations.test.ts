@@ -5,6 +5,7 @@ import { createApp } from '../src/app.js';
 import { prisma } from '../src/db/client.js';
 import { redis } from '../src/infra/redis.js';
 import { tokenDigest } from '../src/security/sessions.js';
+import { CANCELLATION_CUTOFF, RESCHEDULE_CUTOFF } from '../src/http/errors.js';
 
 after(async () => { redis.disconnect(); await prisma.$disconnect(); });
 
@@ -12,9 +13,9 @@ test('reschedule and cancellation preserve atomic capacity, ownership and lifecy
   const run = randomUUID();
   const business = await prisma.business.create({ data: { name: 'Operations QA', slug: `operations-${run}`, timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED', publishedAt: new Date() } });
   const foreignBusiness = await prisma.business.create({ data: { name: 'Foreign QA', slug: `foreign-operations-${run}`, timezone: 'UTC', approvalStatus: 'APPROVED', publishedAt: new Date() } });
-  const people = await Promise.all(['customer', 'foreign', 'owner', 'staff'].map(role => prisma.identity.create({ data: { email: `${role}-${run}@example.test` } })));
-  const [customer, foreign, owner, staffIdentity] = people;
-  assert.ok(customer && foreign && owner && staffIdentity);
+  const people = await Promise.all(['customer', 'foreign', 'owner', 'staff', 'bystander'].map(role => prisma.identity.create({ data: { email: `${role}-${run}@example.test` } })));
+  const [customer, foreign, owner, staffIdentity, bystander] = people;
+  assert.ok(customer && foreign && owner && staffIdentity && bystander);
   const tokens = new Map<string, string>();
   for (const person of people) {
     const token = randomUUID(); tokens.set(person.id, token);
@@ -119,8 +120,16 @@ test('reschedule and cancellation preserve atomic capacity, ownership and lifecy
       const contact = await app.inject({ method: 'POST', url, headers: headers(), payload: payload(new Date(+booking.startsAt + 3600000)) });
       assert.equal(contact.statusCode, 409); assert.equal(contact.json().error.code, 'CUSTOMER_CONTACT_REQUIRED'); await unchanged(booking);
       await prisma.bookingPolicy.update({ where: { businessId: business.id }, data: { requireVerifiedPhone: false, rescheduleCutoffMinutes: 50000, cancellationCutoffMinutes: 50000 } });
-      assert.equal((await app.inject({ method: 'POST', url, headers: headers(), payload: payload(new Date(+booking.startsAt + 3600000)) })).statusCode, 409);
-      assert.equal((await app.inject({ method: 'POST', url: `/v1/bookings/${booking.id}/cancel`, headers: headers(), payload: { expectedRevision: 0 } })).statusCode, 409); await unchanged(booking);
+      // Distinct codes let the app explain a cutoff refusal in the customer's language instead of showing the server's text.
+      const rescheduleRefused = await app.inject({ method: 'POST', url, headers: headers(), payload: payload(new Date(+booking.startsAt + 3600000)) });
+      assert.equal(rescheduleRefused.statusCode, 409); assert.equal(rescheduleRefused.json().error.code, RESCHEDULE_CUTOFF);
+      const cancelRefused = await app.inject({ method: 'POST', url: `/v1/bookings/${booking.id}/cancel`, headers: headers(), payload: { expectedRevision: 0 } });
+      assert.equal(cancelRefused.statusCode, 409); assert.equal(cancelRefused.json().error.code, CANCELLATION_CUTOFF); await unchanged(booking);
+      // Another customer cannot tell "inside the cutoff" from "no such booking".
+      for (const probe of [{ method: 'POST' as const, url, payload: payload(new Date(+booking.startsAt + 3600000)) }, { method: 'POST' as const, url: `/v1/bookings/${booking.id}/cancel`, payload: { expectedRevision: 0 } }, { method: 'GET' as const, url: `/api/bookings/${booking.id}/availability?date=${booking.startsAt.toISOString().slice(0, 10)}` }]) {
+        const response = await app.inject({ ...probe, headers: headers(bystander.id) });
+        assert.equal(response.statusCode, 404, `${probe.url}: ${response.body}`); assert.equal(response.json().error.code, 'NOT_FOUND');
+      }
       await prisma.bookingPolicy.update({ where: { businessId: business.id }, data: { rescheduleCutoffMinutes: 0, cancellationCutoffMinutes: 0 } });
     });
     await t.test('missing cancellation policy fails closed and preserves the confirmed booking', async () => {
@@ -130,7 +139,10 @@ test('reschedule and cancellation preserve atomic capacity, ownership and lifecy
         const details = await app.inject({ url: `/v1/bookings/${booking.id}/details`, headers: headers() });
         assert.equal(details.statusCode, 200); assert.equal(details.json().actions.canCancel, false);
         const cancel = await app.inject({ method: 'POST', url: `/v1/bookings/${booking.id}/cancel`, headers: headers(), payload: { expectedRevision: 0 } });
-        assert.equal(cancel.statusCode, 409, cancel.body); await unchanged(booking);
+        assert.equal(cancel.statusCode, 409, cancel.body); assert.equal(cancel.json().error.code, 'CONFLICT'); await unchanged(booking);
+        // No policy is not a cutoff: the reschedule screen must not tell the customer they are too close to the appointment.
+        const availability = await app.inject({ url: `/api/bookings/${booking.id}/availability?date=${booking.startsAt.toISOString().slice(0, 10)}`, headers: headers() });
+        assert.equal(availability.statusCode, 409, availability.body); assert.equal(availability.json().error.code, 'CONFLICT');
       } finally { await prisma.bookingPolicy.create({ data: policy }); }
     });
     await t.test('archived service reschedules retain immutable duration and price', async () => {

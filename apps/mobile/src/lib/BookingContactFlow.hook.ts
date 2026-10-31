@@ -15,6 +15,7 @@ import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest, ApiError } from '@/src/lib/api';
+import { appointmentRefusalKey, bookingLoadRefusalKey } from './AppointmentLifecycle.utils';
 import { localDate } from './appointmentTime';
 import { useCompactBooking } from './CompactBooking.hook';
 import { bookingSlotId, validBookingDate } from './CompactBooking.utils';
@@ -131,9 +132,10 @@ export function useBookingContactFlow() {
         if (terminal || fromBookingId && reason instanceof ApiError && [400, 401, 404, 409].includes(reason.status)) {
           if (fromBookingId) useRescheduleAttempt.getState().set(null); else useBookingAttempt.getState().set(null); setSelection(null);
           if (selected) setConflictSlot(slotId(selected));
-          // A new booking's refusal is shown in the app's language; reschedule refusals (cutoff, revision) still carry
-          // their specific server reason until they get their own localized copy.
-          setError(fromBookingId ? (reason instanceof Error ? reason.message : t('bookingCommit.conflict')) : t(reason instanceof ApiError && reason.code === 'CUSTOMER_CONTACT_REQUIRED' ? 'bookingContact.help' : 'bookingCommit.conflict')); await contacts.refetch(); await details.refetch(); await slots.refetch();
+          // Refusals are shown in the app's language, never as the server's diagnostic. A reschedule cutoff says why,
+          // so a customer past it is not told to choose another time.
+          const code = reason instanceof ApiError ? reason.code : undefined;
+          setError(t(appointmentRefusalKey(code) ?? (code === 'CUSTOMER_CONTACT_REQUIRED' ? 'bookingContact.help' : 'bookingCommit.conflict'))); await contacts.refetch(); await details.refetch(); await slots.refetch();
         } else setError(t('bookingCommit.uncertain'));
       }
     } finally {
@@ -165,7 +167,9 @@ export function useBookingContactFlow() {
     durationAndPrice: `${reviewedService.durationMinutes} ${t('bookingCommit.minutes')} · ${formatMoney(reviewedService.priceMinor, reviewedService.currency)}`,
     cancellation: t('bookingCommit.cancel', { minutes: provider.bookingPolicy?.cancellationCutoffMinutes ?? 0 }),
   } : null;
+  const detailsFailure = details.error instanceof ApiError ? details.error : null;
+  const detailsError = details.isError ? t(bookingLoadRefusalKey(detailsFailure?.code, detailsFailure?.status)) : '';
   const reauthReturnTo = `/booking/${providerId}?${new URLSearchParams({ serviceId: chosenService, date: chosenDate })}`;
   function saveReauthDraft() { if (identityId) useBookingContactDraft.getState().save({ identityId, providerId, serviceId: chosenService, date: chosenDate, selected }); }
-  return { upcoming, controls, review, reauthReturnTo, saveReauthDraft, locale, t, providerId, fromBookingId, serviceId, date, selected, busy, editingDisabled: busy || Boolean(pendingAttempt), pendingAttempt, pendingElsewhere, notice, error, conflictSlot, identityId, details, provider, chosenService, chosenDate, slots, contacts, name, setName, setServiceId, setDate, setNotice, reset, choose, confirm, saveName };
+  return { upcoming, controls, review, reauthReturnTo, saveReauthDraft, locale, t, providerId, fromBookingId, serviceId, date, selected, busy, editingDisabled: busy || Boolean(pendingAttempt), pendingAttempt, pendingElsewhere, notice, error, detailsError, conflictSlot, identityId, details, provider, chosenService, chosenDate, slots, contacts, name, setName, setServiceId, setDate, setNotice, reset, choose, confirm, saveName };
 }

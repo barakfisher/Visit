@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { appointmentOutcomeDelay, canContinueAppointmentAction, canRecordAppointmentOutcome } from '../src/lib/AppointmentLifecycle.utils';
+import { appointmentOutcomeDelay, appointmentRefusalKey, bookingLoadRefusalKey, canContinueAppointmentAction, canRecordAppointmentOutcome, CANCELLATION_CUTOFF, RESCHEDULE_CUTOFF } from '../src/lib/AppointmentLifecycle.utils';
+import { translate } from '../src/i18n/messages';
 import type { AppointmentActionScope, LifecycleAppointment } from '../src/types/AppointmentLifecycle.types';
 const booking: LifecycleAppointment = { id: 'booking', status: 'CONFIRMED', revision: 0, startsAt: '2026-10-26T07:00:00Z', endsAt: '2026-10-26T07:30:00Z' };
 test('outcome controls require a scheduled appointment that has ended at the exact absolute instant', () => {
@@ -73,4 +74,15 @@ test('deferred confirmation checks the latest identity, context, business, and m
   assert.equal(canContinueAppointmentAction(anonymous, anonymous, true), false);
   const customerScope = { ...initial, activeBusinessId: null };
   assert.equal(canContinueAppointmentAction(customerScope, customerScope, true), true);
+});
+test('cutoff refusals map to their own localized copy; other refusals keep the caller fallback', () => {
+  assert.equal(appointmentRefusalKey(CANCELLATION_CUTOFF), 'lifecycle.cancelCutoff');
+  assert.equal(appointmentRefusalKey(RESCHEDULE_CUTOFF), 'lifecycle.rescheduleCutoff');
+  for (const code of ['CONFLICT', 'CUSTOMER_CONTACT_REQUIRED', undefined]) assert.equal(appointmentRefusalKey(code), null);
+  // A booking screen that cannot load keeps a cutoff's reason, treats not-found and unpublished alike, and never falls back to the server's text.
+  assert.equal(bookingLoadRefusalKey(RESCHEDULE_CUTOFF, 409), 'lifecycle.rescheduleCutoff');
+  assert.equal(bookingLoadRefusalKey('NOT_FOUND', 404), 'providers.unavailable');
+  for (const [code, status] of [['CONFLICT', 409], [undefined, undefined]] as const) assert.equal(bookingLoadRefusalKey(code, status), 'compact.detailsFailed');
+  // translate falls back to English and then to the key, so Hebrew copy must differ from English to exist.
+  for (const key of ['lifecycle.cancelCutoff', 'lifecycle.rescheduleCutoff', 'compact.detailsFailed'] as const) { assert.notEqual(translate('en', key), key); assert.notEqual(translate('he', key), translate('en', key)); }
 });
