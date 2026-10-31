@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import type { Browser } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
 import { preferBookingTime, selectedBookingDate } from './booking-controls.utils';
+const FOCUS_RETURN_TIMEOUT_MS = 2000;
 export async function compactBookingSmoke({ browser, webUrl, prisma, run, businessIds }: { browser: Browser; webUrl: string; prisma: typeof Prisma; run: string; businessIds: string[] }) {
   const business = await prisma.business.create({ data: { name: `Compact ${run}`, slug: `compact-${run}`, timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED', publishedAt: new Date() } });
   businessIds.push(business.id);
@@ -21,9 +22,12 @@ export async function compactBookingSmoke({ browser, webUrl, prisma, run, busine
     await page.getByTestId('booking-date-trigger').click();
     await page.getByTestId(`booking-day-${date}`).waitFor();
     assert.equal(await page.getByTestId(`booking-day-${date}`).isDisabled(), true);
+    // React Native Web's Modal ignores Escape until it is active, a render after its content appears; only then does it take role=dialog.
+    await page.getByRole('dialog').waitFor();
     await page.keyboard.press('Escape');
     await page.getByRole('dialog').waitFor({ state: 'hidden' });
-    assert.equal(await page.getByTestId('booking-date-trigger').evaluate(node => node === document.activeElement), true);
+    // Focus returns to the trigger when the sheet unmounts, a render after it hides.
+    await page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'booking-date-trigger', undefined, { timeout: FOCUS_RETURN_TIMEOUT_MS });
     await page.goto(`${webUrl}/account`); await page.getByTestId('language-en').click();
     await page.goto(`${webUrl}/booking/${business.id}?date=${date}`);
     await page.getByRole('heading', { name: 'Available appointments' }).waitFor();
