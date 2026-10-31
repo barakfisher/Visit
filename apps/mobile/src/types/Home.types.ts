@@ -5,5 +5,5 @@ export type SavedProviderPage = { providers: SavedProviderItem[]; nextCursor: st
 export type HomeView = {
   t: ReturnType<typeof useAppLocale>['t']; identity: string | null; bootstrapping: boolean; upcoming: UpcomingAppointmentView;
   providersState: 'loading' | 'error' | 'ready'; providers: SavedProviderItem[]; hasMore: boolean; loadingMore: boolean; removingId: string | null; removeError: boolean;
-  onSignIn: () => void; onAppointments: () => void; onRetryProviders: () => void; onMore: () => void; onBook: (businessId: string) => void; onRemove: (businessId: string) => void;
+  onAppointments: () => void; onRetryProviders: () => void; onMore: () => void; onBook: (businessId: string) => void; onRemove: (businessId: string) => void;
 };
