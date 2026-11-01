@@ -1,3 +1,4 @@
+import { tokens } from '@/src/design/tokens';
 import { useState } from 'react';
 import { CALENDAR_MIN_WIDTH, compactBookingStyles as styles } from './CompactBookingControls.styles';
 import { ActivityIndicator, Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
@@ -16,7 +17,7 @@ export function CompactBookingControls({ controls: c, t, disabled, date, selecte
     <View className="gap-2"><AppText className="text-sm font-semibold text-body">{t('compact.date')}</AppText>
       <Pressable testID="booking-date-trigger" accessibilityRole="button" accessibilityLabel={`${t('compact.chooseDate')} · ${c.dateTitle} · ${date}`} accessibilityState={{ expanded: c.sheet === 'calendar', disabled: disabled || !c.chosen }} disabled={disabled || !c.chosen} onPress={() => c.open('calendar')} className="min-h-14 rounded-control border border-line bg-surface px-4 py-3"><AppText className="font-semibold text-brand">{c.dateTitle}</AppText></Pressable>
     </View>
-    {c.chosen ? <View className="gap-3"><AppText className="text-sm font-semibold text-body">{t('compact.around')}</AppText><TextInput testID="booking-preferred-time" accessibilityLabel={t('compact.around')} value={c.preferred} onChangeText={c.changePreferred} editable={!disabled} placeholder="09:00" maxLength={5} keyboardType="numbers-and-punctuation" style={styles.identifier} className="rounded-control border border-line bg-surface px-4 py-3 text-ink" />
+    {c.chosen ? <View className="gap-3"><AppText className="text-sm font-semibold text-body">{t('compact.around')}</AppText><TextInput placeholderTextColor={tokens.color.disabled} testID="booking-preferred-time" accessibilityLabel={t('compact.around')} value={c.preferred} onChangeText={c.changePreferred} editable={!disabled} placeholder="09:00" maxLength={5} keyboardType="numbers-and-punctuation" style={styles.identifier} className="rounded-control border border-line bg-surface px-4 py-3 text-ink" />
       <AppText className="text-sm text-muted">{t('compact.preferenceHelp')}</AppText>
       {!c.validPreferred ? <AppText accessibilityRole="alert" className="text-danger">{t('compact.validTime')}</AppText> : slotError ? <View className="gap-2"><AppText accessibilityRole="alert" className="text-danger">{t('compact.slotsFailed')}</AppText><ActionButton secondary label={t('common.retry')} onPress={onRetrySlots} /></View> : <>
         <TimeChips timezone="" slots={c.page} selectedId={selectedId} loading={slotLoading} busy={disabled} onSelect={onSelectSlot} />

@@ -98,6 +98,10 @@ export function createEmailLoginService({ delivery, webOrigin = env.WEB_APP_URL,
         if (challenge.identityId) {
           const verified = await tx.identity.updateMany({ where: { id: challenge.identityId, email: challenge.email }, data: { emailVerifiedAt: current } });
           if (verified.count !== 1) throw unauthenticated();
+          // Proving the address hands the account to its owner: a password set by whoever registered it
+          // first without proof stops working, and that person's sessions end (decisions.md, 2026-11-01).
+          const unproven = await tx.passwordCredential.deleteMany({ where: { identityId: challenge.identityId, unprovenEmail: challenge.email } });
+          if (unproven.count) await tx.session.updateMany({ where: { identityId: challenge.identityId, revokedAt: null }, data: { revokedAt: current } });
           person = await tx.identity.findUniqueOrThrow({ where: { id: challenge.identityId } });
         } else {
           if (await tx.identity.findUnique({ where: { email: challenge.email }, select: { id: true } })) throw unauthenticated();

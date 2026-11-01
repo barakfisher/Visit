@@ -7,8 +7,27 @@ import { AppError, unauthenticated } from '../http/errors.js';
 import { authenticate, clearSessionCookie, issueSessionToken, readSessionToken, rotateSession, revokeSessionFamily } from '../security/sessions.js';
 
 import { emailSchema, emailLoginService, type createEmailLoginService } from '../security/email-login.js';
+import { passwordLoginService, type createPasswordLoginService } from '../security/password-login.js';
 
-export async function registerAuthRoutes(app: FastifyInstance, { emailLogin = emailLoginService }: { emailLogin?: ReturnType<typeof createEmailLoginService> } = {}) {
+export async function registerAuthRoutes(app: FastifyInstance, { emailLogin = emailLoginService, passwordLogin = passwordLoginService }: { emailLogin?: ReturnType<typeof createEmailLoginService>; passwordLogin?: ReturnType<typeof createPasswordLoginService> } = {}) {
+  // Field rules are enforced by the service; the route only bounds the shape before hashing.
+  const passwordFields = { email: z.string().max(320), password: z.string().max(1024) };
+  app.post('/v1/auth/password/sign-up', async (request, reply) => {
+    const parsed = z.strictObject({ ...passwordFields, displayName: z.string().max(512) }).safeParse(request.body);
+    if (!parsed.success) throw new AppError(400, 'VALIDATION_ERROR', 'Enter your name, email and password.');
+    const result = await passwordLogin.signUp(parsed.data, request.ip).catch((error: unknown) => {
+      if (error instanceof z.ZodError) throw new AppError(400, 'VALIDATION_ERROR', 'Enter your name, a valid email and a password of at least 8 characters.');
+      throw error;
+    });
+    reply.code(201);
+    return { ...issueSessionToken(reply, request, result.token), identity: result.identity };
+  });
+  app.post('/v1/auth/password/sign-in', async (request, reply) => {
+    const parsed = z.strictObject(passwordFields).safeParse(request.body);
+    if (!parsed.success) throw new AppError(400, 'VALIDATION_ERROR', 'Enter your email and password.');
+    const result = await passwordLogin.signIn(parsed.data, request.ip);
+    return { ...issueSessionToken(reply, request, result.token), identity: result.identity };
+  });
   app.post('/v1/auth/email-challenges', async (request, reply) => {
     const parsed = z.strictObject({ email: emailSchema, target: z.enum(['web', 'native']).default('web'), returnTo: z.string().max(512).refine(value => safeAuthReturnTo(value) !== undefined).optional() }).safeParse(request.body);
     if (!parsed.success) throw new AppError(400, 'VALIDATION_ERROR', 'Enter a valid email address and supported destination.', { email: 'Review the sign-in request.' });

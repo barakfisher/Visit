@@ -1,5 +1,7 @@
 # Passwordless email and recovery (VIS-21)
 
+> MVP amendment, 2026-11-01: email and password is the primary sign-in for now, and its email is trusted without proof. See [password-authentication.md](password-authentication.md). The email-link flow below is unchanged and still reachable at `/auth/email`.
+
 ## Ownership and delivery lifecycle
 
 Email addresses are trimmed and case-normalized. Send responses are the same for known and new addresses; sending a link never creates or activates an identity. Tokens are 256-bit opaque random values and PostgreSQL stores only their hashes. Each login challenge has explicit creation/expiry, delivery and consumption state; validity is at most 15 minutes from issuance.

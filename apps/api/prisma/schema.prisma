@@ -61,6 +61,7 @@ model Identity {
   securityVersion Int @default(0)
   contactChallenges AccountContactChallenge[]
   securityEvents IdentitySecurityEvent[]
+  passwordCredential PasswordCredential?
   securityNotifications SecurityNotification[]
   phoneVerifiedAt DateTime?
   id                    String             @id @default(cuid())
@@ -409,6 +410,18 @@ model AccountContactChallenge {
   session Session @relation(fields: [sessionId, identityId], references: [id, identityId], onDelete: Cascade)
   @@index([identityId, consumedAt])
   @@index([expiresAt])
+}
+
+// MVP email+password sign-in (decisions.md, 2026-11-01). Kept apart from Identity so ordinary
+// identity reads never carry the password hash.
+model PasswordCredential {
+  identityId String   @id
+  hash       String
+  // The address accepted at sign-up without proof of ownership; re-verify while it equals Identity.email.
+  unprovenEmail String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  identity   Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
 }
 
 model IdentitySecurityEvent {

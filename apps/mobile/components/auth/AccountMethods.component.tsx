@@ -1,3 +1,4 @@
+import { tokens } from '@/src/design/tokens';
 import { Link } from 'expo-router';
 import { Platform, Pressable, TextInput, View } from 'react-native';
 import { ActionButton } from '../ActionButton';
@@ -26,7 +27,7 @@ export function AccountMethodsView(props: ReturnType<typeof useAccountMethods>) 
           {__DEV__ ? <ActionButton secondary label={t('methods.localCode')} busy={busy} onPress={() => void loadLocalCode()} /> : null}
           <ActionButton secondary label={t('methods.restart')} disabled={busy} onPress={resetDraft} />
         </> : <>
-          <TextInput value={destination} onChangeText={setDestination} editable={available && !reauth && !busy} accessibilityLabel={t(channel === 'email' ? 'methods.newEmail' : 'methods.newPhone')} autoComplete={channel === 'email' ? 'email' : 'tel'} keyboardType={channel === 'email' ? 'email-address' : 'phone-pad'} autoCapitalize="none" autoCorrect={false} placeholder={channel === 'email' ? 'you@example.com' : '+972501234567'} style={{ writingDirection: 'ltr', textAlign: 'left' }} className="rounded-control border border-line px-4 py-4 text-ink" />
+          <TextInput placeholderTextColor={tokens.color.disabled} value={destination} onChangeText={setDestination} editable={available && !reauth && !busy} accessibilityLabel={t(channel === 'email' ? 'methods.newEmail' : 'methods.newPhone')} autoComplete={channel === 'email' ? 'email' : 'tel'} keyboardType={channel === 'email' ? 'email-address' : 'phone-pad'} autoCapitalize="none" autoCorrect={false} placeholder={channel === 'email' ? 'you@example.com' : '+972501234567'} style={{ writingDirection: 'ltr', textAlign: 'left' }} className="rounded-control border border-line px-4 py-4 text-ink" />
           <ActionButton label={!available ? t('methods.unavailable') : cooldown ? t('methods.resendIn', { seconds: cooldown }) : t('methods.send')} busy={busy} disabled={!available || reauth || !valid || cooldown > 0} onPress={() => void start()} />
         </>}
         {!contactOnly ? <GoogleSigninButton intent="link" disabled={reauth || busy} enabled={Platform.OS === 'web' ? capabilities.data?.google : capabilities.data?.googleNative} onError={setError} /> : null}
