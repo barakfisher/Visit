@@ -16,7 +16,7 @@ export function useHome(): HomeView {
   } });
   return { t, identity, bootstrapping: !identity && bootstrap !== 'ready', upcoming,
     providersState: saved.isPending ? 'loading' : saved.isError ? 'error' : 'ready', providers: saved.data?.pages.flatMap(page => page.providers) ?? [], hasMore: Boolean(saved.hasNextPage), loadingMore: saved.isFetchingNextPage, removingId: remove.isPending ? remove.variables?.businessId ?? null : null, removeError: remove.isError,
-    onSignIn: () => router.push('/auth/login'), onAppointments: () => router.push('/appointments'), onRetryProviders: () => { void saved.refetch(); }, onMore: () => { void saved.fetchNextPage(); },
+    onAppointments: () => router.push('/appointments'), onRetryProviders: () => { void saved.refetch(); }, onMore: () => { void saved.fetchNextPage(); },
     onBook: businessId => router.push({ pathname: '/booking/[providerId]', params: { providerId: businessId } }), onRemove: businessId => { if (identity && !remove.isPending) remove.mutate({ businessId, identity, version: useSessionStore.getState().contextVersion }); },
   };
 }

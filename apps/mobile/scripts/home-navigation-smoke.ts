@@ -72,6 +72,8 @@ export async function homeNavigationSmoke({ browser, webUrl, apiUrl, prisma, run
     await page.getByRole('dialog').getByRole('alert').waitFor(); assert.equal((await context.request.get(`${apiUrl}/api/auth/me`)).status(), 200);
     await page.unroute(`${apiUrl}/v1/auth/logout`);
     await page.getByRole('dialog').getByRole('button', { name: 'Sign out', exact: true }).click(); await page.waitForURL(`${webUrl}/auth/login`);
+    // Signed out, Home itself is the login screen: no title-and-button guest page.
+    await page.goto(webUrl); await page.waitForURL(`${webUrl}/auth/login`); assert.equal(await page.getByRole('heading', { name: 'Your time, well spent.', exact: true }).count(), 0);
 
     for (const status of ['PENDING', 'REJECTED'] as const) {
       const applicant = await person(status); await application(applicant.identity.id, status); await applicant.page.goto(webUrl);
@@ -103,6 +105,6 @@ export async function homeNavigationSmoke({ browser, webUrl, apiUrl, prisma, run
     await hebrew.page.keyboard.press('Escape'); await hebrew.page.setViewportSize({ width: 1280, height: 900 });
     await hebrew.page.screenshot({ path: 'test-results/home-empty-he-desktop.png', fullPage: true });
     assert.deepEqual(errors, []);
-    console.log('PASS: Home bootstrap/empty/saved/offline states, scoped removal, legacy redirects, no tabs/directory, customer/application/multi-business menu, explicit mode choice, focus trap/return and Hebrew RTL.');
+    console.log('PASS: Home bootstrap/empty/saved/offline states, scoped removal, legacy redirects, signed-out Home opens login, no tabs/directory, customer/application/multi-business menu, explicit mode choice, focus trap/return and Hebrew RTL.');
   } finally { await Promise.all(contexts.map(c => c.close())); }
 }

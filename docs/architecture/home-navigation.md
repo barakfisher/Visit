@@ -1,6 +1,6 @@
 # Home and navigation (VIS-46)
 
-Ordinary sign-in always lands on Home for a unified identity. Home shows the localized “Your time, well spent” heading, the nearest upcoming confirmed appointment, a link to all owned appointments, and the identity's saved providers. Empty state explains asking a business for its Visit link or scanning its QR with the phone camera. It never lists global businesses, invents providers or redirects based on global business counts.
+Ordinary sign-in always lands on Home for a unified identity. A signed-out visitor who opens Home is redirected to login once the session lookup has finished; a lookup still in progress or failed keeps the loading/retry state instead. Home shows the localized “Your time, well spent” heading, the nearest upcoming confirmed appointment, a link to all owned appointments, and the identity's saved providers. Empty state explains asking a business for its Visit link or scanning its QR with the phone camera. It never lists global businesses, invents providers or redirects based on global business counts.
 
 ## States and ownership
 
