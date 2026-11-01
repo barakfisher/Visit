@@ -77,7 +77,7 @@ try {
   if (redis.status === 'wait') await redis.connect();
   // Only the local test IP's OTP counters are reset; fixture phone numbers are unique.
   const ipHash = createHash('sha256').update('127.0.0.1').digest('hex');
-  const resetLocalSignInLimits = () => redis.del(`visit:otp:limit:ip:${ipHash}`, `visit:otp:limit:verify-ip:${ipHash}`, `visit:email:limit:ip:${ipHash}`, `visit:email:limit:verify:${ipHash}`);
+  const resetLocalSignInLimits = () => redis.del(`visit:otp:limit:ip:${ipHash}`, `visit:otp:limit:verify-ip:${ipHash}`, `visit:email:limit:ip:${ipHash}`, `visit:email:limit:verify:${ipHash}`, `visit:password:limit:sign-in:ip:${ipHash}`, `visit:password:limit:sign-up:ip:${ipHash}`);
   await resetLocalSignInLimits();
   const { createApp } = await import('../../api/src/app.js');
   const { createGoogleAuthService } = await import('../../api/src/security/google-auth.js');
@@ -132,6 +132,8 @@ try {
     await sharedProvidersSmoke({ browser, webUrl, apiUrl, prisma, run, identityIds, businessId: businessIds[0]! });
     const { googleSmoke } = await import('./google-smoke.js');
     await googleSmoke({ browser, webUrl, apiUrl, claims: googleClaims, run, prisma, identityIds, sharedBusinessId: businessIds[0]! });
+    const { passwordSignInSmoke } = await import('./password-sign-in-smoke.js');
+    await passwordSignInSmoke({ browser, webUrl, prisma, run, identityIds });
     const { homeNavigationSmoke } = await import('./home-navigation-smoke.js');
     await homeNavigationSmoke({ browser, webUrl, apiUrl, prisma, run, identityIds, businessIds });
     const { pilotLifecycleSmoke } = await import('./pilot-lifecycle-smoke.js');
@@ -429,8 +431,8 @@ try {
     const emailRequestUrls: string[] = []; let emailVerifications = 0;
     emailPage.on('pageerror', error => pageErrors.push(error.message));
     emailPage.on('request', request => { emailRequestUrls.push(request.url()); if (request.url().endsWith('/v1/auth/email-challenges/verify')) emailVerifications++; });
-    await emailPage.goto(`${webUrl}/auth/login`);
-    await emailPage.getByRole('link', { name: 'Continue with email', exact: true }).click();
+    // Email-link sign-in is no longer offered on the login screen (password is the MVP default) but stays reachable.
+    await emailPage.goto(`${webUrl}/auth/email`);
     await emailPage.getByLabel('Email address').fill(identities[1]!.email!);
     await emailPage.getByRole('button', { name: 'Email me a sign-in link' }).click();
     await emailPage.getByText(/If this address can sign in/).waitFor();

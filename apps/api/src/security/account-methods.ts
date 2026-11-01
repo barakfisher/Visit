@@ -148,7 +148,11 @@ export function createAccountMethodsService({ delivery = accountDelivery, otp = 
         const channels = await previousSecurityChannels(tx, identity);
         if (input.method === 'google') {
           const removed = await tx.externalIdentity.deleteMany({ where: { id: google!.id, identityId: identity.id, provider: 'google', subject: google!.subject } }); if (removed.count !== 1) throw methodUnavailable();
-        } else if (input.method === 'email') await tx.identity.update({ where: { id: identity.id }, data: { email: null, emailVerifiedAt: null } });
+        } else if (input.method === 'email') {
+          // A password signs in with the email, so it goes with it; a later email must not revive it.
+          await tx.passwordCredential.deleteMany({ where: { identityId: identity.id } });
+          await tx.identity.update({ where: { id: identity.id }, data: { email: null, emailVerifiedAt: null } });
+        }
         else { await otp.invalidate(identity.phone!); await loginOtp.invalidate(identity.phone!); await tx.identity.update({ where: { id: identity.id }, data: { phone: null, phoneVerifiedAt: null } }); }
         return finishAccountSecurityChange(tx, { identity, session, channels, notificationScope: namespace === 'visit:account' ? 'live' : namespace, action: 'REMOVED', method: input.method, rotate: true }, new Date(now()));
       }, { maxWait: 5000, timeout: 5000 });

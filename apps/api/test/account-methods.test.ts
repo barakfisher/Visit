@@ -9,6 +9,7 @@ import { env } from '../src/env.js';
 import { AppError } from '../src/http/errors.js';
 import { createAccountMethodsService } from '../src/security/account-methods.js';
 import { createLocalAccountDelivery, createAccountDelivery } from '../src/security/account-delivery.js';
+import { hashPassword } from '../src/security/password-login.js';
 import { createEmailLoginService, createLocalEmailDelivery } from '../src/security/email-login.js';
 import { createOtpService } from '../src/security/phone-otp.js';
 import { authenticate, tokenDigest, newOpaqueToken, rotateSession, revokeSessionFamily } from '../src/security/sessions.js';
@@ -207,6 +208,12 @@ test('account methods bind ownership, recent authentication, proof, contact name
       await prisma.securityNotification.updateMany({ where: { identityId: a.identity.id, channel: 'phone' }, data: { createdAt: new Date(Date.now() - 8 * 86400000) } }); await worker.run();
       const expired = await prisma.securityNotification.findFirstOrThrow({ where: { identityId: a.identity.id, channel: 'phone' } }); assert.equal(expired.status, 'FAILED'); assert.equal(expired.destination, null);
       await worker.stop();
+    });
+    await t.test('removing the email removes its password, so a later email cannot revive it', async () => {
+      const a = await actor({ email: true, google: true });
+      await prisma.passwordCredential.create({ data: { identityId: a.identity.id, hash: await hashPassword('old password value'), unprovenEmail: a.identity.email } });
+      assert.ok((await account.remove({ method: 'email' }, a.context)).sessionToken);
+      assert.equal(await prisma.passwordCredential.count({ where: { identityId: a.identity.id } }), 0);
     });
     await t.test('removed email is released only for a newly proven identity, stale links cannot recover the original account and last-method recovery has no bypass', async () => {
       const a = await actor({ email: true, google: true });
