@@ -27,10 +27,10 @@ test('agenda draft patches stay in identity/business scope and clear sensitive t
   useAgendaDraft.getState().update('identity-a:business-a', { reason: 'Private break', staffId: 'staff-a', blockOpen: true, date: '2027-03-15' });
   useAgendaDraft.getState().update('identity-a:business-a', { mode: 'week' });
   assert.equal(useAgendaDraft.getState().draft.reason, 'Private break');
-  useAgendaDraft.getState().update('identity-a:business-b', { tab: 'hours' });
-  assert.deepEqual(useAgendaDraft.getState().draft, { ...emptyAgendaDraft, tab: 'hours' });
+  useAgendaDraft.getState().update('identity-a:business-b', { mode: 'week' });
+  assert.deepEqual(useAgendaDraft.getState().draft, { ...emptyAgendaDraft, mode: 'week' });
   useAgendaDraft.getState().update('identity-b:business-b', { reason: 'Second identity' });
-  assert.equal(useAgendaDraft.getState().draft.tab, 'agenda');
+  assert.equal(useAgendaDraft.getState().draft.mode, emptyAgendaDraft.mode);
   useAgendaDraft.getState().clear();
   assert.equal(useAgendaDraft.getState().scope, '');
   assert.deepEqual(useAgendaDraft.getState().draft, emptyAgendaDraft);

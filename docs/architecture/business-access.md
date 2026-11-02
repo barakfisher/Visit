@@ -2,7 +2,7 @@
 
 ## User journeys
 
-Business setup → Team access → choose Staff or Manager and a recipient's verified email/phone → create a private invitation → copy and share directly. The raw link is shown once. Creating another invitation to the same contact/role revokes the previous pending link; a lost response is recovered by issuing a fresh link.
+Provider menu → Team access → choose Staff or Manager and a recipient's verified email/phone → create a private invitation → copy and share directly. The raw link is shown once. Creating another invitation to the same contact/role revokes the previous pending link; a lost response is recovered by issuing a fresh link.
 
 Recipient opens `/invite#invite=<opaque>` → URL is scrubbed → explicitly reviews the business/role → explicitly accepts. Opening or previewing never grants membership. Signed-out recipients sign in and reopen the original link; credentials are not persisted in browser storage, query keys, return URLs or logs. The token stays only in screen memory and is cleared on account change/unmount/acceptance. Network ambiguity requires checking the account or requesting a fresh invitation; consumed tokens cannot resurrect revoked access.
 

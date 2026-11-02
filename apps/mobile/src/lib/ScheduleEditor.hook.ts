@@ -9,7 +9,7 @@ import { readSchedule, previewSchedule, saveSchedule } from './ScheduleEditor.se
 import { scheduleDraft, scheduleProposal } from './ScheduleEditor.utils';
 import { appointmentDate, appointmentTime } from './appointmentTime';
 import type { ScheduleDraft, ScheduleException, ScheduleInterval, SchedulePreview, ScheduleEditorState, ScheduleEditorView } from '../types/ScheduleEditor.types';
-export function useScheduleEditor(businessId: string, staffId?: string): ScheduleEditorView {
+export function useScheduleEditor(businessId: string, staffId?: string, onSaved?: () => void): ScheduleEditorView {
   const { t, locale } = useAppLocale(), client = useQueryClient();
   const identity = useSessionStore(state => state.identityId), version = useSessionStore(state => state.contextVersion);
   const scope = JSON.stringify([identity, version, businessId, staffId]), scopeRef = useRef(scope);
@@ -43,7 +43,7 @@ export function useScheduleEditor(businessId: string, staffId?: string): Schedul
         await saveSchedule(businessId, staffId, proposal, preview.token);
         if (!isCurrent()) return;
         await Promise.allSettled([client.invalidateQueries({ predicate: query => isBookingQuery(query.queryKey) })]);
-        if (isCurrent()) { setPreview(null); setDraft(null); setFeedback('saved'); }
+        if (isCurrent()) { setPreview(null); setDraft(null); setFeedback('saved'); onSaved?.(); }
       } else { const result = await previewSchedule(businessId, staffId, proposal); if (isCurrent()) setPreview(result); }
     } catch { if (isCurrent()) { setPreview(null); setFeedback('error'); } }
     finally { operation.current = false; if (mounted.current) setBusy(false); }

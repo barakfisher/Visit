@@ -7,7 +7,7 @@ import type { BrowserSession } from './pilot-customers';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
 import type { redis as Redis } from '../../api/src/infra/redis.js';
 import { translate, type Locale } from '../src/i18n/messages';
-import { configureBusinessSmoke, sharingBusinessSmoke, SETUP_SERVICE, SETUP_STAFF_NAME } from './business-setup-smoke';
+import { configureBusinessSmoke, openSettings, sharingBusinessSmoke, SETUP_SERVICE, SETUP_STAFF_NAME } from './business-setup-smoke';
 import { preferBookingTime } from './booking-controls.utils';
 
 // VIS-14 golden path: one provider is onboarded entirely through the UI (only the platform admin is seeded, as the
@@ -135,7 +135,7 @@ export async function pilotLifecycleSmoke({ browser, webUrl, apiUrl, prisma, red
 
     // 3. Setup through the UI, including a required verified customer phone; unpublished links stay unbookable.
     const setup = await configureBusinessSmoke({ page: provider, context: providerContext, webUrl, apiUrl, businessId: business.id });
-    await provider.getByTestId('setup-section-policy').click();
+    await openSettings(provider, webUrl, business.id, 'policy');
     await provider.getByRole('switch', { name: 'Require verified phone', exact: true }).click();
     const policySaved = provider.waitForResponse(r => r.url() === `${apiUrl}/v1/provider/businesses/${business.id}/booking-policy` && r.request().method() === 'PUT');
     await provider.getByRole('button', { name: 'Save booking policy', exact: true }).click();
@@ -153,6 +153,7 @@ export async function pilotLifecycleSmoke({ browser, webUrl, apiUrl, prisma, red
     for (const url of Object.values(bookability)) assert.equal((await fetch(url)).status, 404, url);
 
     // 4. Publish, then take the link from the real Copy button and the decoded QR code.
+    await openSettings(provider, webUrl, business.id, 'publish');
     await provider.getByRole('button', { name: 'Publish business', exact: true }).click();
     await provider.getByText('Published — ready for bookings', { exact: true }).filter({ visible: true }).waitFor();
     await sharingBusinessSmoke({ page: provider, context: providerContext, webUrl, apiUrl, businessId: business.id, slug });

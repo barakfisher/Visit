@@ -103,8 +103,8 @@ export async function appointmentRetentionSmoke(deps: Deps) {
   }
   const money = (page: Page, minor: number) => page.evaluate(({ total, currency }) => new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(total), { total: minor / 100, currency: SETUP_SERVICE.currency });
   async function publication(provider: Page, action: 'publish.stop' | 'publish.action', status: 'publish.draft' | 'publish.live') {
-    await provider.goto(`${webUrl}/provider/${business.businessId}`);
-    await provider.getByRole('button', { name: translate('en', action), exact: true }).click();
+    await provider.goto(`${webUrl}/provider/${business.businessId}/publish`);
+    await provider.getByRole('button', { name: translate('en', action), exact: true }).filter({ visible: true }).click();
     await provider.getByText(translate('en', status), { exact: true }).filter({ visible: true }).waitFor();
   }
   async function errorCode(response: { json(): Promise<unknown> }) { return ((await response.json()) as ApiFailure).error.code; }
@@ -293,8 +293,7 @@ export async function appointmentRetentionSmoke(deps: Deps) {
       const page = await newPage(owner.context); details.set(id, page);
       await page.goto(`${webUrl}/appointment/${id}`); await page.getByRole('button', { name: owner.t('details.cancel'), exact: true }).filter({ visible: true }).waitFor();
     }
-    await provider.page.goto(`${webUrl}/provider/${business.businessId}`);
-    await provider.page.getByTestId('setup-section-policy').click();
+    await provider.page.goto(`${webUrl}/provider/${business.businessId}/policy`);
     await provider.page.getByRole('textbox', { name: translate('en', 'setup.cancelCutoff'), exact: true }).fill(String(CUTOFF_MINUTES));
     await provider.page.getByRole('textbox', { name: translate('en', 'setup.rescheduleCutoff'), exact: true }).fill(String(CUTOFF_MINUTES));
     const policySaved = provider.page.waitForResponse(response => response.url() === `${apiUrl}/v1/provider/businesses/${business.businessId}/booking-policy` && response.request().method() === 'PUT');

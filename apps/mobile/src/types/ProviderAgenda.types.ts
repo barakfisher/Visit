@@ -8,7 +8,7 @@ export type ProviderAgenda = {
   bookings: { source?: string; manualReason?: string | null; id: string; status: AppointmentStatus; revision: number; startsAt: string; endsAt: string; customer: { displayName: string | null; phone: string | null; email: string | null }; service: { name: string }; staff: { displayName: string } }[];
   blocks: { id: string; startsAt: string; endsAt: string; reason: string | null; staff: { displayName: string } }[];
 };
-export type AgendaDraft = { tab: 'agenda' | 'services' | 'hours'; date: string; mode: 'day' | 'week'; blockOpen: boolean; staffId: string; from: string; to: string; reason: string };
+export type AgendaDraft = { date: string; mode: 'day' | 'week'; blockOpen: boolean; staffId: string; from: string; to: string; reason: string };
 export type AgendaBlockInput = { businessId: string; staffId: string; date: string; startLocal: string; endLocal: string; reason: string };
 export type ProviderAgendaView = {
   manual: ManualBookingView;

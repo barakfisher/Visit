@@ -31,7 +31,7 @@ function Examples({ onAction }: { onAction: () => void }) {
     <View className="flex-row flex-wrap gap-3"><View className="flex-1"><ActionButton secondary disabled label={t('methods.recovery')} onPress={onAction} /></View><ActionButton busy label={t('auth.verify')} onPress={onAction}/></View>
     <ServiceCard name={name} description={name} durationMinutes={45} priceLabel="₪125.00" selected onPress={onAction} />
     <HorizontalCalendarBar days={Array.from({ length: 12 }, (_, index) => ({ id: index === 0 ? 'monday' : `day-${index}`, label: locale === 'he' ? 'יום שני' : 'Monday', dateLabel: String(index + 1), accessibilityLabel: `${locale === 'he' ? 'נובמבר' : 'November'} ${index + 1}, 2026`, disabled: index === 2 }))} selectedId={day} onSelect={setDay} />
-    <SectionNavigation label={t('account.workspace')} items={[{ id: 'agenda', label: t('agenda.title') }, { id: 'catalog', label: t('catalog.title') }, { id: 'future', label: t('setup.title'), disabled: true }]} selectedId={section} onSelect={setSection} />
+    <SectionNavigation label={t('account.workspace')} items={[{ id: 'agenda', label: t('agenda.title') }, { id: 'catalog', label: t('catalog.title') }, { id: 'future', label: t('nav.businessSettings'), disabled: true }]} selectedId={section} onSelect={setSection} />
     <TimeChips slots={[{ id: 'a', label: '09:00' }, { id: 'b', label: '09:30' }, { id: 'c', label: '10:00', locked: true }]} timezone="Asia/Jerusalem" selectedId={time} onSelect={setTime} />
     <AvailabilityState state="error" onRetry={onAction} />
     <ActiveBookingCard service={name} provider={name} dateLabel={locale === 'he' ? 'יום שני, 2 בנובמבר' : 'Monday, November 2'} timeLabel="10:30" timezone="Asia/Jerusalem" onReschedule={onAction} onCancel={onAction} />

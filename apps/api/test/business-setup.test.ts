@@ -38,6 +38,9 @@ test('approved business configures, publishes and shares through scoped setup AP
       const reviewed = await app.inject({ method: 'POST', url: `/v1/admin/provider-applications/${application.json().id}/decision`, headers: admin.headers, payload: { decision: 'APPROVED', reason: 'Synthetic approved application for setup lifecycle.' } }); assert.equal(reviewed.statusCode, 200, reviewed.body);
       assert.equal((await app.inject({ url: base, headers: owner.headers })).json().business.publishedAt, null);
       assert.deepEqual((await app.inject({ url: base + '/sharing', headers: owner.headers })).json(), { available: false, url: null });
+      const readiness = (await app.inject({ url: base + '/publication', headers: owner.headers })).json();
+      assert.equal(readiness.ready, false); assert.equal(readiness.hasAppointments, false);
+      assert.equal((await app.inject({ url: base + '/publication', headers: outsider.headers })).statusCode, 403);
     });
     await t.test('profile is strict, explicit public contact does not change identity or sharing slug/timezone', async () => {
       for (const payload of [{ slug: 'changed' }, { timezone: 'UTC' }, { approvalStatus: 'APPROVED' }, { contactEmail: 'bad' }, { contactPhone: '0501234567' }, { name: { set: 'spoof' } }]) assert.equal((await request('PATCH', '', payload)).statusCode, 400);
@@ -91,6 +94,8 @@ test('approved business configures, publishes and shares through scoped setup AP
       assert.equal(await prisma.booking.count({ where: { businessId, staffId, startsAt: new Date(at('15:00')) } }), 0);
       assert.equal((await request('PUT', '/publication', { published: false })).statusCode, 200);
       assert.deepEqual((await app.inject({ url: base + '/sharing', headers: owner.headers })).json(), { available: false, url: null });
+      const readiness = (await app.inject({ url: base + '/publication', headers: owner.headers })).json();
+      assert.equal(readiness.publishedAt, null); assert.equal(readiness.hasAppointments, true); // Confirmed appointments above keep the agenda reachable.
     });
   } finally { await app.close(); await prisma.booking.deleteMany({ where: { businessId: { in: businesses } } }); await prisma.business.deleteMany({ where: { id: { in: businesses } } }); await prisma.identity.deleteMany({ where: { id: { in: people } } }); }
 });

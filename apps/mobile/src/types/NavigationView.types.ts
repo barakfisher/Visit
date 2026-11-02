@@ -19,6 +19,9 @@ export interface NavigationViewProps {
   close: () => void;
   onOpen: () => void;
   onRetry: () => void;
+  /** Provider mode with an active business only; omitted otherwise. */
+  onSettings?: () => void;
+  onTeam?: () => void;
   onHome: () => void;
   onAccount: () => void;
   onApplication: () => void;

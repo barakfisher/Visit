@@ -7,7 +7,7 @@ import { NavigationView } from './NavigationView.component';
 import { translate } from '../src/i18n/messages';
 import { useAppLocale } from '../src/i18n/LocaleContext';
 import type { NavigationViewProps } from '../src/types/NavigationView.types';
-type FixtureProps = Pick<NavigationViewProps, 'managed' | 'applicationStatus' | 'becomeProvider' | 'providerMode' | 'loading' | 'failed' | 'busy' | 'error' | 'onLogout'>;
+type FixtureProps = Pick<NavigationViewProps, 'managed' | 'applicationStatus' | 'becomeProvider' | 'providerMode' | 'loading' | 'failed' | 'busy' | 'error' | 'onLogout' | 'onSettings' | 'onTeam'>;
 function Fixture(props: FixtureProps) {
   const { t, direction } = useAppLocale();
   const trigger = useRef<ComponentRef<typeof View>>(null);
@@ -48,7 +48,13 @@ export const Customer: Story = { play: async ({ canvas, canvasElement }) => {
 } };
 export const Pending: Story = { args: { applicationStatus: true, becomeProvider: false } };
 export const Approved: Story = { args: { becomeProvider: false, applicationStatus: true, managed: [0, 1].map(i => ({ role: 'OWNER', status: 'ACTIVE', business: { id: `synthetic-${i}`, name: `המרכז המקצועי לייעוץ ושירותים ${i}`, approvalStatus: 'APPROVED' } })) } };
-export const ProviderMode: Story = { args: { ...Approved.args, providerMode: true } };
+export const ProviderMode: Story = { args: { ...Approved.args, providerMode: true, onSettings: fn(), onTeam: fn() }, play: async ({ canvas, canvasElement, args }) => {
+  await userEvent.click(canvas.getByRole('button', { name: 'פתיחת תפריט' }));
+  await userEvent.click(within(canvasElement.ownerDocument.body).getByRole('button', { name: 'הגדרות העסק' }));
+  await expect(args.onSettings).toHaveBeenCalledOnce();
+  await userEvent.click(within(canvasElement.ownerDocument.body).getByRole('button', { name: 'הרשאות צוות' }));
+  await expect(args.onTeam).toHaveBeenCalledOnce();
+} };
 export const Failed: Story = { args: { failed: true, becomeProvider: false } };
 export const Loading: Story = { args: { loading: true, becomeProvider: false } };
 export const English: Story = { globals: { locale: 'en' } };

@@ -49,7 +49,8 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
     const { businessId } = businessIdParams.parse(request.params);
     const { identity } = await authenticate(request);
     await requireBusinessMembership(identity.id, businessId, ['OWNER', 'MANAGER']);
-    return prisma.$transaction(tx => publicationReadiness(tx, businessId), { isolationLevel: 'RepeatableRead', timeout: 15000 });
+    // hasAppointments keeps the agenda in reach of a business that was set up before (decisions.md, 2026-11-01 setup guide).
+    return prisma.$transaction(async tx => ({ ...await publicationReadiness(tx, businessId), hasAppointments: !!await tx.booking.findFirst({ where: { businessId, status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'] } }, select: { id: true } }) }), { isolationLevel: 'RepeatableRead', timeout: 15000 });
   });
   app.get('/v1/provider/businesses/:businessId/sharing', async request => {
     const { businessId } = businessIdParams.parse(request.params);
