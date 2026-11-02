@@ -1,0 +1,28 @@
+export const hoursEn = {
+  'hours.title': 'Weekly hours', 'hours.edit': 'Edit hours', 'hours.editTitle': 'Edit weekly hours', 'hours.closed': 'closed',
+  'hours.empty': 'No hours set yet. Customers cannot book until you add them.', 'hours.inherited': 'Follows the business hours.', 'hours.followBusiness': 'Follow business hours',
+  'hours.loadFailed': 'Could not load the hours. Check your connection and try again.', 'hours.saved': 'Hours saved.',
+  'hours.saveFailed': 'Could not save the hours. Your changes are still here; try again.',
+  'hours.conflicts': '{count} appointments or reservations fall outside these hours, so nothing was saved. Move or cancel them, or choose other hours.',
+  'hours.days': 'Days', 'hours.daysHint': 'Choose one or more days. The first day you choose fills in its current hours.', 'hours.closedSwitch': 'Closed on these days',
+  'hours.timeHint': 'Business local time, 24-hour HH:mm. For a split day, such as a lunch break, add a second range.',
+  'hours.opening': 'Opening time {index}', 'hours.closing': 'Closing time {index}', 'hours.addInterval': 'Add a time range', 'hours.removeInterval': 'Remove time range {index}',
+  'hours.save': 'Save hours', 'hours.cancel': 'Cancel',
+  'hours.error.days': 'Choose at least one day.', 'hours.error.format': 'Use HH:mm, for example 09:00.', 'hours.error.order': 'The closing time must be after the opening time.',
+  'hours.error.overlap': 'This range overlaps another range.', 'hours.error.staffClosed': 'A staff member cannot be closed every day. To stop their bookings, turn off Accept new appointments.',
+  'hours.day.0': 'Sun', 'hours.day.1': 'Mon', 'hours.day.2': 'Tue', 'hours.day.3': 'Wed', 'hours.day.4': 'Thu', 'hours.day.5': 'Fri', 'hours.day.6': 'Sat',
+} as const;
+export const hoursHe: Record<keyof typeof hoursEn, string> = {
+  'hours.title': 'שעות שבועיות', 'hours.edit': 'עריכת שעות', 'hours.editTitle': 'עריכת שעות שבועיות', 'hours.closed': 'סגור',
+  'hours.empty': 'עוד לא הוגדרו שעות. עד שתוסיפו אותן לא ניתן לקבוע תורים.', 'hours.inherited': 'לפי שעות העסק.', 'hours.followBusiness': 'חזרה לשעות העסק',
+  'hours.loadFailed': 'לא ניתן לטעון את השעות. בדקו את החיבור ונסו שוב.', 'hours.saved': 'השעות נשמרו.',
+  'hours.saveFailed': 'לא ניתן לשמור את השעות. השינויים שלכם עדיין כאן; נסו שוב.',
+  'hours.conflicts': '{count} תורים או שריונים נופלים מחוץ לשעות האלה, ולכן שום דבר לא נשמר. הזיזו או בטלו אותם, או בחרו שעות אחרות.',
+  'hours.days': 'ימים', 'hours.daysHint': 'בחרו יום אחד או יותר. היום הראשון שתבחרו ממלא את השעות הנוכחיות שלו.', 'hours.closedSwitch': 'סגור בימים האלה',
+  'hours.timeHint': 'שעון מקומי של העסק, בפורמט HH:mm של 24 שעות. ליום מפוצל, למשל עם הפסקת צהריים, הוסיפו טווח שני.',
+  'hours.opening': 'שעת פתיחה {index}', 'hours.closing': 'שעת סגירה {index}', 'hours.addInterval': 'הוספת טווח שעות', 'hours.removeInterval': 'הסרת טווח שעות {index}',
+  'hours.save': 'שמירת שעות', 'hours.cancel': 'ביטול',
+  'hours.error.days': 'בחרו לפחות יום אחד.', 'hours.error.format': 'הזינו בפורמט HH:mm, למשל 09:00.', 'hours.error.order': 'שעת הסגירה צריכה להיות אחרי שעת הפתיחה.',
+  'hours.error.overlap': 'הטווח הזה חופף לטווח אחר.', 'hours.error.staffClosed': 'אי אפשר לסגור איש צוות בכל הימים. כדי לעצור תורים אליו, כבו את "קבלת תורים חדשים".',
+  'hours.day.0': 'א׳', 'hours.day.1': 'ב׳', 'hours.day.2': 'ג׳', 'hours.day.3': 'ד׳', 'hours.day.4': 'ה׳', 'hours.day.5': 'ו׳', 'hours.day.6': 'ש׳',
+};

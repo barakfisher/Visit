@@ -4,8 +4,8 @@ export const SETUP_SECTIONS = ['profile', 'services', 'hours', 'staff', 'policy'
 export type SetupSection = (typeof SETUP_SECTIONS)[number];
 /** The steps a business completes before it can publish; publishing is the last step. */
 export const REQUIRED_SECTIONS = ['profile', 'services', 'hours', 'staff', 'policy'] as const satisfies readonly SetupSection[];
-/** Sections holding one form return to the settings hub on save; services and staff are lists the owner adds to repeatedly. */
-export const RETURNS_ON_SAVE = ['profile', 'hours', 'policy'] as const satisfies readonly SetupSection[];
+/** Sections holding one form return to the settings hub on save; services, hours and staff are edited in dialogs, often several times in a row. */
+export const RETURNS_ON_SAVE = ['profile', 'policy'] as const satisfies readonly SetupSection[];
 export type BusinessReadiness = { ready: boolean; publishedAt: string | null; blockers: Record<string, string>; hasAppointments: boolean };
 
 export const blockerMessages: Record<string, MessageKey> = { ADMIN_APPROVAL_REQUIRED: 'publish.approval', ISRAEL_TIME_REVIEW_REQUIRED: 'publish.timezone', COMPLETE_BUSINESS_PROFILE: 'publish.profile', ACTIVE_SERVICE_REQUIRED: 'publish.services', EXPLICIT_POLICY_REQUIRED: 'publish.policy', WORKING_HOURS_REQUIRED: 'publish.hours', ASSIGNED_ACTIVE_STAFF_REQUIRED: 'publish.staff', SERVICE_AND_BUFFERS_MUST_FIT_HOURS: 'publish.hours' };
