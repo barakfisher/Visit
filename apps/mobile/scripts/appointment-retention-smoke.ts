@@ -8,6 +8,7 @@ import { translate } from '../src/i18n/messages';
 import { SETUP_SERVICE } from './business-setup-smoke';
 import { preferBookingTime } from './booking-controls.utils';
 import { CANCELLATION_CUTOFF, RESCHEDULE_CUTOFF } from '../src/lib/AppointmentLifecycle.utils';
+import { MINUTES_PER_HOUR } from '../src/lib/BookingPolicyForm';
 import { pilotCustomers, type PilotCustomer, type Slot } from './pilot-customers';
 import type { PilotBusiness } from './pilot-lifecycle-smoke';
 
@@ -294,8 +295,8 @@ export async function appointmentRetentionSmoke(deps: Deps) {
       await page.goto(`${webUrl}/appointment/${id}`); await page.getByRole('button', { name: owner.t('details.cancel'), exact: true }).filter({ visible: true }).waitFor();
     }
     await provider.page.goto(`${webUrl}/provider/${business.businessId}/policy`);
-    await provider.page.getByRole('textbox', { name: translate('en', 'setup.cancelCutoff'), exact: true }).fill(String(CUTOFF_MINUTES));
-    await provider.page.getByRole('textbox', { name: translate('en', 'setup.rescheduleCutoff'), exact: true }).fill(String(CUTOFF_MINUTES));
+    await provider.page.getByRole('textbox', { name: translate('en', 'setup.cancelCutoff'), exact: true }).fill(String(CUTOFF_MINUTES / MINUTES_PER_HOUR)); // typed in hours
+    await provider.page.getByRole('textbox', { name: translate('en', 'setup.rescheduleCutoff'), exact: true }).fill(String(CUTOFF_MINUTES / MINUTES_PER_HOUR)); // typed in hours
     const policySaved = provider.page.waitForResponse(response => response.url() === `${apiUrl}/v1/provider/businesses/${business.businessId}/booking-policy` && response.request().method() === 'PUT');
     await provider.page.getByRole('button', { name: translate('en', 'setup.savePolicy'), exact: true }).click();
     assert.equal((await policySaved).status(), 200);

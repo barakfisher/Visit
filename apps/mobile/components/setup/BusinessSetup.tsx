@@ -46,7 +46,7 @@ function Section({ business, section }: { business: BusinessProfile; section: Se
   // dismissTo pops back to the hub, or replaces this screen when the section was opened directly.
   const onSaved = (RETURNS_ON_SAVE as readonly SetupSection[]).includes(section) ? () => router.dismissTo(hub) : undefined;
   const editor = section === 'profile' ? <BusinessProfileForm key={business.id} business={business} onSaved={onSaved} />
-    : section === 'services' ? <ServiceCatalog businessId={business.id} />
+    : section === 'services' ? <ServiceCatalog key={`services:${business.id}`} businessId={business.id} />
     : section === 'hours' ? <AvailabilityEditor businessId={business.id} onSaved={onSaved} />
     : section === 'staff' ? <StaffEditor businessId={business.id} />
     : section === 'policy' ? <PolicyEditor businessId={business.id} onSaved={onSaved} />

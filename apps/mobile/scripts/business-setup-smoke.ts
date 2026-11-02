@@ -38,13 +38,16 @@ export async function configureBusinessSmoke({ page, context, webUrl, apiUrl, bu
   // A single-form section returns to the hub, whose status is already current.
   await page.waitForURL(hubUrl(businessId)); await page.getByRole('button', { name: 'Business details, Complete', exact: true }).filter({ visible: true }).waitFor();
   await openFromHub(page, 'services');
+  // The form opens only from the header's add button, and has no currency field: new prices are ILS.
+  await page.getByTestId('service-add').filter({ visible: true }).click();
   const form = page.getByTestId('service-form');
   await form.getByRole('textbox', { name: 'Service name', exact: true }).fill(SETUP_SERVICE.name);
   await form.getByRole('textbox', { name: 'Duration in minutes', exact: true }).fill(String(SETUP_SERVICE.durationMinutes));
   await form.getByRole('textbox', { name: 'Price', exact: true }).fill(String(SETUP_SERVICE.price));
-  await form.getByRole('button', { name: SETUP_SERVICE.currency, exact: true }).click();
   const serviceCreated = page.waitForResponse(r => r.url() === `${base}/services` && r.request().method() === 'POST');
-  await form.getByRole('button', { name: 'Add service', exact: true }).click(); const response = await serviceCreated; assert.equal(response.status(), 201); const serviceId = (await response.json()).id;
+  await form.getByRole('button', { name: 'Add service', exact: true }).click(); const response = await serviceCreated; assert.equal(response.status(), 201); const created = await response.json(); const serviceId = created.id;
+  assert.equal(created.currency, SETUP_SERVICE.currency);
+  await form.waitFor({ state: 'detached' });
   // Services is a list: saving one keeps the owner there to add the next.
   assert.equal(new URL(page.url()).pathname, `/provider/${businessId}/services`);
   await backToHub(page, businessId); await openFromHub(page, 'staff');
@@ -75,10 +78,15 @@ export async function configureBusinessSmoke({ page, context, webUrl, apiUrl, bu
   const hoursSaved = page.waitForResponse(r => r.url() === `${base}/availability-rules` && r.request().method() === 'PUT');
   await page.getByRole('button', { name: 'Save working hours', exact: true }).click(); await page.getByRole('button', { name: 'Confirm schedule change', exact: true }).click(); assert.equal((await hoursSaved).status(), 200);
   await page.waitForURL(hubUrl(businessId)); await openFromHub(page, 'policy');
-  await page.getByRole('textbox', { name: 'Minimum notice (minutes)', exact: true }).fill('0');
-  await page.getByRole('textbox', { name: 'Maximum advance (days)', exact: true }).fill('30');
+  await page.getByRole('textbox', { name: 'Latest booking before start (minutes)', exact: true }).fill('0');
+  await page.getByRole('textbox', { name: 'How far ahead customers can book (days)', exact: true }).fill('30');
+  // Cutoffs are typed in hours; the API keeps minutes.
+  assert.equal(await page.getByRole('textbox', { name: 'Cancellation cutoff (hours before)', exact: true }).inputValue(), '24');
+  await page.getByRole('textbox', { name: 'Reschedule cutoff (hours before)', exact: true }).fill('2');
+  await page.getByText('The calendar is open for booking 30 days ahead.', { exact: true }).waitFor();
   const policySaved = page.waitForResponse(r => r.url() === `${base}/booking-policy` && r.request().method() === 'PUT');
-  await page.getByRole('button', { name: 'Save booking policy', exact: true }).click(); assert.equal((await policySaved).status(), 200);
+  await page.getByRole('button', { name: 'Save booking policy', exact: true }).click(); const savedPolicy = await policySaved; assert.equal(savedPolicy.status(), 200);
+  assert.deepEqual([savedPolicy.request().postDataJSON().cancellationCutoffMinutes, savedPolicy.request().postDataJSON().rescheduleCutoffMinutes], [24 * 60, 2 * 60]);
   await page.waitForURL(hubUrl(businessId)); await page.getByRole('button', { name: 'Publish your business, Needs attention', exact: true }).filter({ visible: true }).waitFor();
   await openSettings(page, webUrl, businessId, 'share');
   assert.equal(await page.getByRole('button', { name: 'Copy booking link', exact: true }).isDisabled(), true);

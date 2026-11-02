@@ -266,17 +266,22 @@ try {
       await providerPage.getByText('South consultation', { exact: true }).waitFor();
       await catalogOf(`Visit QA North ${run.slice(0, 6)}`);
       await Promise.race([oldObserved, new Promise<never>((_, reject) => { const timer = setTimeout(() => reject(new Error('Old catalog request was not observed')), 10000); oldObserved.then(() => clearTimeout(timer)); })]);
+      // The form is a dialog: an owner leaves it (Cancel) before the menu is reachable, and the draft goes with it.
+      await providerPage.getByTestId('service-add').filter({ visible: true }).click();
       await providerPage.getByLabel('Service name', { exact: true }).fill('Unsaved North draft');
+      await providerPage.getByTestId('service-form').getByRole('button', { name: 'Cancel', exact: true }).click();
     await catalogOf(`Visit QA South ${run.slice(0, 6)}`);
     await providerPage.getByText('South consultation', { exact: true }).waitFor();
+    await providerPage.getByTestId('service-add').filter({ visible: true }).click();
     assert.equal(await providerPage.getByLabel('Service name', { exact: true }).inputValue(), '');
+    await providerPage.getByTestId('service-form').getByRole('button', { name: 'Cancel', exact: true }).click();
     assert.equal(await providerPage.getByText('QA consultation', { exact: true }).count(), 0);
       releaseOld(); await oldFinished;
       // The agenda intentionally polls; global network-idle is not a reliable
       // completion condition. Drain browser render frames after fulfillment.
       await providerPage.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
       assert.equal(await providerPage.getByText('QA consultation', { exact: true }).count(), 0);
-      assert.equal(await providerPage.getByLabel('Service name', { exact: true }).inputValue(), '');
+      assert.equal(await providerPage.getByTestId('service-form').count(), 0);
       assert.deepEqual(await providerPage.evaluate(async () => ({ caches: await caches.keys(), registrations: (await navigator.serviceWorker.getRegistrations()).length })), { caches: [], registrations: 0 });
       const storage = await providerPage.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }));
       assert.equal(storage.includes('Unsaved North draft') || storage.includes('QA consultation') || storage.includes('South consultation'), false);
@@ -284,10 +289,11 @@ try {
 
     await catalogOf(`Visit QA North ${run.slice(0, 6)}`);
     await providerPage.getByText('QA consultation', { exact: true }).waitFor();
-    assert.equal(await providerPage.getByLabel('Service name', { exact: true }).inputValue(), '');
+    assert.equal(await providerPage.getByTestId('service-form').count(), 0);
     console.log('PASS: business switching discards delayed old-workspace responses, clears drafts, and leaves browser caches/private storage empty.');
     const catalogBase = `${apiUrl}/v1/provider/businesses/${businessIds[0]}/services`;
     const form = providerPage.getByTestId('service-form');
+    await providerPage.getByTestId('service-add').filter({ visible: true }).click();
     await form.getByLabel('Service name', { exact: true }).fill('QA exact-money service');
     await form.getByLabel('Duration in minutes', { exact: true }).fill('0');
     await form.getByLabel('Price', { exact: true }).fill('19.999');
@@ -312,20 +318,32 @@ try {
     const createdService = providerPage.waitForResponse(response => response.url() === catalogBase && response.request().method() === 'POST');
     await form.getByRole('button', { name: 'Add service', exact: true }).click();
     const serviceResponse = await createdService; assert.equal(serviceResponse.status(), 201);
-    const newService = await serviceResponse.json(); assert.equal(newService.priceMinor, 1999);
+    const newService = await serviceResponse.json(); assert.equal(newService.priceMinor, 1999); assert.equal(newService.currency, 'ILS');
+    await form.waitFor({ state: 'detached' });
     const card = providerPage.getByTestId(`service-card-${newService.id}`);
     await card.getByRole('button', { name: 'Edit service', exact: true }).click();
     await form.getByLabel('Service name', { exact: true }).fill('QA revised service');
     await form.getByLabel('Duration in minutes', { exact: true }).fill('45');
     await form.getByRole('button', { name: 'Save changes', exact: true }).click();
     await card.getByText('QA revised service', { exact: true }).waitFor();
-    await card.getByRole('button', { name: 'Archive', exact: true }).click();
-    await card.getByRole('button', { name: 'Restore', exact: true }).waitFor();
+    // Pausing a service is the availability switch in its edit form, not a card button.
+    const setAvailable = async (target: typeof card, available: boolean) => {
+      await target.getByRole('button', { name: 'Edit service', exact: true }).click();
+      const toggle = form.getByRole('switch', { name: 'Available for booking', exact: true });
+      if (await toggle.isChecked() !== available) await toggle.click();
+      await form.getByRole('button', { name: 'Save changes', exact: true }).click(); await form.waitFor({ state: 'detached' });
+    };
+    await setAvailable(card, false);
+    await card.getByText('Not available for booking', { exact: true }).waitFor();
     assert.equal((await fetch(`${apiUrl}/v1/businesses/${businessIds[0]}/services`)).status, 404); // Incomplete active catalog suspended publication.
-    await card.getByRole('button', { name: 'Restore', exact: true }).click();
-    await card.getByRole('button', { name: 'Archive', exact: true }).waitFor();
-    await card.getByRole('button', { name: 'Delete or archive', exact: true }).click();
-    await card.getByRole('button', { name: 'Confirm deletion or archive', exact: true }).click();
+    await setAvailable(card, true);
+    await card.getByText('Not available for booking', { exact: true }).waitFor({ state: 'detached' });
+    assert.equal(await card.getByRole('button', { name: 'Archive', exact: true }).count(), 0);
+    await card.getByRole('button', { name: 'Delete', exact: true }).click();
+    // Confirm and Cancel sit side by side.
+    const [confirmBox, cancelBox] = await Promise.all(['Confirm', 'Cancel'].map(name => card.getByRole('button', { name, exact: true }).boundingBox()));
+    assert.ok(confirmBox && cancelBox && Math.abs(confirmBox.y - cancelBox.y) < 1, 'Confirm and Cancel share a row');
+    await card.getByRole('button', { name: 'Confirm', exact: true }).click();
     await providerPage.getByText('Service deleted.', { exact: true }).waitFor();
     assert.equal(await prisma.service.count({ where: { id: newService.id } }), 0);
     // Editing or removing a referenced service never rewrites an appointment's snapshot.
@@ -342,16 +360,22 @@ try {
     await providerPage.getByText('QA consultation', { exact: true }).waitFor();
     assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: hold.holdId } })).servicePriceMinor, 6500);
     await catalogOf(`Visit QA North ${run.slice(0, 6)}`);
-    await original.getByRole('button', { name: 'Delete or archive', exact: true }).click();
-    await original.getByRole('button', { name: 'Confirm deletion or archive', exact: true }).click();
-    await providerPage.getByText('Service archived. Booking history is preserved.', { exact: true }).waitFor();
-    await original.getByRole('button', { name: 'Restore', exact: true }).click();
+    await original.getByRole('button', { name: 'Delete', exact: true }).click();
+    await original.getByRole('button', { name: 'Confirm', exact: true }).click();
+    // Booking history turns "Delete" into an archive the owner can switch back on.
+    await providerPage.getByText('This service has booking history, so it was turned off for booking instead of deleted.', { exact: true }).waitFor();
+    await original.getByText('Not available for booking', { exact: true }).waitFor();
     await original.getByRole('button', { name: 'Edit service', exact: true }).click();
+    await form.getByRole('switch', { name: 'Available for booking', exact: true }).click();
     await form.getByLabel('Service name', { exact: true }).fill('QA consultation');
     await form.getByLabel('Price', { exact: true }).fill('65');
     await form.getByRole('button', { name: 'Save changes', exact: true }).click();
     await original.getByText('QA consultation', { exact: true }).waitFor();
+    assert.equal(await original.getByText('Not available for booking', { exact: true }).count(), 0);
     await providerPage.screenshot({ path: path.join(diagnostics, 'service-catalog-en-desktop.png'), fullPage: true });
+    await providerPage.getByTestId('service-add').filter({ visible: true }).click(); await form.waitFor();
+    await providerPage.screenshot({ path: path.join(diagnostics, 'service-dialog-en-desktop.png') });
+    await form.getByRole('button', { name: 'Cancel', exact: true }).click();
     // The same editor works on the settings route and in Hebrew at mobile width.
     await providerPage.goto(`${webUrl}/account`);
     await providerPage.getByTestId('language-he').click();
@@ -359,13 +383,16 @@ try {
     await providerPage.setViewportSize({ width: 390, height: 844 });
     await providerPage.getByTestId('setup-guide-services').filter({ visible: true }).click();
     await providerPage.getByRole('heading', { name: 'קטלוג שירותים', exact: true }).waitFor();
-    assert.equal(await providerPage.getByLabel('מחיר', { exact: true }).evaluate(node => getComputedStyle(node).direction), 'ltr');
     await providerPage.screenshot({ path: path.join(diagnostics, 'service-catalog-he-mobile.png'), fullPage: true });
+    await providerPage.getByTestId('service-add').filter({ visible: true }).click();
+    assert.equal(await providerPage.getByLabel('מחיר', { exact: true }).evaluate(node => getComputedStyle(node).direction), 'ltr');
+    await providerPage.screenshot({ path: path.join(diagnostics, 'service-dialog-he-mobile.png') });
+    await form.getByRole('button', { name: 'ביטול', exact: true }).click();
     await providerPage.goto(`${webUrl}/account`); await providerPage.getByTestId('language-en').click();
     // Generic UTC engine fixture is explicitly restored after its catalog is complete.
     // Real pilot publishing is exercised above through readiness + the provider UI.
     await prisma.business.update({ where: { id: businessIds[0]! }, data: { publishedAt: new Date() } });
-    console.log('PASS: service create/edit/archive/restore/delete, exact prices, failed draft recovery, immutable agenda details and Hebrew mobile editor.');
+    console.log('PASS: service add/edit dialog, availability switch, delete with side-by-side confirm (deleted or archived by history), ILS-only prices, failed draft recovery, immutable agenda details and Hebrew mobile editor.');
 
 
     const rival = await browser.newContext({ viewport: { width: 390, height: 844 } }); contexts.push(rival);
