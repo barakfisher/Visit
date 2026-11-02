@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { scheduleDraft, scheduleProposal } from '../src/lib/ScheduleEditor.utils';
+import { scheduleDraft, scheduleProposal } from '../src/lib/WeeklyHours';
 import { emptyAgendaDraft, useAgendaDraft } from '../src/state/ProviderAgenda.store';
 
 test('schedule draft fills closed days and copies source rows before edits', () => {

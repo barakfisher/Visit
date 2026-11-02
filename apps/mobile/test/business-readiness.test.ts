@@ -24,8 +24,8 @@ test('setup steps follow the readiness blockers, with hours before staff and pub
   assert.equal(sectionComplete(ready, 'publish'), false); assert.equal(sectionComplete({ ...ready, publishedAt: '2026-11-01T10:00:00.000Z' }, 'publish'), true);
 });
 
-test('only single-form sections return to the settings hub on save; services and staff are lists', () => {
-  assert.deepEqual([...RETURNS_ON_SAVE].sort(), ['hours', 'policy', 'profile']);
+test('only single-form sections return to the settings hub on save; services, hours and staff edit in dialogs and stay', () => {
+  assert.deepEqual([...RETURNS_ON_SAVE].sort(), ['policy', 'profile']);
 });
 
 test('blockers no setup step can fix are reported once; unknown sections are rejected', () => {

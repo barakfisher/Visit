@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import jsQR from 'jsqr';
-import type { Page, BrowserContext } from 'playwright';
+import type { Page, BrowserContext, Locator } from 'playwright';
 // The catalog this setup flow creates through the UI; journeys that book it assert against these values.
 export const SETUP_SERVICE = { name: 'Pilot consultation', durationMinutes: 30, price: 100, currency: 'ILS' } as const;
 export const SETUP_STAFF_NAME = 'Pilot expert edited';
@@ -18,6 +18,22 @@ async function openFromHub(page: Page, section: string) {
 }
 async function backToHub(page: Page, businessId: string) {
   await page.getByTestId('setup-back').filter({ visible: true }).click(); await page.waitForURL(hubUrl(businessId));
+}
+const WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+/** Summary times sit in Unicode isolates so they read left to right in Hebrew; compare without them. */
+export async function summaryText(scope: Page | Locator, testID: string) { return (await scope.getByTestId(testID).filter({ visible: true }).textContent())?.replace(/[\u2066-\u2069]/g, ''); }
+/** Opens the hours dialog, sets the given days to 09:00–17:00 or closed, and saves; the dialog saves on its own. */
+async function saveHours(page: Page, url: string, { days, closed, screenshot }: { days: string[]; closed: boolean; screenshot?: string }) {
+  await page.getByRole('button', { name: 'Edit hours', exact: true }).filter({ visible: true }).click();
+  const dialog = page.getByTestId('hours-form'); await page.getByRole('dialog').waitFor();
+  for (const day of days) await dialog.getByRole('checkbox', { name: day, exact: true }).click();
+  const closedSwitch = dialog.getByRole('switch', { name: 'Closed on these days', exact: true });
+  if (await closedSwitch.isChecked() !== closed) await closedSwitch.click();
+  if (!closed) { await dialog.getByRole('textbox', { name: 'Opening time 1', exact: true }).fill('09:00'); await dialog.getByRole('textbox', { name: 'Closing time 1', exact: true }).fill('17:00'); }
+  if (screenshot) await page.screenshot({ path: `test-results/${screenshot}.png` });
+  const saved = page.waitForResponse(r => r.url() === url && r.request().method() === 'PUT');
+  await dialog.getByRole('button', { name: 'Save hours', exact: true }).click(); assert.equal((await saved).status(), 200);
+  await dialog.waitFor({ state: 'detached' }); await page.getByRole('status').filter({ hasText: 'Hours saved.' }).filter({ visible: true }).waitFor();
 }
 export async function configureBusinessSmoke({ page, context, webUrl, apiUrl, businessId }: { page: Page; context: BrowserContext; webUrl: string; apiUrl: string; businessId: string }) {
   const base = `${apiUrl}/v1/provider/businesses/${businessId}`;
@@ -66,18 +82,33 @@ export async function configureBusinessSmoke({ page, context, webUrl, apiUrl, bu
   await staff.getByRole('textbox', { name: 'Staff display name', exact: true }).fill(SETUP_STAFF_NAME);
   const staffSaved = page.waitForResponse(r => r.url() === `${base}/staff/${staffId}` && r.request().method() === 'PATCH');
   await staff.getByRole('button', { name: 'Save staff member', exact: true }).click(); assert.equal((await staffSaved).status(), 200);
+  // Downstream journeys need one date the only staff member does not work. Date closures are not edited in the UI until
+  // the time-block PR (decisions.md, 2026-11-02), so it is stored through the API, and the UI saves below must keep it.
+  const closedDate = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10), staffRules = `${base}/staff/${staffId}/availability-rules`;
+  assert.equal((await context.request.put(staffRules, { headers: { Origin: webUrl }, data: { weekly: [], overrides: [{ date: closedDate, isOpen: false }] } })).status(), 200);
+  // Staff hours start from the business hours; with none set yet, the staff member follows an empty week.
   await staff.getByRole('button', { name: `Edit staff hours: ${SETUP_STAFF_NAME}`, exact: true }).click();
-  await staff.getByRole('button', { name: 'Add date exception', exact: true }).click();
-  const closedDate = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
-  await staff.getByRole('textbox', { name: 'Exception date 1 (YYYY-MM-DD)', exact: true }).fill(closedDate);
-  const staffHours = page.waitForResponse(r => r.url() === `${base}/staff/${staffId}/availability-rules` && r.request().method() === 'PUT');
-  await staff.getByRole('button', { name: 'Save working hours', exact: true }).click(); await staff.getByRole('button', { name: 'Confirm schedule change', exact: true }).click(); assert.equal((await staffHours).status(), 200);
+  await staff.getByText('Follows the business hours.', { exact: true }).waitFor();
+  await saveHours(page, staffRules, { days: WEEK, closed: false });
+  assert.equal(await summaryText(staff, 'hours-group-0-1-2-3-4-5-6'), 'Sun, Mon, Tue, Wed, Thu, Fri, Sat: 09:00–17:00');
+  const followed = page.waitForResponse(r => r.url() === staffRules && r.request().method() === 'PUT');
+  await staff.getByRole('button', { name: 'Follow business hours', exact: true }).click(); assert.equal((await followed).status(), 200);
+  await staff.getByText('Follows the business hours.', { exact: true }).waitFor();
+  const kept = await (await context.request.get(staffRules)).json() as { weekly: unknown[]; overrides: { date: string; isOpen: boolean }[] };
+  assert.deepEqual([kept.weekly.length, kept.overrides.map(row => [row.date.slice(0, 10), row.isOpen])], [0, [[closedDate, false]]], 'hours saves keep date closures');
   assert.equal(new URL(page.url()).pathname, `/provider/${businessId}/staff`, 'staff hours save in place');
   await backToHub(page, businessId); await openFromHub(page, 'hours');
-  for (const day of ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']) await page.getByRole('button', { name: `Add hours: ${day}`, exact: true }).click();
-  const hoursSaved = page.waitForResponse(r => r.url() === `${base}/availability-rules` && r.request().method() === 'PUT');
-  await page.getByRole('button', { name: 'Save working hours', exact: true }).click(); await page.getByRole('button', { name: 'Confirm schedule change', exact: true }).click(); assert.equal((await hoursSaved).status(), 200);
-  await page.waitForURL(hubUrl(businessId)); await openFromHub(page, 'policy');
+  await page.getByText('No hours set yet. Customers cannot book until you add them.', { exact: true }).filter({ visible: true }).waitFor();
+  await page.getByRole('button', { name: 'Edit hours', exact: true }).filter({ visible: true }).click();
+  const dialog = page.getByTestId('hours-form');
+  await dialog.getByRole('button', { name: 'Save hours', exact: true }).click(); await dialog.getByText('Choose at least one day.', { exact: true }).waitFor();
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click(); await dialog.waitFor({ state: 'detached' });
+  await saveHours(page, `${base}/availability-rules`, { days: WEEK, closed: false, screenshot: 'business-hours-dialog-en-mobile' });
+  // Hours stay on their screen after saving, so several day groups can be edited in a row (decisions.md, 2026-11-02).
+  assert.equal(await summaryText(page, 'hours-group-0-1-2-3-4-5-6'), 'Sun, Mon, Tue, Wed, Thu, Fri, Sat: 09:00–17:00');
+  assert.equal(new URL(page.url()).pathname, `/provider/${businessId}/hours`, 'business hours save in place');
+  await page.screenshot({ path: 'test-results/business-hours-en-mobile.png', fullPage: true });
+  await backToHub(page, businessId); await openFromHub(page, 'policy');
   await page.getByRole('textbox', { name: 'Latest booking before start (minutes)', exact: true }).fill('0');
   await page.getByRole('textbox', { name: 'How far ahead customers can book (days)', exact: true }).fill('30');
   // Cutoffs are typed in hours; the API keeps minutes.
@@ -127,5 +158,5 @@ export async function sharingBusinessSmoke({ page, context, webUrl, apiUrl, busi
     await review.screenshot({ path: 'test-results/business-setup-he-desktop.png', fullPage: true });
     await review.setViewportSize({ width: 390, height: 844 }); await review.screenshot({ path: 'test-results/business-setup-he-mobile.png', fullPage: true });
   } finally { await fresh.close(); }
-  console.log('PASS: clean approved business configures profile/catalog/staff/weekly hours/exceptions/policy through UI, survives a lost creation acknowledgement without duplicates, publishes and exports an independently decoded canonical QR.');
+  console.log('PASS: clean approved business configures profile/catalog/staff/weekly hours/staff hours/policy through UI, survives a lost creation acknowledgement without duplicates, publishes and exports an independently decoded canonical QR.');
 }

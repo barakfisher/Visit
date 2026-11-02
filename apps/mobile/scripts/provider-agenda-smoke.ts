@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Browser } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
+import { summaryText } from './business-setup-smoke.js';
 export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run, businessIds, identityIds }: { browser: Browser; webUrl: string; apiUrl: string; prisma: typeof Prisma; run: string; businessIds: string[]; identityIds: string[] }) {
   const business = await prisma.business.create({ data: { name: 'Agenda studio — סטודיו לייעוץ ושירות אישי', slug: `agenda-web-${run}`, timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED', publishedAt: new Date() } }); businessIds.push(business.id);
   const owner = await prisma.identity.create({ data: { email: `agenda-web-${run}@example.test`, preferredLocale: 'en' } }), customer = await prisma.identity.create({ data: { email: `agenda-customer-${run}@example.test` } }); identityIds.push(owner.id, customer.id);
@@ -39,28 +40,44 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     // Hours live in business settings (decisions.md, 2026-11-02).
     await page.getByRole('button', { name: 'Open menu', exact: true }).filter({ visible: true }).click(); await page.getByRole('dialog').getByRole('button', { name: 'Business settings', exact: true }).click();
     await page.getByTestId('setup-guide-hours').filter({ visible: true }).click(); await page.getByRole('heading', { name: 'Business hours', exact: true }).filter({ visible: true }).waitFor();
-    await page.getByRole('button', { name: 'Add date exception', exact: true }).click();
-    await page.getByLabel('Exception date 1 (YYYY-MM-DD)', { exact: true }).fill(date);
+    // Closing Tuesday would strand the appointment and the active reservation on that day: nothing is written.
+    await page.getByRole('button', { name: 'Edit hours', exact: true }).filter({ visible: true }).click();
+    const dialog = page.getByTestId('hours-form'), save = dialog.getByRole('button', { name: 'Save hours', exact: true });
+    await dialog.getByRole('checkbox', { name: 'Tuesday', exact: true }).click();
+    assert.equal(await dialog.getByRole('textbox', { name: 'Opening time 1', exact: true }).inputValue(), '00:00');
+    await dialog.getByRole('switch', { name: 'Closed on these days', exact: true }).click();
     const hoursBefore = await prisma.businessWeeklyAvailability.findMany({ where: { businessId: business.id }, orderBy: { id: 'asc' } });
-    await page.getByRole('button', { name: 'Save working hours', exact: true }).click();
-    const impact = page.getByTestId('schedule-impact'); await impact.getByRole('button', { name: 'Confirm schedule change', exact: true }).waitFor();
-    await impact.getByText('Active temporary reservation', { exact: true }).waitFor();
-    assert.equal(await impact.getByRole('button', { name: 'Confirm schedule change', exact: true }).isDisabled(), true);
+    let writes = 0; await page.route(base, async route => { if (route.request().method() === 'PUT') writes++; await route.continue(); });
+    const previewed = page.waitForResponse(response => response.url() === `${base}/preview`); await save.click(); assert.equal((await previewed).status(), 200);
+    const impact = dialog.getByTestId('schedule-impact'); await impact.getByText('Active temporary reservation', { exact: true }).waitFor();
+    await impact.getByText('Existing appointment', { exact: true }).waitFor();
+    assert.equal(writes, 0); await page.unroute(base);
     assert.deepEqual(await prisma.businessWeeklyAvailability.findMany({ where: { businessId: business.id }, orderBy: { id: 'asc' } }), hoursBefore);
     assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: first.id } })).status, 'CONFIRMED');
-    await page.getByRole('button', { name: 'Remove date exception 1', exact: true }).click();
-    await page.getByRole('button', { name: 'Save working hours', exact: true }).click(); await impact.getByRole('button', { name: 'Confirm schedule change', exact: true }).waitFor();
-    // An appointment change after review must invalidate the saved preview token.
-    await prisma.booking.update({ where: { id: second.id }, data: { startsAt: new Date(+second.startsAt + 60000), endsAt: new Date(+second.endsAt + 60000), occupiedFrom: new Date(+second.occupiedFrom + 60000), occupiedUntil: new Date(+second.occupiedUntil + 60000) } });
+    // Any edit clears the refusal; reopening Tuesday is safe.
+    await dialog.getByRole('switch', { name: 'Closed on these days', exact: true }).click(); assert.equal(await impact.count(), 0);
+    await dialog.getByRole('textbox', { name: 'Closing time 1', exact: true }).fill('23:00');
+    // An appointment change between the preview and the write invalidates the preview token.
+    let moved = false;
+    await page.route(base, async route => {
+      if (route.request().method() === 'PUT' && !moved) { moved = true; await prisma.booking.update({ where: { id: second.id }, data: { startsAt: new Date(+second.startsAt + 60000), endsAt: new Date(+second.endsAt + 60000), occupiedFrom: new Date(+second.occupiedFrom + 60000), occupiedUntil: new Date(+second.occupiedUntil + 60000) } }); }
+      await route.continue();
+    });
     const stale = page.waitForResponse(response => response.url() === base && response.request().method() === 'PUT');
-    await impact.getByRole('button', { name: 'Confirm schedule change', exact: true }).click(); assert.equal((await stale).status(), 409);
-    await page.getByRole('alert').filter({ hasText: 'Your draft is retained.' }).waitFor();
-    await page.getByRole('button', { name: 'Save working hours', exact: true }).click();
+    await save.click(); assert.equal((await stale).status(), 409);
+    await dialog.getByRole('alert').filter({ hasText: 'Your changes are still here' }).waitFor();
+    assert.equal(await dialog.getByRole('textbox', { name: 'Closing time 1', exact: true }).inputValue(), '23:00');
+    await page.unroute(base);
     const gate = new Promise<void>(resolve => { releaseSave = resolve; });
     await page.route(base, async route => { if (route.request().method() === 'PUT') { await gate; await route.continue(); } else await route.continue(); });
-    await impact.getByRole('button', { name: 'Confirm schedule change', exact: true }).click(); assert.equal(await impact.getByRole('button', { name: 'Confirm schedule change', exact: true }).isDisabled(), true);
-    // A saved schedule returns to the settings hub.
-    releaseSave?.(); await page.waitForURL(url => url.pathname === `/provider/${business.id}`); await page.unroute(base);
+    const committed = page.waitForResponse(response => response.url() === base && response.request().method() === 'PUT');
+    await save.click(); await page.waitForRequest(request => request.url() === base && request.method() === 'PUT');
+    assert.equal(await save.isDisabled(), true); assert.equal(await dialog.getByRole('button', { name: 'Cancel', exact: true }).isDisabled(), true);
+    // A saved schedule stays on the hours screen with the new summary.
+    releaseSave?.(); assert.equal((await committed).status(), 200); await page.unroute(base);
+    await dialog.waitFor({ state: 'detached' }); await page.getByRole('status').filter({ hasText: 'Hours saved.' }).filter({ visible: true }).waitFor();
+    assert.equal(new URL(page.url()).pathname, `/provider/${business.id}/hours`);
+    assert.equal(await summaryText(page, 'hours-group-2'), 'Tue: 00:00–23:00');
     await page.getByRole('button', { name: 'Open menu', exact: true }).filter({ visible: true }).click(); await page.getByRole('dialog').getByRole('button', { name: 'Home', exact: true }).click();
     // Leaving the agenda clears its draft by design, so the date is chosen again.
     await page.getByLabel('Agenda date', { exact: true }).filter({ visible: true }).fill(date); await firstCard.waitFor();
@@ -73,6 +90,6 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     await page.goto(`${webUrl}/provider/dashboard?businessId=${business.id}`); await page.getByLabel('תאריך ביומן', { exact: true }).fill(date); await page.getByRole('button', { name: 'תצוגה שבועית', exact: true }).click(); await page.getByText('יומן שבועי', { exact: true }).waitFor();
     assert.equal(await page.locator('html').getAttribute('dir'), 'rtl'); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
     await page.screenshot({ path: 'test-results/agenda-week-he-mobile.png', fullPage: true }); await page.setViewportSize({ width: 1280, height: 900 }); await page.screenshot({ path: 'test-results/agenda-week-he-desktop.png', fullPage: true });
-    console.log('PASS: local daily/weekly agenda, loading/error/retry/empty, schedule impact no-write conflict, active hold protection, stale review refusal, pending commit, declined/failed/successful provider cancellation and Hebrew RTL.');
+    console.log('PASS: local daily/weekly agenda, loading/error/retry/empty, hours dialog no-write conflict, active hold protection, stale preview refusal, pending commit that stays on the hours screen, declined/failed/successful provider cancellation and Hebrew RTL.');
   } finally { releaseLoading?.(); releaseSave?.(); await context.close(); }
 }
