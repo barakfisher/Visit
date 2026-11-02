@@ -4,6 +4,7 @@ import { MAX_BLOCK_DAYS, MAX_BLOCK_REASON, type BlockFormError, type BlockKind }
 import type { TimeBlockDialogState } from '@/src/lib/TimeBlocks.hook';
 import { AppText } from './AppText';
 import { ActionButton } from './ActionButton';
+import { AppointmentConflicts } from './AppointmentConflicts.component';
 import { Control } from './Control';
 import { FormDialog } from './FormDialog';
 import { TextField } from './TextField';
@@ -51,13 +52,7 @@ export function TimeBlockForm({ staff, ...state }: TimeBlockDialogState & { staf
       <AppText className="text-sm text-body">{t('blocks.daysHint')}</AppText>
     </View>}
     <TextField editable={!busy} label={t('blocks.reason')} value={form.reason} hint={t('blocks.reasonHint')} maxLength={MAX_BLOCK_REASON} onChangeText={reason => update({ reason })} error={errorFor('reason')} />
-    {conflicts ? <View testID="block-conflicts" className="gap-2 rounded-control border border-danger bg-canvas p-3">
-      <AppText accessibilityRole="alert" className="text-danger">{t('blocks.conflicts', { count: conflicts.total })}</AppText>
-      {conflicts.conflicts.map((row, index) => <AppText key={row.kind === 'APPOINTMENT' ? row.id : `reservation-${index}`} className="text-sm text-ink">
-        {when(row.startsAt)} · {row.staffName} · {row.kind === 'APPOINTMENT' ? [row.customerName, row.serviceName].filter(Boolean).join(' · ') || t('dashboard.customer') : t('blocks.reservation')}
-      </AppText>)}
-      {conflicts.total > conflicts.conflicts.length ? <AppText className="text-sm text-body">{t('blocks.more', { count: conflicts.total - conflicts.conflicts.length })}</AppText> : null}
-    </View> : null}
+    {conflicts ? <AppointmentConflicts testID="block-conflicts" title={t('blocks.conflicts', { count: conflicts.total })} total={conflicts.total} conflicts={conflicts.conflicts} when={when} /> : null}
     {failure ? <AppText accessibilityRole="alert" className="text-danger">{t(failure)}</AppText> : null}
     <View className="flex-row gap-3">
       <View className="flex-1"><ActionButton label={t('blocks.save')} busy={busy} onPress={save} /></View>

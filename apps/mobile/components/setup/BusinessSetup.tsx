@@ -11,7 +11,7 @@ import { SessionLoading } from '../SessionLoading';
 import { BusinessProfileForm, type BusinessProfile } from './BusinessProfileForm';
 import { AvailabilityEditor } from './AvailabilityEditor';
 import { TimeBlocksEditor } from './TimeBlocksEditor';
-import { StaffEditor } from './StaffEditor';
+import { StaffRoster } from '../StaffRoster';
 import { PolicyEditor } from './PolicyEditor';
 import { ProviderSharing } from './ProviderSharing';
 import { useSessionStore } from '@/src/state/session';
@@ -49,7 +49,7 @@ function Section({ business, section }: { business: BusinessProfile; section: Se
   const editor = section === 'profile' ? <BusinessProfileForm key={business.id} business={business} onSaved={onSaved} />
     : section === 'services' ? <ServiceCatalog key={`services:${business.id}`} businessId={business.id} />
     : section === 'hours' ? <AvailabilityEditor businessId={business.id} />
-    : section === 'staff' ? <StaffEditor businessId={business.id} />
+    : section === 'staff' ? <StaffRoster key={`staff:${business.id}`} businessId={business.id} />
     : section === 'policy' ? <PolicyEditor businessId={business.id} onSaved={onSaved} />
     : null;
   return <SettingsPage back={<Link testID="setup-back" href={hub} dismissTo className="min-h-touch py-3 font-semibold text-brand">{t('setup.back')}</Link>} title={t(`setup.${section}`)}>

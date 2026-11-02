@@ -211,6 +211,8 @@ model Staff {
   displayName    String
   active         Boolean                @default(true)
   parallelCapacity Int                  @default(1)
+  // Set when a removed staff member keeps booking history; archived staff are gone from every screen.
+  archivedAt     DateTime?              @db.Timestamptz(3)
   createdAt      DateTime               @default(now())
   business       Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
   services       StaffService[]

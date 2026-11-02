@@ -67,30 +67,54 @@ export async function configureBusinessSmoke({ page, context, webUrl, apiUrl, bu
   // Services is a list: saving one keeps the owner there to add the next.
   assert.equal(new URL(page.url()).pathname, `/provider/${businessId}/services`);
   await backToHub(page, businessId); await openFromHub(page, 'staff');
-  await page.getByRole('textbox', { name: 'Staff display name', exact: true }).fill('Pilot expert');
-  await page.getByRole('textbox', { name: 'Simultaneous appointments', exact: true }).fill('2');
-  await page.getByRole('checkbox', { name: `Select service: ${SETUP_SERVICE.name}`, exact: true }).click();
+  // The add form opens only from the header button, in a dialog.
+  await page.getByText('No staff members yet.', { exact: true }).filter({ visible: true }).waitFor();
+  await page.getByTestId('staff-add').filter({ visible: true }).click();
+  const addForm = page.getByTestId('staff-add-form'); await page.getByRole('dialog').waitFor();
+  await addForm.getByRole('textbox', { name: 'Name', exact: true }).fill('Pilot expert');
+  // Capacity takes digits only: the letters never reach the field.
+  await addForm.getByRole('textbox', { name: 'Simultaneous appointments', exact: true }).fill('');
+  await addForm.getByRole('textbox', { name: 'Simultaneous appointments', exact: true }).pressSequentially('x2y');
+  assert.equal(await addForm.getByRole('textbox', { name: 'Simultaneous appointments', exact: true }).inputValue(), '2');
+  await addForm.getByRole('checkbox', { name: SETUP_SERVICE.name, exact: true }).click();
   let lostAcknowledgement = true, firstStaffId = '';
   await page.route(`${base}/staff`, async route => {
     if (route.request().method() === 'POST' && lostAcknowledgement) { lostAcknowledgement = false; const created = await route.fetch(); assert.equal(created.status(), 201); firstStaffId = (await created.json()).id; await route.abort(); } else await route.continue();
   });
-  await page.getByRole('button', { name: 'Add staff member', exact: true }).click(); await page.getByRole('alert').filter({ hasText: 'Could not save.' }).waitFor();
+  await addForm.getByRole('button', { name: 'Add staff member', exact: true }).click(); await addForm.getByRole('alert').filter({ hasText: 'Could not save.' }).waitFor();
   const staffCreated = page.waitForResponse(r => r.url() === `${base}/staff` && r.request().method() === 'POST');
-  await page.getByRole('button', { name: 'Add staff member', exact: true }).click(); const staffResponse = await staffCreated; assert.equal(staffResponse.status(), 201); const staffId = (await staffResponse.json()).id; assert.equal(staffId, firstStaffId);
-  const staff = page.getByTestId(`setup-staff-${staffId}`); await staff.waitFor();
-  await staff.getByRole('button', { name: 'Edit staff member: Pilot expert', exact: true }).click();
-  await staff.getByRole('textbox', { name: 'Staff display name', exact: true }).fill(SETUP_STAFF_NAME);
+  await addForm.getByRole('button', { name: 'Add staff member', exact: true }).click(); const staffResponse = await staffCreated; assert.equal(staffResponse.status(), 201); const staffId = (await staffResponse.json()).id; assert.equal(staffId, firstStaffId);
+  await addForm.waitFor({ state: 'detached' });
+  const staff = page.getByTestId(`staff-card-${staffId}`); await staff.waitFor();
+  await staff.getByText(SETUP_SERVICE.name, { exact: true }).waitFor();
+  await staff.getByRole('button', { name: 'Edit Pilot expert', exact: true }).click();
+  await staff.getByRole('tab', { name: 'General', exact: true }).waitFor();
+  await staff.getByRole('textbox', { name: 'Name', exact: true }).fill(SETUP_STAFF_NAME);
   const staffSaved = page.waitForResponse(r => r.url() === `${base}/staff/${staffId}` && r.request().method() === 'PATCH');
-  await staff.getByRole('button', { name: 'Save staff member', exact: true }).click(); assert.equal((await staffSaved).status(), 200);
+  await staff.getByRole('button', { name: 'Save changes', exact: true }).click(); assert.equal((await staffSaved).status(), 200);
+  await staff.getByRole('status').filter({ hasText: 'Changes saved.' }).waitFor();
   const staffRules = `${base}/staff/${staffId}/availability-rules`;
   // Staff hours start from the business hours; with none set yet, the staff member follows an empty week.
-  await staff.getByRole('button', { name: `Edit staff hours: ${SETUP_STAFF_NAME}`, exact: true }).click();
+  await staff.getByRole('tab', { name: 'Hours', exact: true }).click();
   await staff.getByText('Follows the business hours.', { exact: true }).waitFor();
+  await page.screenshot({ path: 'test-results/business-staff-hours-en-mobile.png', fullPage: true });
   await saveHours(page, staffRules, { days: WEEK, closed: false });
   assert.equal(await summaryText(staff, 'hours-group-0-1-2-3-4-5-6'), 'Sun, Mon, Tue, Wed, Thu, Fri, Sat: 09:00–17:00');
   const followed = page.waitForResponse(r => r.url() === staffRules && r.request().method() === 'PUT');
   await staff.getByRole('button', { name: 'Follow business hours', exact: true }).click(); assert.equal((await followed).status(), 200);
   await staff.getByText('Follows the business hours.', { exact: true }).waitFor();
+  // Removing someone who never had a booking deletes them; the pilot staff member stays the only one.
+  await page.getByTestId('staff-add').filter({ visible: true }).click();
+  await addForm.getByRole('textbox', { name: 'Name', exact: true }).fill('Temporary helper');
+  await addForm.getByRole('checkbox', { name: SETUP_SERVICE.name, exact: true }).click();
+  const tempCreated = page.waitForResponse(r => r.url() === `${base}/staff` && r.request().method() === 'POST');
+  await addForm.getByRole('button', { name: 'Add staff member', exact: true }).click(); const tempId = (await (await tempCreated).json()).id;
+  const temp = page.getByTestId(`staff-card-${tempId}`); await temp.waitFor();
+  await temp.getByRole('button', { name: 'Remove Temporary helper', exact: true }).click();
+  const removed = page.waitForResponse(r => r.url() === `${base}/staff/${tempId}` && r.request().method() === 'DELETE');
+  await temp.getByRole('button', { name: 'Confirm', exact: true }).click(); assert.deepEqual(await (await removed).json(), { deleted: true, archived: false });
+  await temp.waitFor({ state: 'detached' }); await page.getByRole('status').filter({ hasText: 'Staff member removed.' }).filter({ visible: true }).waitFor();
+  await page.screenshot({ path: 'test-results/business-staff-en-mobile.png', fullPage: true });
   assert.equal(new URL(page.url()).pathname, `/provider/${businessId}/staff`, 'staff hours save in place');
   await backToHub(page, businessId); await openFromHub(page, 'hours');
   await page.getByText('No hours set yet. Customers cannot book until you add them.', { exact: true }).filter({ visible: true }).waitFor();
@@ -169,9 +193,14 @@ export async function sharingBusinessSmoke({ page, context, webUrl, apiUrl, busi
     await review.getByRole('heading', { name: 'פרטי העסק', exact: true }).filter({ visible: true }).waitFor();
     assert.equal(await review.getByRole('textbox', { name: 'דואר אלקטרוני ציבורי של העסק', exact: true }).inputValue(), 'public-studio@example.test');
     assert.equal(await review.getByRole('textbox', { name: 'טלפון ציבורי של העסק', exact: true }).evaluate(el => getComputedStyle(el).direction), 'ltr');
+    await review.goto(`${webUrl}/provider/${businessId}/staff`); await review.getByRole('heading', { name: 'אנשי הצוות', exact: true }).filter({ visible: true }).waitFor();
+    await review.getByRole('button', { name: `עריכה: ${SETUP_STAFF_NAME}`, exact: true }).click(); await review.getByRole('tab', { name: 'כללי', exact: true }).waitFor();
+    await review.screenshot({ path: 'test-results/business-staff-he-desktop.png', fullPage: true });
+    await review.setViewportSize({ width: 390, height: 844 }); await review.screenshot({ path: 'test-results/business-staff-he-mobile.png', fullPage: true });
+    await review.setViewportSize({ width: 1280, height: 900 });
     await review.goto(`${webUrl}/provider/${businessId}/share`); await review.getByTestId('provider-sharing-qr').waitFor();
     await review.screenshot({ path: 'test-results/business-setup-he-desktop.png', fullPage: true });
     await review.setViewportSize({ width: 390, height: 844 }); await review.screenshot({ path: 'test-results/business-setup-he-mobile.png', fullPage: true });
   } finally { await fresh.close(); }
-  console.log('PASS: clean approved business configures profile/catalog/staff/weekly hours/staff hours/policy through UI, survives a lost creation acknowledgement without duplicates, publishes and exports an independently decoded canonical QR.');
+  console.log('PASS: clean approved business configures profile/catalog/staff (add, edit, hours tab, removal)/weekly hours/policy through UI, survives a lost creation acknowledgement without duplicates, publishes and exports an independently decoded canonical QR.');
 }
