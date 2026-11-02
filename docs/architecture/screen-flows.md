@@ -44,7 +44,7 @@ A slot click creates a HELD database record and an owned Redis reservation lasti
 
 Selecting a different date, service or slot releases the previous hold. Late responses and screen unmounts release obsolete reservations. Both Redis and the database expiry rules recover holds after crashes or closed browsers. Expired holds cannot confirm. Other clients see availability refresh every two seconds; a conflict response immediately disables the contested time and shows an accessible alert in the sticky footer.
 
-Manual breaks are tenant-scoped staff intervals in TimeBlock. Availability and booking/rescheduling transactions check them. Break creation rejects overlaps with confirmed appointments or unexpired holds and uses the same interval mutex as booking writes. Closed days come from weekly hours and date overrides, rather than assuming every business closes on weekends.
+Breaks, holidays and days off are tenant-scoped `TimeBlock` rows for one staff member or, with no staff member, the whole business. Availability and booking/rescheduling transactions check both. Block creation rejects overlaps with current appointments or unexpired holds, listing them, and uses the same configuration lock as booking writes. Closed days come from weekly hours and blocks, rather than assuming every business closes on weekends.
 
 ## External authentication configuration
 

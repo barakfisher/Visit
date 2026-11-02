@@ -15,7 +15,6 @@ const managers = ['OWNER', 'MANAGER'] as const;
 const staffProjection = { id: true, businessId: true, displayName: true, active: true, parallelCapacity: true } as const;
 export type AvailabilityRules = {
   weekly: { weekday: number; intervals: { startLocal: string; endLocal: string }[] }[];
-  overrides: { date: string; isOpen: boolean; startLocal?: string | undefined; endLocal?: string | undefined }[];
 };
 export type PolicyInput = {
   requireCustomerName?: boolean | undefined; requireVerifiedPhone?: boolean | undefined; requireVerifiedEmail?: boolean | undefined;
@@ -61,29 +60,21 @@ export async function saveBusinessPolicy(context: AuthorizedBusinessContext, inp
 
 export async function getBusinessAvailability(context: AuthorizedBusinessContext) {
   await validateBusinessContext(context, managers);
-  const [weekly, overrides] = await Promise.all([
-    prisma.businessWeeklyAvailability.findMany({ where: { businessId: context.businessId }, orderBy: [{ weekday: 'asc' }, { startLocal: 'asc' }] }),
-    prisma.scheduleOverride.findMany({ where: { businessId: context.businessId }, orderBy: { date: 'asc' } }),
-  ]);
-  return { weekly, overrides };
+  return { weekly: await prisma.businessWeeklyAvailability.findMany({ where: { businessId: context.businessId }, orderBy: [{ weekday: 'asc' }, { startLocal: 'asc' }] }) };
 }
 
 export async function saveBusinessAvailability(context: AuthorizedBusinessContext, input: unknown, expectedToken?: string, session?: AuthenticatedSession) {
   await validateBusinessContext(context, managers);
   const businessId = context.businessId;
-  const business = await prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { timezone: true } });
-  const rules = parseAvailabilityRules(input, business.timezone);
+  const rules = parseAvailabilityRules(input);
   const weekly = rules.weekly.flatMap(day => day.intervals.map(hours => ({ businessId, weekday: day.weekday, startLocal: hours.startLocal, endLocal: hours.endLocal })));
-  const overrides = rules.overrides.map(day => ({ businessId, date: new Date(`${day.date}T00:00:00.000Z`), isOpen: day.isOpen, startLocal: day.isOpen ? day.startLocal! : null, endLocal: day.isOpen ? day.endLocal! : null }));
   await withBusinessConfiguration(context, async tx => {
     await fenceScheduleSession(tx, session);
     await assertSafeSchedule(tx, businessId, rules, undefined, expectedToken);
     await tx.businessWeeklyAvailability.deleteMany({ where: { businessId } });
-    await tx.scheduleOverride.deleteMany({ where: { businessId } });
     if (weekly.length) await tx.businessWeeklyAvailability.createMany({ data: weekly });
-    if (overrides.length) await tx.scheduleOverride.createMany({ data: overrides });
   });
-  return { saved: true, weeklyIntervals: weekly.length, overrides: overrides.length };
+  return { saved: true, weeklyIntervals: weekly.length };
 }
 
 export async function listBusinessStaff(context: AuthorizedBusinessContext) {
@@ -116,17 +107,13 @@ export async function saveStaffAvailability(context: AuthorizedBusinessContext, 
   await validateBusinessContext(context, managers);
   const businessId = context.businessId;
   if (!await prisma.staff.findFirst({ where: { id: staffId, businessId }, select: { id: true } })) throw notFound();
-  const business = await prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { timezone: true } });
-  const rules = parseAvailabilityRules(input, business.timezone);
+  const rules = parseAvailabilityRules(input);
   const weekly = rules.weekly.flatMap(day => day.intervals.map(hours => ({ businessId, staffId, weekday: day.weekday, startLocal: hours.startLocal, endLocal: hours.endLocal })));
-  const overrides = rules.overrides.map(day => ({ businessId, staffId, date: new Date(`${day.date}T00:00:00.000Z`), isOpen: day.isOpen, startLocal: day.isOpen ? day.startLocal! : null, endLocal: day.isOpen ? day.endLocal! : null }));
   await withBusinessConfiguration(context, async tx => {
     await fenceScheduleSession(tx, session);
     await assertSafeSchedule(tx, businessId, rules, staffId, expectedToken);
     await tx.staffWeeklyAvailability.deleteMany({ where: { businessId, staffId } });
-    await tx.staffScheduleOverride.deleteMany({ where: { businessId, staffId } });
     if (weekly.length) await tx.staffWeeklyAvailability.createMany({ data: weekly });
-    if (overrides.length) await tx.staffScheduleOverride.createMany({ data: overrides });
   });
   return { saved: true };
 }
@@ -135,11 +122,7 @@ export async function getStaffAvailability(context: AuthorizedBusinessContext, s
   await validateBusinessContext(context, managers);
   const businessId = context.businessId;
   if (!await prisma.staff.findFirst({ where: { id: staffId, businessId }, select: { id: true } })) throw notFound();
-  const [weekly, overrides] = await Promise.all([
-    prisma.staffWeeklyAvailability.findMany({ where: { businessId, staffId }, orderBy: [{ weekday: 'asc' }, { startLocal: 'asc' }] }),
-    prisma.staffScheduleOverride.findMany({ where: { businessId, staffId }, orderBy: { date: 'asc' } }),
-  ]);
-  return { weekly, overrides };
+  return { weekly: await prisma.staffWeeklyAvailability.findMany({ where: { businessId, staffId }, orderBy: [{ weekday: 'asc' }, { startLocal: 'asc' }] }) };
 }
 
 export async function updateBusinessStaff(context: AuthorizedBusinessContext, staffId: string, input: { displayName?: string | undefined; active?: boolean | undefined; parallelCapacity?: number | undefined; serviceIds?: string[] | undefined }) {

@@ -4,6 +4,8 @@ export class AppError extends Error {
     readonly code: string,
     message: string,
     readonly fields?: Record<string, string>,
+    // Structured context a client can render, such as the appointments a block would cover.
+    readonly details?: unknown,
   ) {
     super(message);
     this.name = 'AppError';

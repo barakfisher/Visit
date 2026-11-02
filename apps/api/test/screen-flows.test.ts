@@ -69,10 +69,12 @@ test('screen flows enforce OTP single use, tenant access, Redis holds, confirmat
     assert.equal(addedService.statusCode, 201, addedService.body);
     assert.equal(await prisma.staffService.count({ where: { businessId: business.id, staffId: staff.id, serviceId: addedService.json().id } }), 1);
     const closedDate = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
-    const hoursSaved = await app.inject({ method: 'PUT', url: `/api/provider/working-hours?businessId=${business.id}`, headers: headers(0), payload: { weekly: Array.from({ length: 7 }, (_, weekday) => ({ weekday, intervals: [{ startLocal: '09:00', endLocal: '17:00' }] })), overrides: [{ date: closedDate, isOpen: false }] } });
+    const hoursSaved = await app.inject({ method: 'PUT', url: `/api/provider/working-hours?businessId=${business.id}`, headers: headers(0), payload: { weekly: Array.from({ length: 7 }, (_, weekday) => ({ weekday, intervals: [{ startLocal: '09:00', endLocal: '17:00' }] })) } });
     assert.equal(hoursSaved.statusCode, 200);
+    const closedDay = await app.inject({ method: 'POST', url: '/api/provider/block-time', headers: headers(0), payload: { businessId: business.id, kind: 'days', fromDate: closedDate, toDate: closedDate, reason: 'Holiday' } });
+    assert.equal(closedDay.statusCode, 201, closedDay.body);
     const closedAvailability = await app.inject({ url: `/api/providers/${business.id}/availability?serviceId=${service.id}&date=${closedDate}` });
-    assert.deepEqual(closedAvailability.json().slots, []);
+    assert.equal(closedAvailability.json().slots.some((slot: { available: boolean }) => slot.available), false);
     const phone = `+1555${String(Date.now()).slice(-7)}`;
     assert.equal((await app.inject({ method: 'POST', url: '/api/auth/otp/send', remoteAddress: `2001:db8:${suffix.slice(0, 4)}:${suffix.slice(4, 8)}::1`, payload: { phone } })).statusCode, 202);
     const code = (await app.inject({ url: `/__dev/otp?phone=${encodeURIComponent(phone)}` })).json().code;

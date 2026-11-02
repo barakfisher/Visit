@@ -5,10 +5,9 @@ import { prisma } from '../db/client.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { AppError, forbidden, notFound } from '../http/errors.js';
 import { validateBusinessContext, type AuthorizedBusinessContext } from '../security/tenant-context.js';
-import { effectiveWindows } from '../scheduling/rules.js';
 import { workingWindows } from '../scheduling/availability.js';
 export async function publicationReadiness(tx: Prisma.TransactionClient, businessId: string) {
-  const business = await tx.business.findUnique({ where: { id: businessId }, include: { bookingPolicy: true, weeklyAvailability: true, scheduleOverrides: true, services: { where: { active: true }, include: { staff: { where: { staff: { active: true } }, include: { staff: { include: { availability: true, overrides: true } } } } } } } });
+  const business = await tx.business.findUnique({ where: { id: businessId }, include: { bookingPolicy: true, weeklyAvailability: true, services: { where: { active: true }, include: { staff: { where: { staff: { active: true } }, include: { staff: { include: { availability: true } } } } } } } });
   if (!business) throw notFound();
   const blockers: Record<string, string> = {};
   if (business.deletedAt) blockers.business = 'BUSINESS_UNAVAILABLE';
@@ -17,7 +16,7 @@ export async function publicationReadiness(tx: Prisma.TransactionClient, busines
   if (business.name.trim().length < 2 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(business.slug) || !business.category.trim() || !business.location?.trim()) blockers.profile = 'COMPLETE_BUSINESS_PROFILE';
   if (!business.services.length) blockers.services = 'ACTIVE_SERVICE_REQUIRED';
   if (!business.bookingPolicy) blockers.policy = 'EXPLICIT_POLICY_REQUIRED';
-  if (!business.weeklyAvailability.length && !business.scheduleOverrides.some(day => day.isOpen)) blockers.hours = 'WORKING_HOURS_REQUIRED';
+  if (!business.weeklyAvailability.length) blockers.hours = 'WORKING_HOURS_REQUIRED';
   let calculationZone = business.timezone;
   try { new Intl.DateTimeFormat('en', { timeZone: calculationZone }); } catch { calculationZone = PILOT_TIMEZONE; }
   const today = Temporal.Now.zonedDateTimeISO(calculationZone).toPlainDate();
@@ -29,10 +28,10 @@ export async function publicationReadiness(tx: Prisma.TransactionClient, busines
     const earliestNotice = Date.now() + (business.bookingPolicy?.minimumNoticeMinutes ?? 0) * 60000;
     if (!blockers.hours) for (let offset = 0; offset <= Math.min(730, business.bookingPolicy?.maximumAdvanceDays ?? 60) && !fits; offset++) {
       const date = today.add({ days: offset }), key = date.toString(), weekday = date.dayOfWeek % 7;
-      const businessHours = effectiveWindows(business.scheduleOverrides.find(d => d.date.toISOString().slice(0, 10) === key) ?? null, business.weeklyAvailability.filter(d => d.weekday === weekday));
+      const businessHours = business.weeklyAvailability.filter(d => d.weekday === weekday);
       if (!businessHours.length) continue;
       for (const { staff } of service.staff) {
-        const staffHours = effectiveWindows(staff.overrides.find(d => d.date.toISOString().slice(0, 10) === key) ?? null, staff.availability.length ? staff.availability.filter(d => d.weekday === weekday) : businessHours);
+        const staffHours = staff.availability.length ? staff.availability.filter(d => d.weekday === weekday) : businessHours;
         const windows = workingWindows(key, calculationZone, businessHours, staffHours).intervals;
         if (windows.some(w => {
           const opening = w.startsAt.getTime();

@@ -101,7 +101,7 @@ test('conflict reasons contain no customer or booking identifiers and default re
   assert.throws(() => evaluateCandidate({ startsAt: at('10:00'), durationMinutes: 30, timezone: 'UTC', now, policy, staff: resource, windows: workingWindows(date, 'UTC', hours(), hours()).intervals }), RangeError);
 });
 
-test('availability repository and legacy/compatibility routes share scoped schedule, capacity and override behavior', async t => {
+test('availability repository and legacy/compatibility routes share scoped schedule, capacity and block behavior', async t => {
   const runId = randomUUID(), token = randomUUID();
   const app = Fastify();
   app.setErrorHandler((error, _req, reply) => reply.code(error instanceof AppError ? error.statusCode : error instanceof ZodError ? 400 : 500).send({ error: { code: error instanceof AppError ? error.code : 'VALIDATION_ERROR' } }));
@@ -144,17 +144,22 @@ test('availability repository and legacy/compatibility routes share scoped sched
       assert.equal(modern.statusCode, 200); assert.deepEqual(modern.json(), legacy.json());
       assert.ok(legacy.json().slots.every((item: { startsAt: string; endsAt: string; localTime: string; utcOffset: string }) => item.startsAt.endsWith('Z') && item.endsAt.endsWith('Z') && item.utcOffset === '+00:00' && /^\d\d:\d\d$/.test(item.localTime)));
     });
-    await t.test('staff recurrence/override precedence intersects business windows and missing staff days close', async () => {
+    await t.test('staff recurrence intersects business windows, missing staff days close, and staff or whole-business blocks remove slots', async () => {
       await prisma.staffWeeklyAvailability.create({ data: { businessId: a.id, staffId: expert.id, weekday: (new Date(`${day}T00:00Z`).getUTCDay() + 1) % 7, startLocal: '10:00', endLocal: '16:00' } });
       let response = (await app.inject({ url: url() })).json(); assert.equal(response.slots.some((item: { staffId: string }) => item.staffId === expert.id), false);
-      await prisma.staffScheduleOverride.create({ data: { businessId: a.id, staffId: expert.id, date: new Date(`${day}T00:00Z`), isOpen: true, startLocal: '10:00', endLocal: '12:00' } });
+      await prisma.staffWeeklyAvailability.create({ data: { businessId: a.id, staffId: expert.id, weekday: new Date(`${day}T00:00Z`).getUTCDay(), startLocal: '10:00', endLocal: '16:00' } });
+      await prisma.timeBlock.create({ data: { businessId: a.id, staffId: expert.id, startsAt: new Date(`${day}T12:00Z`), endsAt: new Date(`${day}T16:00Z`) } });
+      type Slot = { staffId: string; localTime: string; available: boolean; reasons: string[] };
       response = (await app.inject({ url: url() })).json();
-      assert.ok(response.slots.some((item: { staffId: string; localTime: string; available: boolean }) => item.staffId === expert.id && item.localTime === '10:00' && item.available));
-      assert.equal(response.slots.some((item: { staffId: string; localTime: string }) => item.staffId === expert.id && item.localTime === '13:00'), false);
-      await prisma.scheduleOverride.create({ data: { businessId: a.id, date: new Date(`${day}T00:00Z`), isOpen: false } });
-      assert.equal((await app.inject({ url: url() })).json().slots.length, 0);
-      await prisma.scheduleOverride.deleteMany({ where: { businessId: a.id } });
-      await prisma.staffWeeklyAvailability.deleteMany({ where: { businessId: a.id } }); await prisma.staffScheduleOverride.deleteMany({ where: { businessId: a.id } });
+      assert.ok(response.slots.some((item: Slot) => item.staffId === expert.id && item.localTime === '10:00' && item.available));
+      assert.ok(response.slots.some((item: Slot) => item.staffId === expert.id && item.localTime === '13:00' && !item.available && item.reasons.includes('MANUAL_BLOCK')));
+      assert.ok(response.slots.some((item: Slot) => item.staffId !== expert.id && item.localTime === '13:00' && item.available), 'a staff block leaves other staff bookable');
+      await prisma.timeBlock.create({ data: { businessId: a.id, staffId: null, allDay: true, startsAt: new Date(`${day}T00:00Z`), endsAt: new Date(new Date(`${day}T00:00Z`).getTime() + 86400000) } });
+      response = (await app.inject({ url: url() })).json();
+      assert.ok(response.slots.length > 0 && response.slots.every((item: Slot) => !item.available && item.reasons.includes('MANUAL_BLOCK')), 'a whole-business block closes every staff member');
+      assert.equal((await app.inject({ url: url(b.id, services[1]!.id) })).json().slots.some((item: Slot) => item.available), true, 'another business is unaffected');
+      await prisma.timeBlock.deleteMany({ where: { businessId: a.id } });
+      await prisma.staffWeeklyAvailability.deleteMany({ where: { businessId: a.id } });
     });
     await t.test('buffers must fit working hours in both availability and direct hold/reschedule paths', async () => {
       await prisma.bookingPolicy.update({ where: { businessId: a.id }, data: { bufferBeforeMinutes: 15, bufferAfterMinutes: 15 } });

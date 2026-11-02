@@ -4,7 +4,6 @@ import { prisma } from '../db/client.js';
 import { AppError, conflict, notFound } from '../http/errors.js';
 import { validatePublicBusinessContext, type PublicBusinessContext } from '../security/tenant-context.js';
 import { generateAvailability } from '../scheduling/availability.js';
-import { effectiveWindows } from '../scheduling/rules.js';
 
 // Load one bounded range in a single snapshot; calendar and slots use the same engine.
 async function availabilityRange(context: PublicBusinessContext, serviceId: string, date: string, count: number, includeUnavailable: boolean, now: Date) {
@@ -21,14 +20,13 @@ async function availabilityRange(context: PublicBusinessContext, serviceId: stri
     if (!service) throw notFound();
     const durationMinutes = ownedBooking?.serviceDurationMinutes ?? service.durationMinutes;
     const first = Temporal.PlainDate.from(date), end = first.add({ days: count });
-    const fromDate = new Date(`${date}T00:00:00.000Z`), endDate = new Date(`${end}T00:00:00.000Z`);
     const rangeStart = new Date(Number(first.toZonedDateTime({ timeZone: business.timezone, plainTime: '00:00' }).epochMilliseconds));
     const rangeEnd = new Date(Number(end.toZonedDateTime({ timeZone: business.timezone, plainTime: '00:00' }).epochMilliseconds));
-    const [overrides, weekly, links] = await Promise.all([
-      tx.scheduleOverride.findMany({ where: { businessId: business.id, date: { gte: fromDate, lt: endDate } } }),
+    const [businessBlocks, weekly, links] = await Promise.all([
+      tx.timeBlock.findMany({ where: { businessId: business.id, staffId: null, startsAt: { lt: rangeEnd }, endsAt: { gt: rangeStart } }, select: { startsAt: true, endsAt: true } }),
       tx.businessWeeklyAvailability.findMany({ where: { businessId: business.id } }),
       tx.staffService.findMany({ where: { businessId: business.id, serviceId: service.id, staff: { active: true } }, include: { staff: { include: {
-        availability: { where: { businessId: business.id } }, overrides: { where: { businessId: business.id, date: { gte: fromDate, lt: endDate } } },
+        availability: { where: { businessId: business.id } },
         bookings: { where: { businessId: business.id, ...(context.ownedBookingId ? { id: { not: context.ownedBookingId } } : {}), occupiedFrom: { lt: rangeEnd }, occupiedUntil: { gt: rangeStart }, OR: [{ status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW'] } }, { status: 'HELD', holdExpiresAt: { gt: now } }] }, select: { occupiedFrom: true, occupiedUntil: true, status: true, holdExpiresAt: true } },
         timeBlocks: { where: { businessId: business.id, startsAt: { lt: rangeEnd }, endsAt: { gt: rangeStart } }, select: { startsAt: true, endsAt: true } },
       } } } }),
@@ -36,11 +34,11 @@ async function availabilityRange(context: PublicBusinessContext, serviceId: stri
     const today = Temporal.Instant.from(now.toISOString()).toZonedDateTimeISO(business.timezone).toPlainDate();
     const results = Array.from({ length: count }, (_, index) => {
       const day = first.add({ days: index }), key = day.toString(), weekday = day.dayOfWeek % 7;
-      const businessWindows = effectiveWindows(overrides.find(item => item.date.toISOString().slice(0, 10) === key) ?? null, weekly.filter(item => item.weekday === weekday));
+      const businessWindows = weekly.filter(item => item.weekday === weekday);
       return { date: key, ...generateAvailability({ date: key, timezone: business.timezone, now, durationMinutes, policy, businessWindows, includeUnavailable,
         staff: links.map(({ staff }) => ({ id: staff.id, displayName: staff.displayName, parallelCapacity: staff.parallelCapacity,
-          windows: effectiveWindows(staff.overrides.find(item => item.date.toISOString().slice(0, 10) === key) ?? null, staff.availability.length ? staff.availability.filter(hours => hours.weekday === weekday) : businessWindows),
-          bookings: staff.bookings.map(booking => ({ startsAt: booking.occupiedFrom, endsAt: booking.occupiedUntil, status: booking.status, holdExpiresAt: booking.holdExpiresAt })), blocks: staff.timeBlocks,
+          windows: staff.availability.length ? staff.availability.filter(hours => hours.weekday === weekday) : businessWindows,
+          bookings: staff.bookings.map(booking => ({ startsAt: booking.occupiedFrom, endsAt: booking.occupiedUntil, status: booking.status, holdExpiresAt: booking.holdExpiresAt })), blocks: [...staff.timeBlocks, ...businessBlocks],
         })),
       }) };
     });

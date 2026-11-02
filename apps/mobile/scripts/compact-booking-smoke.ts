@@ -12,7 +12,8 @@ export async function compactBookingSmoke({ browser, webUrl, prisma, run, busine
   await prisma.bookingPolicy.create({ data: { businessId: business.id, minimumNoticeMinutes: 0, maximumAdvanceDays: 30, cancellationCutoffMinutes: 0, rescheduleCutoffMinutes: 0 } });
   await prisma.businessWeeklyAvailability.createMany({ data: Array.from({ length: 7 }, (_, weekday) => ({ businessId: business.id, weekday, startLocal: '09:00', endLocal: '17:00' })) });
   const date = new Date(Date.now() + 86400000).toISOString().slice(0, 10), next = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
-  await prisma.scheduleOverride.create({ data: { businessId: business.id, date: new Date(`${date}T00:00Z`), isOpen: false } });
+  // A whole-business block over every hour of the Israeli local date (UTC+2 or +3), and none of the next day's 09:00–17:00.
+  await prisma.timeBlock.create({ data: { businessId: business.id, staffId: null, allDay: true, startsAt: new Date(Date.parse(`${date}T00:00Z`) - 4 * 3600000), endsAt: new Date(Date.parse(`${date}T00:00Z`) + 86400000) } });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'America/Los_Angeles' });
   try {
     const page = await context.newPage();

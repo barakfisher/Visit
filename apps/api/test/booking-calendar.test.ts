@@ -42,8 +42,8 @@ test('bounded calendar derives selectable dates from the scoped authoritative sl
       assert.equal((await app.inject({ url: path(foreign.id, hidden.id) })).statusCode, 404);
       assert.equal(await prisma.booking.count({ where: { businessId: business.id } }), 0);
     });
-    await t.test('closed overrides, notice, horizon, staff capacity and blocks agree with daily candidates', async () => {
-      await prisma.scheduleOverride.create({ data: { businessId: business.id, date: new Date(`${day(1)}T00:00Z`), isOpen: false } });
+    await t.test('whole-business blocks, notice, horizon, staff capacity and staff blocks agree with daily candidates', async () => {
+      await prisma.timeBlock.create({ data: { businessId: business.id, staffId: null, allDay: true, startsAt: new Date(`${day(1)}T00:00Z`), endsAt: new Date(`${day(2)}T00:00Z`) } });
       const block = await prisma.timeBlock.create({ data: { businessId: business.id, staffId: staff.id, startsAt: new Date(`${day(2)}T00:00Z`), endsAt: new Date(`${day(3)}T00:00Z`) } });
       const context = await requirePublicBusiness(business.id);
       const controlledNow = new Date(`${start}T14:45Z`); // 16:45 or17:45 Israeli local time, no fitting same-day start.

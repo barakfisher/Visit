@@ -111,7 +111,6 @@ model Business {
   staff              Staff[]
   services           Service[]
   weeklyAvailability BusinessWeeklyAvailability[]
-  scheduleOverrides  ScheduleOverride[]
   bookingPolicy      BookingPolicy?
   bookings           Booking[]
   providerApplications ProviderApplication[]
@@ -216,7 +215,6 @@ model Staff {
   business       Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
   services       StaffService[]
   availability   StaffWeeklyAvailability[]
-  overrides      StaffScheduleOverride[]
   bookings       Booking[]
   timeBlocks     TimeBlock[]
 
@@ -278,33 +276,6 @@ model StaffWeeklyAvailability {
   staff       Staff    @relation(fields: [businessId, staffId], references: [businessId, id], onDelete: Cascade)
 
   @@index([businessId, staffId, weekday])
-}
-
-model ScheduleOverride {
-  id          String   @id @default(cuid())
-  businessId  String
-  date        DateTime @db.Date
-  isOpen      Boolean
-  startLocal  String?
-  endLocal    String?
-  createdAt   DateTime @default(now())
-  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-
-  @@index([businessId, date])
-}
-
-model StaffScheduleOverride {
-  id          String   @id @default(cuid())
-  businessId  String
-  staffId     String
-  date        DateTime @db.Date
-  isOpen      Boolean
-  startLocal  String?
-  endLocal    String?
-  createdAt   DateTime @default(now())
-  staff       Staff    @relation(fields: [businessId, staffId], references: [businessId, id], onDelete: Cascade)
-
-  @@index([businessId, staffId, date])
 }
 
 model BookingPolicy {
@@ -371,14 +342,18 @@ model Booking {
 model TimeBlock {
   id         String   @id @default(cuid())
   businessId String
-  staffId    String
+  // Null blocks the whole business, including staff added later.
+  staffId    String?
   startsAt   DateTime
   endsAt     DateTime
+  // Whole local days: startsAt and endsAt are local midnights in the business timezone.
+  allDay     Boolean  @default(false)
   reason     String?
   createdAt  DateTime @default(now())
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  staff      Staff    @relation(fields: [businessId, staffId], references: [businessId, id], onDelete: Cascade)
+  staff      Staff?   @relation(fields: [businessId, staffId], references: [businessId, id], onDelete: Cascade)
 
+  @@index([businessId, startsAt, endsAt])
   @@index([businessId, staffId, startsAt, endsAt])
 }
 

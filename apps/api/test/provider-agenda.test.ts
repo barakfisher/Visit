@@ -17,7 +17,7 @@ import { releaseHold } from '../src/scheduling/reservations.js';
 import { registerProviderRoutes } from '../src/routes/providers.js';
 import { registerScreenFlows } from '../src/routes/screen-flows.js';
 
-const hours = (startLocal = '08:00', endLocal = '18:00') => ({ weekly: Array.from({ length: 7 }, (_, weekday) => ({ weekday, intervals: [{ startLocal, endLocal }] })), overrides: [] });
+const hours = (startLocal = '08:00', endLocal = '18:00') => ({ weekly: Array.from({ length: 7 }, (_, weekday) => ({ weekday, intervals: [{ startLocal, endLocal }] })) });
 const code = (expected: string) => (error: unknown) => error instanceof AppError && error.code === expected;
 after(async () => { redis.disconnect(); await prisma.$disconnect(); });
 
@@ -130,29 +130,22 @@ test('provider agenda and schedule edits preserve private bookings and occupied 
       finally { allowLock?.(); }
       await rejected;
     });
-    await t.test('concurrent booking creation and date closure never both commit', async () => {
+    await t.test('concurrent booking creation and a whole-day block never both commit', async () => {
       for (let attempt = 0; attempt < 4; attempt++) {
         const date = `2027-03-${23 + attempt}`, startsAt = new Date(`${date}T14:00:00Z`);
-        await saveBusinessAvailability(context, hours('06:00', '18:00'));
-        const closed = { ...hours('06:00', '18:00'), overrides: [{ date, isOpen: false }] };
-        const [reservation, edit] = await Promise.all([
+        const [reservation, block] = await Promise.all([
           app.inject({ method: 'POST', url: '/v1/bookings', headers, payload: { finalConsent: true, businessId: business.id, serviceId: service.id, staffId: staff.id, startsAt: startsAt.toISOString(), idempotencyKey: randomUUID() } }),
-          saveBusinessAvailability(context, closed).then(() => ({ saved: true as const }), (error: unknown) => ({ saved: false as const, error })),
+          app.inject({ method: 'POST', url: '/api/provider/block-time', headers, payload: { businessId: business.id, kind: 'days', fromDate: date, toDate: date } }),
         ]);
-        const created = reservation.statusCode === 201;
-        assert.equal(created && edit.saved, false, 'A live reservation and a closure for its date cannot both commit');
-        if (created) {
-          assert.equal(edit.saved, false);
-          if (!edit.saved) assert.ok(code('SCHEDULE_CONFLICT')(edit.error));
-        } else {
-          assert.equal(reservation.statusCode, 409, reservation.body);
-          assert.equal(edit.saved, true);
-        }
+        const created = reservation.statusCode === 201, blocked = block.statusCode === 201;
+        assert.equal(created && blocked, false, 'A live reservation and a block over it cannot both commit');
+        if (created) assert.equal(block.json().error.code, 'BLOCK_CONFLICT', block.body);
+        else { assert.equal(reservation.statusCode, 409, reservation.body); assert.equal(blocked, true, block.body); }
         const reservations = await prisma.booking.findMany({ where: { businessId: business.id, startsAt }, select: { id: true, customerId: true, status: true } });
         assert.equal(reservations.filter(row => row.status === 'HELD').length, created ? 1 : 0);
         for (const hold of reservations) { assert.ok(hold.customerId); await releaseHold(hold.id, hold.customerId); }
         await prisma.booking.deleteMany({ where: { businessId: business.id, startsAt } });
-        await saveBusinessAvailability(context, hours('06:00', '18:00'));
+        await prisma.timeBlock.deleteMany({ where: { businessId: business.id } });
       }
     });
     await t.test('unowned business and missing staff stay inaccessible; held rows do not enter agenda', async () => {

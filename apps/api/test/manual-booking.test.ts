@@ -24,7 +24,7 @@ test('manual bookings enforce contact exceptions and authoritative scheduling wi
  const staff = await prisma.staff.create({ data: { businessId: business.id, displayName: 'Specialist', parallelCapacity: 1 } });
  const service = await prisma.service.create({ data: { businessId: business.id, name: 'Consultation', durationMinutes: 30, priceMinor: 10000, currency: 'USD' } });
  await prisma.staffService.create({ data: { businessId: business.id, staffId: staff.id, serviceId: service.id } });
- await saveBusinessAvailability(await requireBusinessMembership(owner.id, business.id), { weekly: Array.from({ length: 7 }, (_, weekday) => ({ weekday, intervals: [{ startLocal: '08:00', endLocal: '18:00' }] })), overrides: [] });
+ await saveBusinessAvailability(await requireBusinessMembership(owner.id, business.id), { weekly: Array.from({ length: 7 }, (_, weekday) => ({ weekday, intervals: [{ startLocal: '08:00', endLocal: '18:00' }] })) });
  const app = Fastify();
  app.setErrorHandler((error, _request, reply) => reply.code(error instanceof AppError ? error.statusCode : error instanceof ZodError ? 400 : 500).send({ error: { code: error instanceof AppError ? error.code : 'INVALID' } }));
  await registerProviderRoutes(app); await registerBookingRoutes(app);

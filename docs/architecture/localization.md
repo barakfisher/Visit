@@ -25,7 +25,7 @@ Product decision confirmed 2026-10-24 for VIS-31: support Hebrew and English; He
 | Back/next arrows and directional navigation | Mirror according to app direction; use logical start/end layout rather than manual left/right positioning |
 | Dates and time | Gregorian date and 24-hour clock, formatted with he-IL or en-GB and an explicit business IANA timezone |
 | Currency | Intl locale formatting with server-provided currency and integer minor units; selecting Hebrew never changes the booking's currency |
-| Working days | Follow business/staff schedule and overrides, never infer closures from locale or assume weekends are closed |
+| Working days | Follow business/staff schedule and time blocks, never infer closures from locale or assume weekends are closed |
 
 The display locale never changes UTC booking instants, business timezone, DST policy, working-day boundaries or money values. Browser `html` lang/dir and root content follow the app locale. Native content uses inherited Yoga direction and Expo Router runtime navigation direction; the app does not force global I18nManager changes or trigger reload loops in Expo Go. Native direction, accessibility and gesture behavior still require device evidence.
 

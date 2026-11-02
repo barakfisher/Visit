@@ -113,7 +113,7 @@ test('final consent owns one recoverable booking attempt across both HTTP surfac
       await prisma.bookingPolicy.update({ where: { businessId: business.id }, data: { bufferBeforeMinutes: 5 } });
       const next = input(), pending = await hold(next); assert.equal(pending.statusCode, 201, pending.body);
       const day = new Date(next.startsAt.slice(0, 10) + 'T00:00Z');
-      await prisma.scheduleOverride.create({ data: { businessId: business.id, date: day, isOpen: false } });
+      await prisma.timeBlock.create({ data: { businessId: business.id, staffId: null, startsAt: day, endsAt: new Date(day.getTime() + 86400000) } });
       assert.equal((await commit(next)).statusCode, 409);
     });
     await t.test('service changes reject an unfinished attempt and release its provisional capacity', async () => {

@@ -52,7 +52,7 @@ test('repeatable isolated fixtures cover both directions of foundation HTTP tena
         }
         assert.equal((await app.inject({ method: 'POST', url: `/api/provider/services?businessId=${own.id}`, headers: f.headers(owner), payload: { name: 'Foreign assignment', durationMinutes: 30, staffIds: [foreignStaff.id] } })).statusCode, 404);
         assert.equal((await app.inject({ method: 'POST', url: `${base}/staff`, headers: f.headers(owner), payload: { displayName: 'Foreign assignment', serviceIds: [foreignService.id] } })).statusCode, 400);
-        const rules = { weekly: [], overrides: [] };
+        const rules = { weekly: [] };
         assert.equal((await app.inject({ method: 'PUT', url: `${base}/staff/${foreignStaff.id}/availability-rules`, headers: f.headers(owner), payload: rules })).statusCode, 404);
         for (const method of ['GET', 'PUT'] as const) {
           assert.equal((await app.inject({ method, url: `/v1/provider/businesses/${foreign.id}/availability-rules`, headers: f.headers(owner), ...(method === 'PUT' ? { payload: rules } : {}) })).statusCode, 403);

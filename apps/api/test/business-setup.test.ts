@@ -63,8 +63,8 @@ test('approved business configures, publishes and shares through scoped setup AP
     });
     await t.test('saved business/staff schedules and policy produce real availability and canonical sharing after publish', async () => {
       const weekly = Array.from({ length: 7 }, (_, weekday) => ({ weekday, intervals: [{ startLocal: '09:00', endLocal: '17:00' }] }));
-      assert.equal((await request('PUT', '/availability-rules', { weekly, overrides: [] })).statusCode, 200);
-      assert.equal((await request('PUT', `/staff/${staffId}/availability-rules`, { weekly: [], overrides: [] })).statusCode, 200);
+      assert.equal((await request('PUT', '/availability-rules', { weekly })).statusCode, 200);
+      assert.equal((await request('PUT', `/staff/${staffId}/availability-rules`, { weekly: [] })).statusCode, 200);
       assert.equal((await app.inject({ url: base + `/staff/${staffId}/availability-rules`, headers: outsider.headers })).statusCode, 403);
       assert.equal((await request('PUT', '/booking-policy', { minimumNoticeMinutes: 0, maximumAdvanceDays: 30, bufferBeforeMinutes: 0, bufferAfterMinutes: 0, cancellationCutoffMinutes: 1440, rescheduleCutoffMinutes: 1440 })).statusCode, 200);
       assert.equal((await request('PUT', '/publication', { published: true })).statusCode, 200);

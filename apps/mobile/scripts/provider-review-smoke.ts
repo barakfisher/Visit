@@ -56,7 +56,7 @@ export async function providerReviewSmoke({ browser, webUrl, apiUrl, prisma, run
     await applicant.page.getByText('Published — ready for bookings', { exact: true }).waitFor();
     assert.equal((await applicant.context.request.get(`${apiUrl}/api/providers/${business.id}`)).status(), 200);
     await sharingBusinessSmoke({ page: applicant.page, context: applicant.context, webUrl, apiUrl, businessId: business.id, slug });
-    const closed = await (await applicant.context.request.get(`${apiUrl}/api/providers/${business.id}/availability?serviceId=${setup.serviceId}&date=${setup.closedDate}`)).json(); assert.equal(closed.slots.length, 0);
+    const closed = await (await applicant.context.request.get(`${apiUrl}/api/providers/${business.id}/availability?serviceId=${setup.serviceId}&date=${setup.closedDate}`)).json(); assert.equal(closed.slots.some((slot: { available: boolean }) => slot.available), false, 'the staff day off leaves nothing bookable');
     const bookableDate = new Date(Date.now() + 4 * 86400000).toISOString().slice(0, 10);
     const open = await (await applicant.context.request.get(`${apiUrl}/api/providers/${business.id}/availability?serviceId=${setup.serviceId}&date=${bookableDate}`)).json(); assert.ok(open.slots.some((slot: { available: boolean }) => slot.available));
     await applicant.page.screenshot({ path: 'test-results/provider-published-en-mobile.png', fullPage: true });

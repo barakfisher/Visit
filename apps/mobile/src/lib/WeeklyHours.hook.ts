@@ -14,7 +14,7 @@ import type { ScheduleInterval, SchedulePreview, ScheduleProposal } from '../typ
 /**
  * Business or staff weekly hours: a grouped summary, and an edit dialog that saves on its own.
  * Saving previews the change against existing appointments and commits only when nothing is affected.
- * Date overrides are not edited here; whatever the server holds is sent back unchanged.
+ * Holidays and days off are time blocks (`TimeBlocks.hook.ts`), not part of the weekly hours.
  */
 export function useWeeklyHours(businessId: string, staffId?: string) {
   const { t, locale, direction } = useAppLocale(), client = useQueryClient();
@@ -65,10 +65,10 @@ export function useWeeklyHours(businessId: string, staffId?: string) {
     if (operation.current || !ready) return;
     const found = validateHoursForm(form, week, Boolean(staffId));
     setErrors(found);
-    if (!Object.keys(found).length) void commit(scheduleProposal({ weekly: applyHoursForm(week, form), overrides: draft.overrides }));
+    if (!Object.keys(found).length) void commit(scheduleProposal({ weekly: applyHoursForm(week, form) }));
   }
   /** Staff only: drop the staff member's own week so they follow the business hours again. */
-  function followBusiness() { if (staffId && ready && !inherited) void commit(scheduleProposal({ weekly: WEEKDAYS.map(() => []), overrides: draft.overrides })); }
+  function followBusiness() { if (staffId && ready && !inherited) void commit(scheduleProposal({ weekly: WEEKDAYS.map(() => []) })); }
   function retry() { void own.refetch(); if (staffId) void business.refetch(); }
 
   return {

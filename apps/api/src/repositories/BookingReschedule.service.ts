@@ -12,6 +12,7 @@ import { reserveHold, requireHold, releaseHold } from '../scheduling/reservation
 import { localDateTimeToInstant } from '../scheduling/local-time.js';
 import { requireBusinessMembership } from '../security/tenant-context.js';
 import { setBookingAudit } from './BookingLifecycle.service.js';
+import { blocksCovering } from '../scheduling/time-blocks.js';
 
 export const rescheduleInputSchema = z.strictObject({
   finalConsent: z.literal(true), idempotencyKey: z.string().min(16).max(128), expectedRevision: z.number().int().nonnegative(),
@@ -78,7 +79,7 @@ export async function rescheduleBooking(session: AuthenticatedSession, bookingId
       if (!link?.staff.active) throw notFound();
       const occupied = occupiedInterval(startsAt, current.serviceDurationMinutes, policy.bufferBeforeMinutes, policy.bufferAfterMinutes);
       await assertWorkingHours(business.id, business.timezone, input.staffId, startsAt, occupied, tx);
-      if (await tx.timeBlock.count({ where: { businessId: business.id, staffId: input.staffId, startsAt: { lt: occupied.endsAt }, endsAt: { gt: occupied.startsAt } } })) throw conflict('This provider has blocked this time.');
+      if (await tx.timeBlock.count({ where: blocksCovering(business.id, input.staffId, occupied.startsAt, occupied.endsAt) })) throw conflict('This provider has blocked this time.');
       const conflicts = await tx.booking.findMany({ where: { businessId: business.id, staffId: input.staffId, id: { not: bookingId }, OR: [{ status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW'] } }, { status: 'HELD', holdExpiresAt: { gt: now } }], occupiedFrom: { lt: occupied.endsAt }, occupiedUntil: { gt: occupied.startsAt } }, select: { occupiedFrom: true, occupiedUntil: true } });
       if (!assertCapacity(occupied, conflicts.map(item => ({ startsAt: item.occupiedFrom, endsAt: item.occupiedUntil })), link.staff.parallelCapacity)) throw conflict('That time was just booked. Choose another time.');
       await reserveHold({ id: reservationId, customerId: session.identity.id, businessId: business.id, staffId: input.staffId, occupiedFrom: occupied.startsAt, occupiedUntil: occupied.endsAt, holdExpiresAt: new Date(Date.now() + 30000) }, link.staff.parallelCapacity);
