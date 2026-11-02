@@ -9,6 +9,7 @@ import { setupEn, setupHe } from './setupMessages';
 import { dashboardEn, dashboardHe } from './dashboardMessages';
 import { hoursEn, hoursHe } from './hoursMessages';
 import { blocksEn, blocksHe } from './blockMessages';
+import { staffEn, staffHe } from './staffMessages';
 export const en = {
   ...manualEn,
   ...agendaEditEn,
@@ -21,6 +22,7 @@ export const en = {
   ...dashboardEn,
   ...hoursEn,
   ...blocksEn,
+  ...staffEn,
   'home.title': 'Your time, well spent.',
   'home.intro': 'Your next appointment and the businesses you visit.',
   'home.providers': 'My Providers',
@@ -306,6 +308,7 @@ export const he: Record<MessageKey, string> = {
   ...dashboardHe,
   ...hoursHe,
   ...blocksHe,
+  ...staffHe,
   'home.title': 'הזמן שלכם, מנוצל היטב.',
   'home.intro': 'התור הבא שלכם והעסקים שאתם מבקרים בהם.',
   'home.providers': 'נותני השירות שלי',

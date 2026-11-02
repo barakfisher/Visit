@@ -1,6 +1,7 @@
 import { assertSafeSchedule, fenceScheduleSession } from './ScheduleImpact.service.js';
 import type { AuthenticatedSession } from '../security/sessions.js';
 import { withBusinessConfiguration } from './publication.js';
+import { MAX_REPORTED_CONFLICTS } from './TimeBlocks.service.js';
 import { prisma } from '../db/client.js';
 import { DEFAULT_BOOKING_POLICY, parseAvailabilityRules, parseBookingPolicy } from '../scheduling/rules.js';
 import { AppError, notFound } from '../http/errors.js';
@@ -79,7 +80,7 @@ export async function saveBusinessAvailability(context: AuthorizedBusinessContex
 
 export async function listBusinessStaff(context: AuthorizedBusinessContext) {
   await validateBusinessContext(context, managers);
-  return { staff: await prisma.staff.findMany({ where: { businessId: context.businessId }, select: { ...staffProjection, services: { include: { service: { select: { id: true, name: true } } } } }, orderBy: { displayName: 'asc' } }) };
+  return { staff: await prisma.staff.findMany({ where: { businessId: context.businessId, archivedAt: null }, select: { ...staffProjection, services: { include: { service: { select: { id: true, name: true } } } } }, orderBy: { displayName: 'asc' } }) };
 }
 
 export async function createBusinessStaff(context: AuthorizedBusinessContext, input: { displayName: string; serviceIds: string[]; parallelCapacity?: number | undefined; creationKey?: string | undefined }) {
@@ -94,7 +95,7 @@ export async function createBusinessStaff(context: AuthorizedBusinessContext, in
     const creationFingerprint = input.creationKey ? createHash('sha256').update(JSON.stringify([input.displayName, input.parallelCapacity ?? 1, [...ids].sort()])).digest('hex') : null;
     if (input.creationKey) {
       const prior = await tx.staff.findUnique({ where: { businessId_creationKey: { businessId, creationKey: input.creationKey } } });
-      if (prior) { if (prior.creationFingerprint !== creationFingerprint) throw conflict('This staff request was already used for different details.'); const { creationKey: _key, creationFingerprint: _fingerprint, ...fields } = prior; return fields; }
+      if (prior) { if (prior.creationFingerprint !== creationFingerprint) throw conflict('This staff request was already used for different details.'); if (prior.archivedAt) throw conflict('This staff member was removed. Add them again with a new request.'); const { creationKey: _key, creationFingerprint: _fingerprint, ...fields } = prior; return fields; }
     }
     if (await tx.service.count({ where: { businessId, id: { in: ids }, active: true } }) !== ids.length) throw new AppError(400, 'VALIDATION_ERROR', 'Every selected service must be active in this business.');
     const staff = await tx.staff.create({ data: { businessId, displayName: input.displayName, parallelCapacity: input.parallelCapacity ?? 1, creationKey: input.creationKey ?? null, creationFingerprint }, select: staffProjection });
@@ -106,7 +107,7 @@ export async function createBusinessStaff(context: AuthorizedBusinessContext, in
 export async function saveStaffAvailability(context: AuthorizedBusinessContext, staffId: string, input: unknown, expectedToken?: string, session?: AuthenticatedSession) {
   await validateBusinessContext(context, managers);
   const businessId = context.businessId;
-  if (!await prisma.staff.findFirst({ where: { id: staffId, businessId }, select: { id: true } })) throw notFound();
+  if (!await prisma.staff.findFirst({ where: { id: staffId, businessId, archivedAt: null }, select: { id: true } })) throw notFound();
   const rules = parseAvailabilityRules(input);
   const weekly = rules.weekly.flatMap(day => day.intervals.map(hours => ({ businessId, staffId, weekday: day.weekday, startLocal: hours.startLocal, endLocal: hours.endLocal })));
   await withBusinessConfiguration(context, async tx => {
@@ -121,7 +122,7 @@ export async function saveStaffAvailability(context: AuthorizedBusinessContext, 
 export async function getStaffAvailability(context: AuthorizedBusinessContext, staffId: string) {
   await validateBusinessContext(context, managers);
   const businessId = context.businessId;
-  if (!await prisma.staff.findFirst({ where: { id: staffId, businessId }, select: { id: true } })) throw notFound();
+  if (!await prisma.staff.findFirst({ where: { id: staffId, businessId, archivedAt: null }, select: { id: true } })) throw notFound();
   return { weekly: await prisma.staffWeeklyAvailability.findMany({ where: { businessId, staffId }, orderBy: [{ weekday: 'asc' }, { startLocal: 'asc' }] }) };
 }
 
@@ -132,7 +133,7 @@ export async function updateBusinessStaff(context: AuthorizedBusinessContext, st
   try {
     const result = await withBusinessConfiguration(context, async tx => {
       await tx.$queryRaw`SELECT id FROM "Staff" WHERE id = ${staffId} AND "businessId" = ${businessId} FOR UPDATE`;
-      const existing = await tx.staff.findFirst({ where: { id: staffId, businessId } }); if (!existing) throw notFound();
+      const existing = await tx.staff.findFirst({ where: { id: staffId, businessId, archivedAt: null } }); if (!existing) throw notFound();
       const serviceIds = input.serviceIds;
       if (serviceIds && (new Set(serviceIds).size !== serviceIds.length || await tx.service.count({ where: { businessId, id: { in: serviceIds }, active: true } }) !== serviceIds.length)) throw new AppError(400, 'VALIDATION_ERROR', 'Choose active services from this business.');
       // Deactivating a resource/removing assignments invalidates only its pending
@@ -150,4 +151,37 @@ export async function updateBusinessStaff(context: AuthorizedBusinessContext, st
     await Promise.allSettled(result.expired.flatMap(h => h.customerId ? [releaseHold(h.id, h.customerId)] : []));
     return result.staff;
   } catch (error) { if (isDatabaseCapacityError(error)) throw conflict('Capacity cannot be lower than existing appointments or active holds.'); throw error; }
+}
+
+export const STAFF_HAS_APPOINTMENTS = 'STAFF_HAS_APPOINTMENTS';
+
+export async function removeBusinessStaff(context: AuthorizedBusinessContext, staffId: string, session?: AuthenticatedSession, now = new Date()) {
+  await validateBusinessContext(context, managers);
+  const businessId = context.businessId;
+  const result = await withBusinessConfiguration(context, async tx => {
+    await fenceScheduleSession(tx, session);
+    await tx.$queryRaw`SELECT id FROM "Staff" WHERE id = ${staffId} AND "businessId" = ${businessId} FOR UPDATE`;
+    if (!await tx.staff.findFirst({ where: { id: staffId, businessId, archivedAt: null }, select: { id: true } })) throw notFound();
+    // Removal never cancels: there is no email delivery yet, so a customer would arrive for a cancelled appointment.
+    const upcoming = { businessId, staffId, status: 'CONFIRMED' as const, occupiedUntil: { gt: now } };
+    const [total, rows] = await Promise.all([
+      tx.booking.count({ where: upcoming }),
+      tx.booking.findMany({ where: upcoming, orderBy: [{ startsAt: 'asc' }, { id: 'asc' }], take: MAX_REPORTED_CONFLICTS, select: { id: true, startsAt: true, endsAt: true, customerName: true, serviceName: true, staff: { select: { displayName: true } } } }),
+    ]);
+    if (total) throw new AppError(409, STAFF_HAS_APPOINTMENTS, 'This staff member has upcoming appointments. Move or cancel them first.', undefined, { total, timezone: (await tx.business.findUniqueOrThrow({ where: { id: businessId }, select: { timezone: true } })).timezone, conflicts: rows.map(row => ({ kind: 'APPOINTMENT' as const, id: row.id, startsAt: row.startsAt, endsAt: row.endsAt, staffName: row.staff.displayName, customerName: row.customerName, serviceName: row.serviceName })) });
+    // Any booking row, even a cancelled or expired one, holds a restrictive foreign key to its staff member.
+    if (!await tx.booking.count({ where: { businessId, staffId } })) {
+      await tx.staff.delete({ where: { id: staffId, businessId } });
+      return { deleted: true, archived: false, expired: [] };
+    }
+    const held = { businessId, staffId, status: 'HELD' as const };
+    const expired = await tx.booking.findMany({ where: held, select: { id: true, customerId: true } });
+    if (expired.length) await tx.booking.updateMany({ where: held, data: { status: 'EXPIRED', holdExpiresAt: null } });
+    await tx.staffService.deleteMany({ where: { businessId, staffId } });
+    await tx.timeBlock.deleteMany({ where: { businessId, staffId } });
+    await tx.staff.update({ where: { id: staffId, businessId }, data: { active: false, archivedAt: now } });
+    return { deleted: false, archived: true, expired };
+  });
+  await Promise.allSettled(result.expired.flatMap(h => h.customerId ? [releaseHold(h.id, h.customerId)] : []));
+  return { deleted: result.deleted, archived: result.archived };
 }

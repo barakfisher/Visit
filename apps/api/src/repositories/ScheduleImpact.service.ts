@@ -16,8 +16,9 @@ export async function fenceScheduleSession(tx: Prisma.TransactionClient, session
 }
 export async function scheduleImpact(tx: Prisma.TransactionClient, businessId: string, proposal: AvailabilityRules, staffId?: string) {
   const business = await tx.business.findUniqueOrThrow({ where: { id: businessId }, select: { timezone: true, updatedAt: true, weeklyAvailability: { orderBy: { id: 'asc' } } } });
-  const staff = await tx.staff.findMany({ where: { businessId }, orderBy: { id: 'asc' }, select: { id: true, displayName: true, availability: { orderBy: { id: 'asc' } } } });
-  if (staffId && !staff.some(item => item.id === staffId)) throw notFound();
+  const staff = await tx.staff.findMany({ where: { businessId }, orderBy: { id: 'asc' }, select: { id: true, displayName: true, archivedAt: true, availability: { orderBy: { id: 'asc' } } } });
+  // Every staff member stays in the list so bookings can be attributed, but an archived one has no hours to preview.
+  if (staffId && !staff.some(item => item.id === staffId && !item.archivedAt)) throw notFound();
   const bookings = await tx.booking.findMany({ where: { businessId, ...(staffId ? { staffId } : {}), occupiedUntil: { gt: new Date() }, OR: [{ status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW'] } }, { status: 'HELD', holdExpiresAt: { gt: new Date() } }] }, orderBy: [{ startsAt: 'asc' }, { id: 'asc' }], select: { id: true, staffId: true, startsAt: true, endsAt: true, occupiedFrom: true, occupiedUntil: true, status: true, revision: true, serviceName: true } });
   const proposedWeekly = proposal.weekly.flatMap(day => day.intervals.map(interval => ({ ...interval, weekday: day.weekday })));
   const affected = bookings.filter(booking => {

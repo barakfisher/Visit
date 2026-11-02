@@ -9,7 +9,7 @@ export const hoursEn = {
   'hours.opening': 'Opening time {index}', 'hours.closing': 'Closing time {index}', 'hours.addInterval': 'Add a time range', 'hours.removeInterval': 'Remove time range {index}',
   'hours.save': 'Save hours', 'hours.cancel': 'Cancel',
   'hours.error.days': 'Choose at least one day.', 'hours.error.format': 'Use HH:mm, for example 09:00.', 'hours.error.order': 'The closing time must be after the opening time.',
-  'hours.error.overlap': 'This range overlaps another range.', 'hours.error.staffClosed': 'A staff member cannot be closed every day. To stop their bookings, turn off Accept new appointments.',
+  'hours.error.overlap': 'This range overlaps another range.', 'hours.error.staffClosed': 'A staff member cannot be closed every day. To stop their bookings, turn off Available for new appointments.',
   'hours.day.0': 'Sun', 'hours.day.1': 'Mon', 'hours.day.2': 'Tue', 'hours.day.3': 'Wed', 'hours.day.4': 'Thu', 'hours.day.5': 'Fri', 'hours.day.6': 'Sat',
 } as const;
 export const hoursHe: Record<keyof typeof hoursEn, string> = {
@@ -23,6 +23,6 @@ export const hoursHe: Record<keyof typeof hoursEn, string> = {
   'hours.opening': 'שעת פתיחה {index}', 'hours.closing': 'שעת סגירה {index}', 'hours.addInterval': 'הוספת טווח שעות', 'hours.removeInterval': 'הסרת טווח שעות {index}',
   'hours.save': 'שמירת שעות', 'hours.cancel': 'ביטול',
   'hours.error.days': 'בחרו לפחות יום אחד.', 'hours.error.format': 'הזינו בפורמט HH:mm, למשל 09:00.', 'hours.error.order': 'שעת הסגירה צריכה להיות אחרי שעת הפתיחה.',
-  'hours.error.overlap': 'הטווח הזה חופף לטווח אחר.', 'hours.error.staffClosed': 'אי אפשר לסגור איש צוות בכל הימים. כדי לעצור תורים אליו, כבו את "קבלת תורים חדשים".',
+  'hours.error.overlap': 'הטווח הזה חופף לטווח אחר.', 'hours.error.staffClosed': 'אי אפשר לסגור איש צוות בכל הימים. כדי לעצור תורים אליו, כבו את "זמין לתורים חדשים".',
   'hours.day.0': 'א׳', 'hours.day.1': 'ב׳', 'hours.day.2': 'ג׳', 'hours.day.3': 'ד׳', 'hours.day.4': 'ה׳', 'hours.day.5': 'ו׳', 'hours.day.6': 'ש׳',
 };

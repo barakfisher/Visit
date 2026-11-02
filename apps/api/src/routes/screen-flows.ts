@@ -157,8 +157,9 @@ export async function registerScreenFlows(app: FastifyInstance) {
     const input = parseService(fields);
     if ('active' in input) throw new AppError(400, 'VALIDATION_ERROR', 'New services start active.');
     const staffIds = [...new Set(assigned)];
-    if (await prisma.staff.count({ where: { businessId, id: { in: staffIds }, active: true } }) !== staffIds.length) throw notFound();
     const service = await withBusinessConfiguration(await requireBusinessMembership(identity.id, businessId, ['OWNER', 'MANAGER']), async (tx) => {
+      // Checked under the configuration lock, so a staff member removed meanwhile cannot be linked.
+      if (await tx.staff.count({ where: { businessId, id: { in: staffIds }, active: true, archivedAt: null } }) !== staffIds.length) throw notFound();
       const service = await tx.service.create({ data: { businessId, name: input.name.trim(), description: input.description?.trim() ?? null, durationMinutes: input.durationMinutes, priceMinor: input.priceMinor ?? null, currency: input.currency ?? null } });
       await tx.staffService.createMany({ data: staffIds.map((staffId) => ({ businessId, staffId, serviceId: service.id })) });
       return service;

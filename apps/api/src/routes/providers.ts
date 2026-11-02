@@ -13,7 +13,7 @@ import { authenticate } from '../security/sessions.js';
 import { requireBusinessMembership, requirePublicBusiness } from '../security/tenant-context.js';
 import { parseService, createBusinessService, deleteBusinessService, getBusinessService, listBusinessServices, listPublicServices, updateBusinessService } from '../repositories/services.js';
 
-import { getBusinessSettings, getBusinessPolicy, saveBusinessPolicy, getBusinessAvailability, saveBusinessAvailability, listBusinessStaff, createBusinessStaff, saveStaffAvailability, getStaffAvailability, updateBusinessStaff } from '../repositories/provider-settings.js';
+import { getBusinessSettings, getBusinessPolicy, saveBusinessPolicy, getBusinessAvailability, saveBusinessAvailability, listBusinessStaff, createBusinessStaff, saveStaffAvailability, getStaffAvailability, removeBusinessStaff, updateBusinessStaff } from '../repositories/provider-settings.js';
 
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const businessIdParams = z.object({ businessId: z.string().min(1) });
@@ -262,5 +262,11 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
     const input = z.strictObject({ displayName: z.string().trim().min(2).max(120).optional(), active: z.boolean().optional(), parallelCapacity: z.number().int().min(1).max(100).optional(), serviceIds: z.array(z.string().min(1)).max(100).optional() }).refine(v => Object.keys(v).length > 0).parse(request.body);
     const { identity } = await authenticate(request);
     return updateBusinessStaff(await requireBusinessMembership(identity.id, businessId, ['OWNER', 'MANAGER']), staffId, input);
+  });
+  app.delete('/v1/provider/businesses/:businessId/staff/:staffId', async request => {
+    const params = z.strictObject({ businessId: z.string().min(1), staffId: z.string().min(1) }).safeParse(request.params);
+    if (!params.success) throw notFound();
+    const session = await authenticate(request);
+    return removeBusinessStaff(await requireBusinessMembership(session.identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]), params.data.staffId, session);
   });
 }

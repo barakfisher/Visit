@@ -122,6 +122,10 @@ test('tenant repositories and both HTTP surfaces enforce scope, ownership and cu
       assert.deepEqual(await prisma.bookingPolicy.findUniqueOrThrow({ where: { businessId: b!.id } }), before);
       assert.equal((await app.inject({ method: 'POST', url: `${base(a!.id)}/staff`, headers: headers(0), payload: { displayName: 'Foreign assignment', serviceIds: [serviceB!.id] } })).statusCode, 400);
       assert.equal((await app.inject({ method: 'PUT', url: `${base(a!.id)}/staff/${staffB!.id}/availability-rules`, headers: headers(0), payload: rules })).statusCode, 404);
+      assert.equal((await app.inject({ method: 'DELETE', url: `${base(a!.id)}/staff/${staffB!.id}`, headers: headers(0) })).statusCode, 404);
+      assert.equal((await app.inject({ method: 'DELETE', url: `${base(b!.id)}/staff/${staffB!.id}`, headers: headers(0) })).statusCode, 403);
+      assert.equal((await app.inject({ method: 'DELETE', url: `${base(a!.id)}/staff/${staffA!.id}`, headers: headers(3) })).statusCode, 403);
+      assert.deepEqual(await prisma.staff.count({ where: { id: { in: [staffA!.id, staffB!.id] }, archivedAt: null } }), 2);
       assert.equal((await app.inject({ method: 'PUT', url: `/api/provider/working-hours?businessId=${b!.id}`, headers: headers(0), payload: rules })).statusCode, 403);
       const context = await requireBusinessMembership(ownerA!.id, a!.id);
       await assert.rejects(saveBusinessPolicy(context, { ...policy, maximumAdvanceDays: 45, businessId: b!.id } as typeof policy), (error: unknown) => error instanceof AppError && error.statusCode === 400);
