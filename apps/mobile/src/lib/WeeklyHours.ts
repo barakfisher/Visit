@@ -18,10 +18,10 @@ export type HoursFormError = 'days' | 'format' | 'order' | 'overlap' | 'staffClo
 export type HoursFormErrors = Record<string, HoursFormError>;
 
 export function scheduleDraft(rules?: ScheduleRules): ScheduleDraft {
-  return { weekly: WEEKDAYS.map(day => sortIntervals(rules?.weekly.filter(row => row.weekday === day).map(({ startLocal, endLocal }) => ({ startLocal, endLocal })) ?? [])), overrides: rules?.overrides.map(row => ({ ...row, date: row.date.slice(0, 10) })) ?? [] };
+  return { weekly: WEEKDAYS.map(day => sortIntervals(rules?.weekly.filter(row => row.weekday === day).map(({ startLocal, endLocal }) => ({ startLocal, endLocal })) ?? [])) };
 }
 export function scheduleProposal(draft: ScheduleDraft): ScheduleProposal {
-  return { weekly: draft.weekly.map((intervals, weekday) => ({ weekday, intervals })), overrides: draft.overrides.map(row => ({ date: row.date, isOpen: row.isOpen, ...(row.isOpen ? { startLocal: row.startLocal, endLocal: row.endLocal } : {}) })) };
+  return { weekly: draft.weekly.map((intervals, weekday) => ({ weekday, intervals })) };
 }
 export function sortIntervals(intervals: ScheduleInterval[]) { return [...intervals].sort((a, b) => a.startLocal.localeCompare(b.startLocal)); }
 export const isClosedWeek = (week: Week) => week.every(day => !day.length);

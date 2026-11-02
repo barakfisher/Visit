@@ -230,9 +230,11 @@ try {
     await providerPage.getByRole('button', { name: 'Call', exact: true }).waitFor();
     await providerPage.screenshot({ path: path.join(diagnostics, 'provider-agenda-desktop.png'), fullPage: true });
     await providerPage.getByRole('button', { name: 'Block time / add a break' }).click();
-    await providerPage.getByLabel('Break start time').fill('10:00'); await providerPage.getByLabel('Break end time').fill('10:30');
-    await providerPage.getByRole('button', { name: 'Save blocked time' }).click();
-    await providerPage.getByRole('button', { name: 'Remove blocked time' }).waitFor();
+    const blockForm = providerPage.getByTestId('block-form');
+    assert.equal(await blockForm.getByRole('textbox', { name: 'Date', exact: true }).inputValue(), date, 'the agenda opens the block dialog on its date');
+    await blockForm.getByRole('textbox', { name: 'From', exact: true }).fill('10:00'); await blockForm.getByRole('textbox', { name: 'Until', exact: true }).fill('10:30');
+    await blockForm.getByRole('button', { name: 'Save block' }).click(); await blockForm.waitFor({ state: 'detached' });
+    await providerPage.getByTestId('agenda-blocks').getByRole('button', { name: 'Remove block' }).waitFor();
     console.log('PASS: provider login lands Home; explicit dashboard navigation, agenda verification and manual break.');
     // The catalog lives in business settings (decisions.md, 2026-11-02). Reach it in-app, through the menu and the
     // settings business switcher, so switching keeps the same page and query cache instead of reloading.

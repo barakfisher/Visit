@@ -9,7 +9,7 @@ This is the executable security foundation for current routes and repositories, 
 | Two isolated business graphs, six identity/membership combinations, deterministic record IDs, safe exact reset | `apps/api/test/support/two-tenant.ts`, `tenant-fixtures.test.ts` |
 | Both directions of foreign list/read/create/update/delete and referenced-ID injection, preserved foreign snapshots | `tenant-fixtures.test.ts` using the actual API factory |
 | WeakSet-branded/forged contexts, repository CRUD, role and approval revocation, old issued contexts and customer ownership | `tenant-isolation.test.ts` |
-| Cross-business composite FK constraints bypassing repositories | `tenant-isolation.test.ts` (staff/service links, schedules, overrides, time blocks, bookings) |
+| Cross-business composite FK constraints bypassing repositories | `tenant-isolation.test.ts` (staff/service links, schedules, time blocks, bookings) |
 | Overlap/capacity, full buffers, half-open boundaries, expired holds, raw concurrent writes, transaction rollback/crash, duplicate idempotency and Redis outage | `booking-guard.test.ts`, `redis-slot-lock.test.ts` |
 | Origin/CSRF, cookie/token boundaries and explicit proxy trust | `request-security.test.ts`; auth-specific suites remain in the complete API suite |
 | Canonical provider preview/save, identity-owned pagination/remove, unavailable snapshots and account-change protection | `saved-providers.test.ts`, `shared-providers-smoke.ts`, `auth-navigation.test.ts`; phone/email/Google browser return paths with local/fake delivery boundaries |

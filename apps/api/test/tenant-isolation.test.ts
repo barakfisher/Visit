@@ -34,7 +34,7 @@ test('tenant repositories and both HTTP surfaces enforce scope, ownership and cu
   const base = (businessId: string) => `/v1/provider/businesses/${businessId}`;
   const policy = { minimumNoticeMinutes: 0, maximumAdvanceDays: 30, bufferBeforeMinutes: 0, bufferAfterMinutes: 0, cancellationCutoffMinutes: 0, rescheduleCutoffMinutes: 0 };
   const date = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
-  const rules = { weekly: [{ weekday: 1, intervals: [{ startLocal: '09:00', endLocal: '17:00' }] }], overrides: [] };
+  const rules = { weekly: [{ weekday: 1, intervals: [{ startLocal: '09:00', endLocal: '17:00' }] }] };
   try {
     await prisma.session.createMany({ data: people.map((person, index) => ({ identityId: person.id, tokenHash: tokenDigest(tokens[index]!), expiresAt: new Date(Date.now() + 600000) })) });
     await prisma.membership.createMany({ data: [
@@ -159,12 +159,28 @@ test('tenant repositories and both HTTP surfaces enforce scope, ownership and cu
       assert.equal((await app.inject({ url: '/v1/admin/provider-applications', headers: headers(0) })).statusCode, 403);
     });
 
+    await t.test('time blocks stay inside their business, including whole-business blocks', async () => {
+      const blockUrl = (businessId: string) => `/api/provider/block-time?businessId=${businessId}`;
+      const nextDay = new Date(Date.now() + 4 * 86_400_000).toISOString().slice(0, 10);
+      const wholeA = await app.inject({ method: 'POST', url: '/api/provider/block-time', headers: headers(0), payload: { businessId: a!.id, kind: 'days', fromDate: nextDay, toDate: nextDay } });
+      assert.equal(wholeA.statusCode, 201, wholeA.body);
+      const listed = await app.inject({ url: blockUrl(a!.id), headers: headers(2) });
+      assert.deepEqual(listed.json().blocks.map((row: { id: string }) => row.id), [wholeA.json().id], 'a manager of both businesses sees only the selected one');
+      for (const actor of [0, 3, 4, 5]) assert.equal((await app.inject({ url: blockUrl(b!.id), headers: headers(actor) })).statusCode, 403);
+      for (const actor of [3, 4]) assert.equal((await app.inject({ method: 'POST', url: '/api/provider/block-time', headers: headers(actor), payload: { businessId: a!.id, kind: 'days', fromDate: nextDay, toDate: nextDay } })).statusCode, 403);
+      assert.equal((await app.inject({ method: 'POST', url: '/api/provider/block-time', headers: headers(0), payload: { businessId: b!.id, kind: 'days', fromDate: nextDay, toDate: nextDay } })).statusCode, 403);
+      assert.equal((await app.inject({ method: 'DELETE', url: `/api/provider/block-time/${wholeA.json().id}?businessId=${b!.id}`, headers: headers(1) })).statusCode, 404);
+      const otherDay = await app.inject({ url: `/v1/businesses/${b!.id}/availability?serviceId=${serviceB!.id}&date=${nextDay}` });
+      assert.equal(otherDay.json().slots.some((slot: { available: boolean }) => slot.available), true, 'a whole-business block in A leaves B bookable');
+      assert.equal(await prisma.timeBlock.count({ where: { businessId: b!.id } }), 1);
+      await prisma.timeBlock.delete({ where: { id: wholeA.json().id } });
+    });
+
     await t.test('database constraints reject foreign tenant references without repository validation', async () => {
       const before = await prisma.booking.count({ where: { businessId: { in: [a!.id, b!.id] } } });
       await assert.rejects(prisma.staffService.create({ data: { businessId: a!.id, staffId: staffA!.id, serviceId: serviceB!.id } }), foreignKey);
       await assert.rejects(prisma.staffService.create({ data: { businessId: a!.id, staffId: staffB!.id, serviceId: serviceA!.id } }), foreignKey);
       await assert.rejects(prisma.staffWeeklyAvailability.create({ data: { businessId: a!.id, staffId: staffB!.id, weekday: 1, startLocal: '09:00', endLocal: '10:00' } }), foreignKey);
-      await assert.rejects(prisma.staffScheduleOverride.create({ data: { businessId: a!.id, staffId: staffB!.id, date: new Date(`${date}T00:00:00Z`), isOpen: false } }), foreignKey);
       await assert.rejects(prisma.timeBlock.create({ data: { businessId: a!.id, staffId: staffB!.id, startsAt: bookingA.startsAt, endsAt: bookingA.endsAt } }), foreignKey);
       await assert.rejects(prisma.booking.create({ data: { ...seedBooking(0, ownerA!.id), staffId: staffB!.id, startsAt: new Date(`${date}T15:00:00Z`), endsAt: new Date(`${date}T15:30:00Z`), occupiedFrom: new Date(`${date}T15:00:00Z`), occupiedUntil: new Date(`${date}T15:30:00Z`) } }), foreignKey);
       await assert.rejects(prisma.booking.create({ data: { ...seedBooking(0, ownerA!.id), serviceId: serviceB!.id, startsAt: new Date(`${date}T15:00:00Z`), endsAt: new Date(`${date}T15:30:00Z`), occupiedFrom: new Date(`${date}T15:00:00Z`), occupiedUntil: new Date(`${date}T15:30:00Z`) } }), foreignKey);

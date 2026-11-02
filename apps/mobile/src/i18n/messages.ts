@@ -8,6 +8,7 @@ import { contactEn, contactHe } from './contactMessages.utils';
 import { setupEn, setupHe } from './setupMessages';
 import { dashboardEn, dashboardHe } from './dashboardMessages';
 import { hoursEn, hoursHe } from './hoursMessages';
+import { blocksEn, blocksHe } from './blockMessages';
 export const en = {
   ...manualEn,
   ...agendaEditEn,
@@ -19,6 +20,7 @@ export const en = {
   ...bookingDetailsEn,
   ...dashboardEn,
   ...hoursEn,
+  ...blocksEn,
   'home.title': 'Your time, well spent.',
   'home.intro': 'Your next appointment and the businesses you visit.',
   'home.providers': 'My Providers',
@@ -303,6 +305,7 @@ export const he: Record<MessageKey, string> = {
   ...bookingDetailsHe,
   ...dashboardHe,
   ...hoursHe,
+  ...blocksHe,
   'home.title': 'הזמן שלכם, מנוצל היטב.',
   'home.intro': 'התור הבא שלכם והעסקים שאתם מבקרים בהם.',
   'home.providers': 'נותני השירות שלי',

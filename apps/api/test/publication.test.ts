@@ -40,7 +40,7 @@ test('publication readiness and public/owned paths preserve lifecycle across set
       assert.equal((await app.inject({ method: 'PATCH', url: base, headers: owner.headers, payload: { location: 'Jerusalem', category: 'Wellness' } })).statusCode, 200);
       const service = await app.inject({ method: 'POST', url: `${base}/services`, headers: owner.headers, payload: { name: 'Consultation', durationMinutes: 30 } }); assert.equal(service.statusCode, 201); serviceId = service.json().id;
       const staff = await app.inject({ method: 'POST', url: `${base}/staff`, headers: owner.headers, payload: { displayName: 'Expert', serviceIds: [serviceId] } }); assert.equal(staff.statusCode, 201); staffId = staff.json().id;
-      assert.equal((await app.inject({ method: 'PUT', url: `${base}/availability-rules`, headers: owner.headers, payload: { weekly: Array.from({ length: 7 }, (_, weekday) => ({ weekday, intervals: [{ startLocal: '09:00', endLocal: '17:00' }] })), overrides: [] } })).statusCode, 200);
+      assert.equal((await app.inject({ method: 'PUT', url: `${base}/availability-rules`, headers: owner.headers, payload: { weekly: Array.from({ length: 7 }, (_, weekday) => ({ weekday, intervals: [{ startLocal: '09:00', endLocal: '17:00' }] })) } })).statusCode, 200);
       assert.equal((await app.inject({ method: 'PUT', url: `${base}/booking-policy`, headers: owner.headers, payload: { minimumNoticeMinutes: 0, maximumAdvanceDays: 30, bufferBeforeMinutes: 0, bufferAfterMinutes: 0, cancellationCutoffMinutes: 0, rescheduleCutoffMinutes: 0 } })).statusCode, 200);
       assert.equal((await app.inject({ url: `${base}/publication`, headers: owner.headers })).json().ready, true);
       assert.equal((await app.inject({ url: `/api/providers/${business.id}` })).statusCode, 404);
@@ -101,9 +101,9 @@ test('publication readiness and public/owned paths preserve lifecycle across set
       assert.equal((await app.inject({ method: 'PUT', url: `${base}/booking-policy`, headers: owner.headers, payload: policy })).statusCode, 200);
       const blocked = await publish(true); assert.equal(blocked.statusCode, 409); assert.equal(blocked.json().error.fields[`services.${serviceId}.hours`], 'SERVICE_AND_BUFFERS_MUST_FIT_HOURS');
       assert.equal((await app.inject({ method: 'PUT', url: `${base}/booking-policy`, headers: owner.headers, payload: { ...policy, bufferBeforeMinutes: 0, bufferAfterMinutes: 0 } })).statusCode, 200);
-      assert.equal((await app.inject({ method: 'PUT', url: `${base}/staff/${staffId}/availability-rules`, headers: owner.headers, payload: { weekly: Array.from({ length: 7 }, (_, weekday) => ({ weekday, intervals: [{ startLocal: '18:00', endLocal: '19:00' }] })), overrides: [] } })).statusCode, 409);
+      assert.equal((await app.inject({ method: 'PUT', url: `${base}/staff/${staffId}/availability-rules`, headers: owner.headers, payload: { weekly: Array.from({ length: 7 }, (_, weekday) => ({ weekday, intervals: [{ startLocal: '18:00', endLocal: '19:00' }] })) } })).statusCode, 409);
       assert.equal((await publish(true)).statusCode, 200);
-      assert.equal((await app.inject({ method: 'PUT', url: `${base}/staff/${staffId}/availability-rules`, headers: owner.headers, payload: { weekly: [], overrides: [] } })).statusCode, 200);
+      assert.equal((await app.inject({ method: 'PUT', url: `${base}/staff/${staffId}/availability-rules`, headers: owner.headers, payload: { weekly: [] } })).statusCode, 200);
     });
     await t.test('unpublish between hold preflight and transaction wins; direct database new holds fail closed', async () => {
       assert.equal((await publish(true)).statusCode, 200);

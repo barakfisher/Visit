@@ -82,10 +82,7 @@ export async function configureBusinessSmoke({ page, context, webUrl, apiUrl, bu
   await staff.getByRole('textbox', { name: 'Staff display name', exact: true }).fill(SETUP_STAFF_NAME);
   const staffSaved = page.waitForResponse(r => r.url() === `${base}/staff/${staffId}` && r.request().method() === 'PATCH');
   await staff.getByRole('button', { name: 'Save staff member', exact: true }).click(); assert.equal((await staffSaved).status(), 200);
-  // Downstream journeys need one date the only staff member does not work. Date closures are not edited in the UI until
-  // the time-block PR (decisions.md, 2026-11-02), so it is stored through the API, and the UI saves below must keep it.
-  const closedDate = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10), staffRules = `${base}/staff/${staffId}/availability-rules`;
-  assert.equal((await context.request.put(staffRules, { headers: { Origin: webUrl }, data: { weekly: [], overrides: [{ date: closedDate, isOpen: false }] } })).status(), 200);
+  const staffRules = `${base}/staff/${staffId}/availability-rules`;
   // Staff hours start from the business hours; with none set yet, the staff member follows an empty week.
   await staff.getByRole('button', { name: `Edit staff hours: ${SETUP_STAFF_NAME}`, exact: true }).click();
   await staff.getByText('Follows the business hours.', { exact: true }).waitFor();
@@ -94,8 +91,6 @@ export async function configureBusinessSmoke({ page, context, webUrl, apiUrl, bu
   const followed = page.waitForResponse(r => r.url() === staffRules && r.request().method() === 'PUT');
   await staff.getByRole('button', { name: 'Follow business hours', exact: true }).click(); assert.equal((await followed).status(), 200);
   await staff.getByText('Follows the business hours.', { exact: true }).waitFor();
-  const kept = await (await context.request.get(staffRules)).json() as { weekly: unknown[]; overrides: { date: string; isOpen: boolean }[] };
-  assert.deepEqual([kept.weekly.length, kept.overrides.map(row => [row.date.slice(0, 10), row.isOpen])], [0, [[closedDate, false]]], 'hours saves keep date closures');
   assert.equal(new URL(page.url()).pathname, `/provider/${businessId}/staff`, 'staff hours save in place');
   await backToHub(page, businessId); await openFromHub(page, 'hours');
   await page.getByText('No hours set yet. Customers cannot book until you add them.', { exact: true }).filter({ visible: true }).waitFor();
@@ -108,6 +103,26 @@ export async function configureBusinessSmoke({ page, context, webUrl, apiUrl, bu
   assert.equal(await summaryText(page, 'hours-group-0-1-2-3-4-5-6'), 'Sun, Mon, Tue, Wed, Thu, Fri, Sat: 09:00–17:00');
   assert.equal(new URL(page.url()).pathname, `/provider/${businessId}/hours`, 'business hours save in place');
   await page.screenshot({ path: 'test-results/business-hours-en-mobile.png', fullPage: true });
+  // Downstream journeys need exactly one date the only staff member does not work: a whole-day block with a reason.
+  const closedDate = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10), blocksUrl = `${apiUrl}/api/provider/block-time`;
+  await page.getByTestId('time-blocks-empty').filter({ visible: true }).waitFor();
+  await page.getByTestId('block-add').filter({ visible: true }).click();
+  const blockForm = page.getByTestId('block-form'); await page.getByRole('dialog').waitFor();
+  await blockForm.getByRole('radio', { name: SETUP_STAFF_NAME, exact: true }).click();
+  await blockForm.getByRole('radio', { name: 'Whole days', exact: true }).click();
+  await blockForm.getByRole('textbox', { name: 'First day', exact: true }).fill(closedDate);
+  await blockForm.getByRole('textbox', { name: 'Last day', exact: true }).fill('2020-01-01');
+  await blockForm.getByRole('button', { name: 'Save block', exact: true }).click(); await blockForm.getByText('The last day cannot come before the first day.', { exact: true }).waitFor();
+  await blockForm.getByRole('textbox', { name: 'Last day', exact: true }).fill(closedDate);
+  await blockForm.getByRole('textbox', { name: 'Reason (optional)', exact: true }).fill('Day off');
+  await page.screenshot({ path: 'test-results/business-block-dialog-en-mobile.png' });
+  const blocked = page.waitForResponse(r => r.url() === blocksUrl && r.request().method() === 'POST');
+  await blockForm.getByRole('button', { name: 'Save block', exact: true }).click(); assert.equal((await blocked).status(), 201);
+  await blockForm.waitFor({ state: 'detached' }); await page.getByRole('status').filter({ hasText: 'Time blocked.' }).filter({ visible: true }).waitFor();
+  await page.getByText(`${SETUP_STAFF_NAME} · Day off`, { exact: true }).filter({ visible: true }).waitFor();
+  const stored = await (await context.request.get(`${blocksUrl}?businessId=${businessId}`)).json() as { blocks: { staff: { id: string } | null; allDay: boolean; fromDate: string; toDate: string }[] };
+  assert.deepEqual(stored.blocks.map(row => [row.staff?.id, row.allDay, row.fromDate, row.toDate]), [[staffId, true, closedDate, closedDate]], 'one staff day off, as booking journeys expect');
+  await page.screenshot({ path: 'test-results/business-blocks-en-mobile.png', fullPage: true });
   await backToHub(page, businessId); await openFromHub(page, 'policy');
   await page.getByRole('textbox', { name: 'Latest booking before start (minutes)', exact: true }).fill('0');
   await page.getByRole('textbox', { name: 'How far ahead customers can book (days)', exact: true }).fill('30');

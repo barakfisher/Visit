@@ -4,7 +4,7 @@ Approval and publication are independent. Review leaves `publishedAt=null`; an a
 
 ## Atomic publishing and configuration
 
-Readiness requires approved business, exact pilot `Asia/Jerusalem`, valid name/slug/location/category, at least one active service, active assigned staff for every active service, compatible business/staff hours with enough room for duration and both buffers, and an explicitly saved booking policy. Recurrence, overrides, DST boundaries, local horizon, elapsed notice and the same 15-minute grid as availability determine whether an eligible start fits. Existing bookings/blocks do not make an otherwise configured business unpublishable; they still reduce actual advisory availability.
+Readiness requires approved business, exact pilot `Asia/Jerusalem`, valid name/slug/location/category, at least one active service, active assigned staff for every active service, compatible business/staff hours with enough room for duration and both buffers, and an explicitly saved booking policy. Recurrence, time blocks, DST boundaries, local horizon, elapsed notice and the same 15-minute grid as availability determine whether an eligible start fits. Existing bookings/blocks do not make an otherwise configured business unpublishable; they still reduce actual advisory availability.
 
 Publish locks the business and its active owner/manager membership, revalidates authorization and all readiness inputs, then sets publication metadata in that transaction. Repeated publication retains the original timestamp. Readiness reads use repeatable-read snapshots; only the mutation is authoritative. Blockers are field-addressable API codes and localized instructions in the UI.
 

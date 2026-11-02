@@ -16,6 +16,7 @@ import { reserveHold, requireHold, releaseHold } from '../scheduling/reservation
 import { fenceScheduleSession } from './ScheduleImpact.service.js';
 import { setBookingAudit } from './BookingLifecycle.service.js';
 import { reviewedServiceSchema } from '../scheduling/booking-consent.utils.js';
+import { blocksCovering } from '../scheduling/time-blocks.js';
 
 export const manualBookingSchema = z.strictObject({
   finalConsent: z.literal(true), idempotencyKey: z.string().uuid(), serviceId: z.string().min(1).max(256), staffId: z.string().min(1).max(256),
@@ -71,7 +72,7 @@ export async function createManualBooking(session: AuthenticatedSession, busines
       if (+startsAt < +now + policy.minimumNoticeMinutes * 60000 || Temporal.PlainDate.compare(localDay, horizon) > 0) throw conflict('The requested time is outside the booking window.');
       const occupied = occupiedInterval(startsAt, service.durationMinutes, policy.bufferBeforeMinutes, policy.bufferAfterMinutes);
       await assertWorkingHours(businessId, business.timezone, input.staffId, startsAt, occupied, tx);
-      if (await tx.timeBlock.count({ where: { businessId, staffId: input.staffId, startsAt: { lt: occupied.endsAt }, endsAt: { gt: occupied.startsAt } } })) throw conflict('This provider has blocked this time.');
+      if (await tx.timeBlock.count({ where: blocksCovering(businessId, input.staffId, occupied.startsAt, occupied.endsAt) })) throw conflict('This provider has blocked this time.');
       // Share the consumer creation mutex before acquiring a reservation. This
       // avoids both contenders rejecting each other's provisional capacity.
       if (slotLock) { await releaseHold(reservationId, session.identity.id); await slotLock.release(); }

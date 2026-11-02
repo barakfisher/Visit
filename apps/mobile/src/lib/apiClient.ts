@@ -1,6 +1,6 @@
 /** Platform-independent transport. Native secure storage is injected by api.ts. */
 export class ApiError extends Error {
-  constructor(message: string, readonly code: string, readonly status: number, readonly fields?: Record<string, string>) {
+  constructor(message: string, readonly code: string, readonly status: number, readonly fields?: Record<string, string>, readonly details?: unknown) {
     super(message); this.name = 'ApiError';
   }
 }
@@ -55,8 +55,8 @@ export function createApiClient(dependencies: Dependencies) {
     }
   }
   function responseError(response: Response, body: unknown) {
-    const error = (body as { error?: { code?: string; message?: string; fields?: Record<string, string> } } | null)?.error;
-    return new ApiError(error?.message ?? 'The request could not be completed.', error?.code ?? 'REQUEST_FAILED', response.status, error?.fields);
+    const error = (body as { error?: { code?: string; message?: string; fields?: Record<string, string>; details?: unknown } } | null)?.error;
+    return new ApiError(error?.message ?? 'The request could not be completed.', error?.code ?? 'REQUEST_FAILED', response.status, error?.fields, error?.details);
   }
   async function refresh(version: number) {
     if (refreshing?.version === version) return refreshing.promise;

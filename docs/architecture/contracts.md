@@ -10,7 +10,7 @@ This contract separates identity (who is signed in) from authorization (which bu
 | Business | Tenant root | Primary key is `id`; includes a unique slug and IANA timezone. |
 | Membership | Business-owned | Links identity to business and role; unique per identity/business/role; provider access requires active approved membership. |
 | ProviderApplication | Business-owned | Pending/approved/rejected lifecycle; pending applicants have no provider permissions. |
-| Staff, Service, WorkingHours, ScheduleOverride, BookingPolicy, Booking | Business-owned | Every read/write is scoped to authorized `business_id`; owned references include the business id. |
+| Staff, Service, WorkingHours, TimeBlock, BookingPolicy, Booking | Business-owned | Every read/write is scoped to authorized `business_id`; owned references include the business id. |
 
 Every repository call that touches a business-owned row receives an `AuthorizedBusinessContext` created by server-side membership authorization. Record-id lookups also include the business id. The API rejects attempts to associate rows from different businesses, with composite database constraints as a second boundary.
 
@@ -58,7 +58,7 @@ Validation errors use `{ "error": { "code": "VALIDATION_ERROR", "message": "Requ
 
 ## Time and policy payloads
 
-Recurring schedule values are local wall-clock times plus weekday and business IANA timezone. An override is explicitly `open` with intervals or `closed`. An unspecified day is closed. An explicit date override takes precedence over recurrence. DST-nonexistent values are invalid; DST-ambiguous input must carry an explicit offset/fold. Confirmed booking payloads and API responses use ISO-8601 UTC instants and include the IANA timezone for display.
+Recurring schedule values are local wall-clock times plus weekday and business IANA timezone. An unspecified day is closed. A date is closed, wholly or in part, by a time block (`/api/provider/block-time`): hours on one local date, or whole local days from one date to another inclusive, for one staff member or the whole business. Whole days are stored from local midnight to the local midnight after the last day. DST-nonexistent values are invalid; DST-ambiguous input must carry an explicit offset/fold. Confirmed booking payloads and API responses use ISO-8601 UTC instants and include the IANA timezone for display.
 
 Business policy is stored per business: `minimumNoticeMinutes`, `maximumAdvanceDays`, `bufferBeforeMinutes`, `bufferAfterMinutes`, `cancellationCutoffMinutes`, and `rescheduleCutoffMinutes`. Recommended onboarding prefill is 60 minutes notice, 60 local days advance, zero buffers and 24-hour cancellation/reschedule cutoffs. Prefill is not an active policy: providers must explicitly save all fields before bookings are accepted. See [scheduling policy](scheduling-policy.md) for validation, clock changes and schedule-edit semantics.
 

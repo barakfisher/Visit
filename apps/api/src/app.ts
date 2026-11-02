@@ -74,7 +74,7 @@ export async function createApp({ google, account, providerReviewScope = 'live' 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof ZodError) { reply.code(400).send({ error: { code: "VALIDATION_ERROR", message: "Review the submitted fields." } }); return; }
     if (error instanceof AppError) {
-      reply.code(error.statusCode).send({ error: { code: error.code, message: error.message, ...(error.fields ? { fields: error.fields } : {}) } });
+      reply.code(error.statusCode).send({ error: { code: error.code, message: error.message, ...(error.fields ? { fields: error.fields } : {}), ...(error.details === undefined ? {} : { details: error.details }) } });
       return;
     }
     request.log.error(safeErrorLog(error), "request failed");

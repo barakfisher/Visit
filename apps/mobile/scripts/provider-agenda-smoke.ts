@@ -81,6 +81,30 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     await page.getByRole('button', { name: 'Open menu', exact: true }).filter({ visible: true }).click(); await page.getByRole('dialog').getByRole('button', { name: 'Home', exact: true }).click();
     // Leaving the agenda clears its draft by design, so the date is chosen again.
     await page.getByLabel('Agenda date', { exact: true }).filter({ visible: true }).fill(date); await firstCard.waitFor();
+    // Blocking the whole business on a day with an appointment is refused, lists it, and writes nothing.
+    const blockUrl = `${apiUrl}/api/provider/block-time`, blockForm = page.getByTestId('block-form');
+    await page.getByRole('button', { name: 'Block time / add a break', exact: true }).click();
+    assert.equal(await blockForm.getByRole('textbox', { name: 'Date', exact: true }).inputValue(), date);
+    await blockForm.getByRole('radio', { name: 'Whole days', exact: true }).click();
+    const refused = page.waitForResponse(response => response.url() === blockUrl && response.request().method() === 'POST');
+    await blockForm.getByRole('button', { name: 'Save block', exact: true }).click(); assert.equal((await refused).status(), 409);
+    const conflicts = blockForm.getByTestId('block-conflicts'); await conflicts.getByRole('alert').filter({ hasText: 'nothing was saved' }).waitFor();
+    await conflicts.getByText(/Agenda expert/).first().waitFor();
+    assert.equal(await prisma.timeBlock.count({ where: { businessId: business.id } }), 0);
+    await page.screenshot({ path: 'test-results/agenda-block-conflict-en-mobile.png' });
+    // A free day blocks, shows on that day as the whole business, all day, and removes after a confirmation.
+    const freeDate = new Date(+nextTuesday + 2 * 86400000).toISOString().slice(0, 10);
+    await blockForm.getByRole('textbox', { name: 'First day', exact: true }).fill(freeDate); await blockForm.getByRole('textbox', { name: 'Last day', exact: true }).fill(freeDate);
+    await blockForm.getByRole('textbox', { name: 'Reason (optional)', exact: true }).fill('Holiday');
+    const blocked = page.waitForResponse(response => response.url() === blockUrl && response.request().method() === 'POST');
+    await blockForm.getByRole('button', { name: 'Save block', exact: true }).click(); assert.equal((await blocked).status(), 201); await blockForm.waitFor({ state: 'detached' });
+    assert.deepEqual((await prisma.timeBlock.findMany({ where: { businessId: business.id }, select: { staffId: true, allDay: true, reason: true } })), [{ staffId: null, allDay: true, reason: 'Holiday' }]);
+    await page.getByLabel('Agenda date', { exact: true }).filter({ visible: true }).fill(freeDate);
+    const agendaBlocks = page.getByTestId('agenda-blocks'); await agendaBlocks.getByText('Whole business · Holiday', { exact: true }).waitFor();
+    await agendaBlocks.getByText(/All day/).waitFor();
+    await agendaBlocks.getByRole('button', { name: 'Remove block', exact: true }).click(); await agendaBlocks.getByRole('button', { name: 'Confirm', exact: true }).click();
+    await agendaBlocks.waitFor({ state: 'detached' }); assert.equal(await prisma.timeBlock.count({ where: { businessId: business.id } }), 0);
+    await page.getByLabel('Agenda date', { exact: true }).filter({ visible: true }).fill(date); await firstCard.waitFor();
     page.once('dialog', dialog => dialog.dismiss()); await firstCard.getByRole('button', { name: 'Cancel appointment', exact: true }).click(); assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: first.id } })).status, 'CONFIRMED');
     const cancelUrl = `${apiUrl}/v1/provider/businesses/${business.id}/bookings/${first.id}/cancel`;
     await page.route(cancelUrl, route => route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":{"code":"UNAVAILABLE"}}' }));
@@ -90,6 +114,6 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     await page.goto(`${webUrl}/provider/dashboard?businessId=${business.id}`); await page.getByLabel('תאריך ביומן', { exact: true }).fill(date); await page.getByRole('button', { name: 'תצוגה שבועית', exact: true }).click(); await page.getByText('יומן שבועי', { exact: true }).waitFor();
     assert.equal(await page.locator('html').getAttribute('dir'), 'rtl'); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
     await page.screenshot({ path: 'test-results/agenda-week-he-mobile.png', fullPage: true }); await page.setViewportSize({ width: 1280, height: 900 }); await page.screenshot({ path: 'test-results/agenda-week-he-desktop.png', fullPage: true });
-    console.log('PASS: local daily/weekly agenda, loading/error/retry/empty, hours dialog no-write conflict, active hold protection, stale preview refusal, pending commit that stays on the hours screen, declined/failed/successful provider cancellation and Hebrew RTL.');
+    console.log('PASS: local daily/weekly agenda, loading/error/retry/empty, hours dialog no-write conflict, block refusal over appointments and a whole-business day block, active hold protection, stale preview refusal, pending commit that stays on the hours screen, declined/failed/successful provider cancellation and Hebrew RTL.');
   } finally { releaseLoading?.(); releaseSave?.(); await context.close(); }
 }

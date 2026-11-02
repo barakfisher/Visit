@@ -26,8 +26,6 @@ VIS-4 implementation contract and audit, 2026-10-24. Business IDs are selectors.
 | StaffService | Business-owned | Composite references include businessId for both staff and service. |
 | BusinessWeeklyAvailability | Business-owned | Business FK and non-null businessId; replace/delete predicates include the tenant. |
 | StaffWeeklyAvailability | Business-owned | Composite (businessId, staffId) FK, preventing staff from another business. |
-| ScheduleOverride | Business-owned | Business FK; all reads and replacements include businessId. |
-| StaffScheduleOverride | Business-owned | Composite (businessId, staffId) FK. |
 | BookingPolicy | Business-owned | Unique businessId; provider policy writes require current OWNER/MANAGER membership. |
 | Booking | Business-owned | Business FK and composite staff/service references; global customer identity reference is intentional. Customer sees only own records across businesses. |
 | BookingEvent | Business-owned | Composite booking/business FK; trigger-generated append-only lifecycle audit, owned customer or current owner/manager reads; actor IDs/contacts omitted from public projections. Privileged parent Booking purge is the explicit retention exception; no deletion API. |
@@ -66,7 +64,7 @@ The personal `/v1/me` projection intentionally lists the identity's own membersh
 - Private service/settings/staff/agenda reads and mutations across both HTTP surfaces, valid dual-business access and explicit selection for ambiguity.
 - Customer-owned booking projections, foreign confirm/cancel/reschedule, wrong-business provider cancellation and time-block operations, with persisted-record assertions.
 - Session/global identity projection isolation, non-admin review denial and revoked membership/approval/session handling.
-- Direct database rejection of both StaffService links, staff hours/overrides, manual blocks and booking staff/service references across businesses.
+- Direct database rejection of both StaffService links, staff hours, staff time blocks and booking staff/service references across businesses.
 - Safe archive behavior for cancelled booking history without changing another tenant's service.
 
 Run `npm test --workspace @visit/api`. For migrations and integration tests on a fresh isolated database/Redis, run `npm run test:infra -- --api-tests`. This builds current source, applies migrations, runs the complete API suite inside its isolated API container and performs dependency/migration failure checks. It cleans only its own project/volumes. Fixture tests clean their unique rows; they never reset existing developer business data.

@@ -10,6 +10,7 @@ import { ServiceCatalog } from '../ServiceCatalog';
 import { SessionLoading } from '../SessionLoading';
 import { BusinessProfileForm, type BusinessProfile } from './BusinessProfileForm';
 import { AvailabilityEditor } from './AvailabilityEditor';
+import { TimeBlocksEditor } from './TimeBlocksEditor';
 import { StaffEditor } from './StaffEditor';
 import { PolicyEditor } from './PolicyEditor';
 import { ProviderSharing } from './ProviderSharing';
@@ -53,6 +54,8 @@ function Section({ business, section }: { business: BusinessProfile; section: Se
     : null;
   return <SettingsPage back={<Link testID="setup-back" href={hub} dismissTo className="min-h-touch py-3 font-semibold text-brand">{t('setup.back')}</Link>} title={t(`setup.${section}`)}>
     {editor ? <View className="gap-4 rounded-card border border-line bg-surface p-card">{editor}</View> : <PublicationPanel businessId={business.id} />}
+    {/* Blocked time sits under the weekly hours: holidays and days off change the same availability. */}
+    {section === 'hours' ? <View className="gap-4 rounded-card border border-line bg-surface p-card"><TimeBlocksEditor businessId={business.id} /></View> : null}
   </SettingsPage>;
 }
 export function SharingScreen({ businessId }: { businessId: string }) {

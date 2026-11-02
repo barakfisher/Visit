@@ -4,8 +4,8 @@
 
 `src/scheduling/availability.ts` is a pure engine with an explicit clock. The
 public repository validates an issued `PublicBusinessContext`, rechecks business
-approval and active service scope, then loads business/staff hours, overrides,
-bookings and blocks in one repeatable-read snapshot. Relation queries batch all
+approval and active service scope, then loads business/staff hours,
+bookings and time blocks (the staff member's own and the whole business's) in one repeatable-read snapshot. Relation queries batch all
 assigned active resources, avoiding per-staff round trips. Every relation carries
 business scope. Unassigned/inactive resources, foreign services and unapproved
 businesses are not returned. No customer identity, booking ID or block reason is
@@ -28,11 +28,13 @@ horizon return no candidates. Closed intervals do not generate starts.
 
 ## Interval semantics
 
-Working hours use the VIS-10 precedence: explicit date override replaces recurring
-hours; business/staff windows intersect; staff with no recurrence inherits business
+Working hours are weekly only: business/staff windows intersect; staff with no recurrence inherits business
 hours; a configured staff recurrence closes unspecified days. Adjacent windows are
 merged before timezone resolution and intersection; a contiguous schedule boundary
-is not an artificial break. Separated lunch breaks remain closed.
+is not an artificial break. Separated lunch breaks remain closed. Holidays and days
+off are time blocks, not hours: a block with no staff member covers every staff
+member, including one added later, and makes overlapping candidates unavailable
+with `MANUAL_BLOCK` (decisions.md, "Time blocks with a reason — 2026-11-02").
 
 **The entire occupied interval, including both buffers, must fit inside the
 intersection of business and staff working hours.** Buffers cannot extend into a
@@ -69,8 +71,8 @@ wall-clock duration arithmetic would exclude them.
 Actual opening/closing boundaries must resolve uniquely. If a weekly boundary is
 nonexistent or ambiguous on a transition day, **that interval is skipped** with
 `NONEXISTENT_SCHEDULE_BOUNDARY` or `AMBIGUOUS_SCHEDULE_BOUNDARY`. No implicit shift
-or fold choice is invented. Use an explicit date override with unambiguous opening
-and closing boundaries; the present override contract has no offset/fold field.
+or fold choice is invented. To close part of such a day, use a time block, whose
+boundaries must also resolve uniquely (`INVALID_LOCAL_TIME`).
 A continuous adjacent union is normalized first, so an internal redundant boundary
 at a clock change does not incorrectly close an otherwise valid continuous window.
 Overnight hours remain outside the current same-day schedule contract.
@@ -101,7 +103,8 @@ snapshots; availability for a new booking uses the current active catalog.
 
 - `npm test --workspace @visit/api`: pure buffers/splits/adjacency/capacity/expiry/
   blocks/notice/horizon matrix; New York and Jerusalem spring/fall transitions;
-  scoped repository and compatibility parity; staff recurrence/overrides; direct
+  scoped repository and compatibility parity; staff recurrence and staff/business
+  blocks (`time-blocks.test.ts`); direct
   hold/reschedule buffer rejection and stale-confirmation rejection. Existing
   PostgreSQL concurrency guard and tenant-isolation suites remain enabled.
 - `npm run test:foundation --workspace @visit/mobile`: repeated clock label tests.

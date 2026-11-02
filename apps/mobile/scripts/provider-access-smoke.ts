@@ -30,8 +30,13 @@ export async function providerAccessSmoke({ browser, webUrl, apiUrl }: { browser
     // The draft check needs the agenda, which a published business always has.
     await prisma.business.updateMany({ where: { id: { in: businesses } }, data: { publishedAt: new Date() } });
     await page.goto(`${webUrl}/provider/dashboard?businessId=${businesses[0]}`); await page.getByRole('heading', { name: 'Protected studio 0', exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Block time / add a break', exact: true }).click(); await page.getByLabel('Break reason').fill('Private draft that must be discarded');
-    await page.getByRole('button', { name: 'Protected studio 1', exact: true }).click(); await page.getByRole('heading', { name: 'Protected studio 1', exact: true }).waitFor(); assert.equal(await page.getByLabel('Break reason').count(), 0);
+    // A block draft never follows the owner into another business: the dialog starts empty there.
+    const blockReason = () => page.getByTestId('block-form').getByRole('textbox', { name: 'Reason (optional)', exact: true });
+    await page.getByRole('button', { name: 'Block time / add a break', exact: true }).click(); await blockReason().fill('Private draft that must be discarded');
+    await page.getByTestId('block-form').getByRole('button', { name: 'Cancel', exact: true }).click(); await page.getByTestId('block-form').waitFor({ state: 'detached' });
+    await page.getByRole('button', { name: 'Protected studio 1', exact: true }).click(); await page.getByRole('heading', { name: 'Protected studio 1', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Block time / add a break', exact: true }).click(); assert.equal(await blockReason().inputValue(), '');
+    await page.getByTestId('block-form').getByRole('button', { name: 'Cancel', exact: true }).click();
     await page.goto(`${webUrl}/provider/dashboard?businessId=foreign-business`); await page.getByRole('alert').filter({ hasText: 'An approved provider account is required' }).waitFor(); assert.equal(await page.getByTestId(/^(setup-guide|dashboard)-/).count(), 0);
     await page.goto(`${webUrl}/provider/team/${businesses[0]}`); await page.getByLabel('Verified recipient contact').waitFor();
     await page.getByRole('button', { name: 'Manager', exact: true }).waitFor();

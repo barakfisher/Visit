@@ -1,4 +1,5 @@
-import { readProviderAgenda, createAgendaBlock, deleteAgendaBlock, timeBlockSchema } from '../repositories/ProviderAgenda.service.js';
+import { readProviderAgenda } from '../repositories/ProviderAgenda.service.js';
+import { createTimeBlock, deleteTimeBlock, listTimeBlocks, timeBlockSchema } from '../repositories/TimeBlocks.service.js';
 import { runBookingAttempt } from '../scheduling/booking-attempts.service.js';
 import { reviewedServiceSchema } from '../scheduling/booking-consent.utils.js';
 import { publicBusinessWhere } from '../security/business-eligibility.js';
@@ -16,6 +17,7 @@ import { requireHold, releaseHold } from '../scheduling/reservations.js';
 import { listCustomerBookings } from '../repositories/bookings.js';
 
 // Compatibility boundary: reuse the existing validated, tenant-scoped v1 handlers.
+// Error details are not forwarded: a v1 handler's details must not reach a route with other callers.
 async function invoke(app: FastifyInstance, request: FastifyRequest, method: HTTPMethods, url: string, payload?: unknown) {
   const response = await app.inject({ method, url, headers: { ...(request.headers['x-visit-schedule-preview'] ? { 'x-visit-schedule-preview': request.headers['x-visit-schedule-preview'] } : {}), ...(request.headers.origin ? { origin: request.headers.origin } : {}), ...(request.headers['sec-fetch-site'] ? { 'sec-fetch-site': request.headers['sec-fetch-site'] } : {}), ...(request.headers.authorization ? { authorization: request.headers.authorization } : {}), ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}), 'x-visit-client': request.headers['x-visit-client'] as string ?? 'web' }, ...(payload !== undefined ? { payload: payload as Record<string, unknown> } : {}) });
   const body = response.json();
@@ -39,7 +41,7 @@ export async function registerScreenFlows(app: FastifyInstance) {
   app.get('/api/bookings/:bookingId/provider', async request => {
     const { bookingId } = z.object({ bookingId: z.string().min(1) }).parse(request.params);
     const { context, serviceId, booking } = await requireOwnedReschedule(await authenticate(request), bookingId);
-    const provider = await prisma.business.findUniqueOrThrow({ where: { id: context.businessId }, select: { id: true, name: true, timezone: true, location: true, category: true, services: { where: { id: serviceId } }, weeklyAvailability: true, scheduleOverrides: true, bookingPolicy: true } });
+    const provider = await prisma.business.findUniqueOrThrow({ where: { id: context.businessId }, select: { id: true, name: true, timezone: true, location: true, category: true, services: { where: { id: serviceId } }, weeklyAvailability: true, bookingPolicy: true } });
     return { revision: booking.revision, provider: { ...provider, services: provider.services.map(service => ({ ...service, name: booking.serviceName, durationMinutes: booking.serviceDurationMinutes, priceMinor: booking.servicePriceMinor, currency: booking.serviceCurrency })) } };
   });
   app.get('/api/bookings/:bookingId/availability', async request => {
@@ -61,7 +63,7 @@ export async function registerScreenFlows(app: FastifyInstance) {
   });
   app.get('/api/providers/:providerId', async (request) => {
     const { providerId } = request.params as { providerId: string };
-    const provider = await prisma.business.findFirst({ where: { id: providerId, ...publicBusinessWhere }, select: { id: true, name: true, timezone: true, location: true, category: true, description: true, contactEmail: true, contactPhone: true, services: { where: { active: true }, orderBy: { name: 'asc' } }, weeklyAvailability: true, scheduleOverrides: true, bookingPolicy: true } });
+    const provider = await prisma.business.findFirst({ where: { id: providerId, ...publicBusinessWhere }, select: { id: true, name: true, timezone: true, location: true, category: true, description: true, contactEmail: true, contactPhone: true, services: { where: { active: true }, orderBy: { name: 'asc' } }, weeklyAvailability: true, bookingPolicy: true } });
     if (!provider) throw notFound();
     return { provider };
   });
@@ -131,17 +133,22 @@ export async function registerScreenFlows(app: FastifyInstance) {
     const context = await providerContext(request, businessId);
     return readProviderAgenda(await requireBusinessMembership(context.identity.id, context.businessId, ['OWNER', 'MANAGER']), date, days === '7' ? 7 : 1);
   });
+  app.get('/api/provider/block-time', async request => {
+    const { businessId } = z.strictObject({ businessId: z.string().optional() }).parse(request.query);
+    const context = await providerContext(request, businessId);
+    return listTimeBlocks(await requireBusinessMembership(context.identity.id, context.businessId, ['OWNER', 'MANAGER']));
+  });
   app.post('/api/provider/block-time', async (request, reply) => {
     const session = await authenticate(request), input = timeBlockSchema.parse(request.body);
     const { businessId } = await providerContext(request, input.businessId);
-    const result = await createAgendaBlock(await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']), input, session);
+    const result = await createTimeBlock(await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']), input, session);
     reply.code(201); return result;
   });
   app.delete('/api/provider/block-time/:blockId', async request => {
     const session = await authenticate(request);
     const { businessId } = await providerContext(request, z.object({ businessId: z.string().optional() }).parse(request.query).businessId);
     const { blockId } = z.object({ blockId: z.string().min(1) }).parse(request.params);
-    return deleteAgendaBlock(await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']), blockId, session);
+    return deleteTimeBlock(await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']), blockId, session);
   });
   app.post('/api/provider/services', async (request, reply) => {
     const { businessId, identity } = await providerContext(request, (request.query as { businessId?: string }).businessId);
