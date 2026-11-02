@@ -55,7 +55,7 @@ export async function upcomingAppointmentsSmoke({ browser, webUrl, apiUrl, prism
     await page.waitForURL(url => url.pathname === `/booking/${business.id}` && url.searchParams.get('fromBookingId') === first.id);
     await selectBookingDate(page, date); await preferBookingTime(page, '12:00');
     await page.getByRole('button', { name: /12:00 · Upcoming expert/ }).click();
-    await page.getByRole('button', { name: 'Confirm reschedule', exact: true }).click(); await page.getByRole('heading', { name: 'You’re all set', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Confirm reschedule', exact: true }).click(); await page.getByRole('heading', { name: 'Appointment rescheduled', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Back to Visit', exact: true }).click();
     const secondCard = page.getByTestId(`active-booking-${second.id}`); await secondCard.waitFor();
     await page.goto(`${webUrl}/booking/${business.id}`);

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { safeAuthReturnTo } from '@visit/contracts';
-import { hasConfirmedBooking, parseBookingDetailsId } from '../src/lib/BookingDetails.utils';
+import { bookingDetailsCopyKeys, hasConfirmedBooking, parseBookingDetailsId, parseConfirmationOutcome, RESCHEDULED_OUTCOME, showsScheduledNotes } from '../src/lib/BookingDetails.utils';
 import type { BookingDetails } from '../src/types/BookingDetails.types';
 
 const booking: BookingDetails = {
@@ -44,4 +44,23 @@ test('authentication returns preserve only exact appointment destinations', () =
   }
   assert.equal(safeAuthReturnTo('/appointments'), '/appointments');
   for (const path of ['/appointments/', '/appointments?customerId=x', '//evil.test/appointments', 'https://evil.test/appointment/a']) assert.equal(safeAuthReturnTo(path), undefined);
+});
+
+test('a reschedule confirms with its own heading; a new booking and the details page keep theirs', () => {
+  assert.deepEqual(bookingDetailsCopyKeys('confirmation', true, 'booked'), { heading: 'details.success', subtitle: 'details.confirmed' });
+  assert.deepEqual(bookingDetailsCopyKeys('confirmation', true, RESCHEDULED_OUTCOME), { heading: 'details.rescheduled', subtitle: 'details.rescheduledNote' });
+  assert.deepEqual(bookingDetailsCopyKeys('details', true, RESCHEDULED_OUTCOME), { heading: 'details.title', subtitle: 'details.confirmed' });
+  for (const outcome of ['booked', RESCHEDULED_OUTCOME] as const) {
+    assert.deepEqual(bookingDetailsCopyKeys('confirmation', false, outcome), { heading: 'details.title', subtitle: undefined });
+  }
+});
+
+test('only the exact reschedule marker selects the reschedule copy', () => {
+  assert.equal(parseConfirmationOutcome(RESCHEDULED_OUTCOME), RESCHEDULED_OUTCOME);
+  for (const value of [undefined, null, '', 'RESCHEDULED', ['rescheduled'], 'booked', 'other']) assert.equal(parseConfirmationOutcome(value), 'booked');
+});
+
+test('cutoff and confirmation-message notes show only while the appointment is scheduled', () => {
+  assert.equal(showsScheduledNotes(booking), true);
+  for (const status of ['CANCELLED', 'COMPLETED', 'NO_SHOW'] as const) assert.equal(showsScheduledNotes({ status }), false);
 });

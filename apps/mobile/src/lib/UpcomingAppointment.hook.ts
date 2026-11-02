@@ -11,6 +11,7 @@ import { appointmentRefusalKey, canContinueAppointmentAction } from './Appointme
 import { ApiError } from './api';
 import { appointmentDate, appointmentTime, timePolicyNote } from './appointmentTime';
 import { isBookingQuery } from './BookingQueries.utils';
+import { translateCount } from '../i18n/plural';
 import type { UpcomingAppointmentView } from '../types/UpcomingAppointment.types';
 export function useUpcomingAppointment(businessId?: string, enabled = true): UpcomingAppointmentView {
   const { t, locale } = useAppLocale(), router = useRouter(), client = useQueryClient();
@@ -54,7 +55,7 @@ export function useUpcomingAppointment(businessId?: string, enabled = true): Upc
   return { state: !identity || !enabled || !focused ? 'hidden' : query.isPending || query.isFetching ? 'loading' : query.isError ? 'error' : booking ? 'ready' : 'hidden',
     heading: t(businessId ? 'upcoming.context' : 'upcoming.heading'), loadingLabel: t('home.loadingBooking'), error: query.isError ? t('home.bookingFailure') : failure?.scope === scopeKey && failure.id === booking?.id ? failure.message : '', retryLabel: t('home.retryBooking'),
     appointment: ready && booking ? { id: booking.id, service: booking.service.name, business: booking.business.name, staff: booking.staff.displayName, when: `${appointmentDate(booking.startsAt, booking.business.timezone, locale)} · ${appointmentTime(booking.startsAt, booking.business.timezone, locale)}`, timeNote: timePolicyNote(booking.business.timezone, locale), canCancel: booking.actions.canCancel, canReschedule: booking.actions.canReschedule } : null,
-    additionalLabel: query.data?.additionalCount ? t('upcoming.more', { count: query.data.additionalCount }) : '', detailsLabel: t('details.open'), cancelLabel: t('details.cancel'), rescheduleLabel: t('details.reschedule'), busy,
+    additionalLabel: query.data?.additionalCount ? translateCount(locale, 'upcoming.more', query.data.additionalCount) : '', detailsLabel: t('details.open'), cancelLabel: t('details.cancel'), rescheduleLabel: t('details.reschedule'), busy,
     onRetry: () => { setFailure(null); if (identity && enabled && focused) void query.refetch(); }, onAll: () => router.push('/appointments'),
     onDetails: () => { if (ready && booking && !operation.current) router.push({ pathname: '/appointment/[bookingId]', params: { bookingId: booking.id } }); },
     onReschedule: () => { if (ready && booking?.actions.canReschedule && !operation.current) router.push({ pathname: '/booking/[providerId]', params: { providerId: booking.business.id, serviceId: booking.service.id, fromBookingId: booking.id } }); }, onCancel: () => void cancel(),

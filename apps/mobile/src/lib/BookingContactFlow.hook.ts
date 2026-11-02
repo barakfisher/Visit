@@ -21,6 +21,8 @@ import { useCompactBooking } from './CompactBooking.hook';
 import { bookingSlotId, validBookingDate } from './CompactBooking.utils';
 import type { AdvisorySelection } from '../types/CompactBooking.types';
 import { useAuthStore } from '@/src/state/auth';
+import { cancellationCutoffText } from '@/src/i18n/cancellationCutoff';
+import { RESCHEDULED_OUTCOME } from './BookingDetails.utils';
 import type { BookingContactReadiness } from '@/src/types/BookingContact.types';
 import { formatMoney, type ProviderDetail, type Slot } from '@/src/types/flows';
 const slotId = bookingSlotId;
@@ -142,7 +144,7 @@ export function useBookingContactFlow() {
       if (result && (isCommittedBookingOutcome(result) || Boolean(fromBookingId && result.status === 'CANCELLED')) && isCurrent()) {
         if (fromBookingId) useRescheduleAttempt.getState().set(null); else useBookingAttempt.getState().set(null);
         await Promise.allSettled([client.invalidateQueries({ predicate: query => isBookingQuery(query.queryKey) })]);
-        if (isCurrent()) { if (result.status === 'CONFIRMED') router.replace({ pathname: '/confirmation/[bookingId]', params: { bookingId: result.id } }); else router.replace('/appointments'); }
+        if (isCurrent()) { if (result.status === 'CONFIRMED') router.replace({ pathname: '/confirmation/[bookingId]', params: fromBookingId ? { bookingId: result.id, outcome: RESCHEDULED_OUTCOME } : { bookingId: result.id } }); else router.replace('/appointments'); }
       }
       operation.current = false;
       if (mounted.current) setBusy(false);
@@ -165,7 +167,7 @@ export function useBookingContactFlow() {
     businessAndService: `${provider.name} · ${reviewedService.name}`,
     timeAndStaff: `${new Intl.DateTimeFormat(locale === 'he' ? 'he-IL' : 'en-US', { dateStyle: 'full', timeStyle: 'short', timeZone: provider.timezone }).format(new Date(selected.startsAt))} · ${selected.staffName}`,
     durationAndPrice: `${reviewedService.durationMinutes} ${t('bookingCommit.minutes')} · ${formatMoney(reviewedService.priceMinor, reviewedService.currency)}`,
-    cancellation: t('bookingCommit.cancel', { minutes: provider.bookingPolicy?.cancellationCutoffMinutes ?? 0 }),
+    cancellation: cancellationCutoffText(locale, provider.bookingPolicy?.cancellationCutoffMinutes ?? 0),
   } : null;
   const detailsFailure = details.error instanceof ApiError ? details.error : null;
   const detailsError = details.isError ? t(bookingLoadRefusalKey(detailsFailure?.code, detailsFailure?.status)) : '';

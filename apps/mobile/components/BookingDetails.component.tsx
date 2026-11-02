@@ -10,13 +10,13 @@ export function BookingDetails(view: BookingDetailsView) {
     {view.loading ? <View className="flex-row gap-2"><ActivityIndicator accessibilityLabel={view.loadingLabel} /><AppText>{view.loadingLabel}</AppText></View> : null}
     {view.needsSignIn ? <ActionButton secondary label={view.signInLabel} onPress={view.onSignIn} /> : null}
     {view.error ? <View className="gap-3"><AppText accessibilityRole="alert" className="text-danger">{view.error}</AppText><ActionButton secondary label={view.retryLabel} onPress={view.onRetry} /></View> : null}
-    {booking ? <View className="gap-4 rounded-card border border-line bg-surface p-5"><AppText className="text-xl font-semibold text-ink">{booking.service.name}</AppText><AppText>{booking.business.name} · {booking.staff.displayName}</AppText><AppText className="font-semibold text-brand">{view.when}</AppText><AppText>{view.status}</AppText><AppText>{view.durationAndPrice}</AppText><AppText className="text-sm text-muted">{view.timeNote}</AppText><AppText>{view.cancellation}</AppText>
+    {booking ? <View className="gap-4 rounded-card border border-line bg-surface p-5"><AppText className="text-xl font-semibold text-ink">{booking.service.name}</AppText><AppText>{booking.business.name} · {booking.staff.displayName}</AppText><AppText className="font-semibold text-brand">{view.when}</AppText><AppText>{view.status}</AppText><AppText>{view.durationAndPrice}</AppText><AppText className="text-sm text-muted">{view.timeNote}</AppText>{view.cancellation ? <AppText>{view.cancellation}</AppText> : null}
       {booking.actions.canExport ? <ActionButton secondary label={view.exportLabel} busy={view.exporting} disabled={view.busy} onPress={view.onExport} /> : null}
       {view.exportError ? <AppText accessibilityRole="alert" className="text-danger">{view.exportError}</AppText> : null}
       {booking.actions.canReschedule ? <ActionButton secondary label={view.rescheduleLabel} onPress={view.onReschedule} /> : null}
       {booking.actions.canCancel ? <ActionButton secondary label={view.cancelLabel} busy={view.busy} disabled={view.exporting} onPress={view.onCancel} /> : null}
       {!view.detailsMode ? <ActionButton secondary label={view.detailsLabel} onPress={view.onDetails} /> : null}
-      <AppText>{view.notificationNote}</AppText><ActionButton secondary disabled label={view.unsupportedSms} /><ActionButton secondary disabled label={view.unsupportedWhatsapp} />
+      {view.notificationNote ? <><AppText>{view.notificationNote}</AppText><ActionButton secondary disabled label={view.unsupportedSms} /><ActionButton secondary disabled label={view.unsupportedWhatsapp} /></> : null}
     </View> : null}
     <ActionButton secondary label={view.historyLabel} onPress={view.onHistory} /><ActionButton secondary label={view.homeLabel} onPress={view.onHome} />
   </ScrollView>;

@@ -5,6 +5,7 @@ import type { Browser, Locator, Page } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
 import type { redis as Redis } from '../../api/src/infra/redis.js';
 import { translate } from '../src/i18n/messages';
+import { translateCount } from '../src/i18n/plural';
 import { SETUP_SERVICE } from './business-setup-smoke';
 import { preferBookingTime } from './booking-controls.utils';
 import { CANCELLATION_CUTOFF, RESCHEDULE_CUTOFF } from '../src/lib/AppointmentLifecycle.utils';
@@ -173,7 +174,7 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     await beforeCancel.has(h2).waitFor();
     await beforeCancel.tile('dashboard.revenue', await money(provider.page, PRICE_MINOR));
     // Home shows the next appointment (h1) and counts the later h2 as one more.
-    const oneMore = translate('he', 'upcoming.more', { count: 1 });
+    const oneMore = translateCount('he', 'upcoming.more', 1);
     await he.page.goto(webUrl);
     await homeCard(he.page, h1).getByRole('button', { name: oneMore, exact: true }).waitFor();
     await he.page.goto(`${webUrl}/appointment/${h2}`);

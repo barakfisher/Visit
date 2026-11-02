@@ -87,6 +87,7 @@ function RootLayoutNav() {
           <Stack.Screen name="booking" options={{ headerShown: false }} />
           <Stack.Screen name="provider" options={{ headerShown: false }} />
           <Stack.Screen name="appointment" options={{ headerShown: false }} />
+          <Stack.Screen name="confirmation/[bookingId]" options={{ headerShown: false }} />
           <Stack.Screen name="appointments" options={{ headerShown: false }} />
           <Stack.Screen name="account" options={{ headerShown: false }} />
           <Stack.Screen name="discover" options={{ headerShown: false }} />
