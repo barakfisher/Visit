@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from './AppText';
 import { ActionButton } from './ActionButton';
 import type { NavigationViewProps } from '../src/types/NavigationView.types';
-export function NavigationView({ t, direction, trigger, open, providerMode, loading, failed, managed, applicationStatus, becomeProvider, choosingBusiness, busy, error, close, onOpen, onRetry, onHome, onAccount, onApplication, onSwitchMode, onBusiness, onLogout }: NavigationViewProps) {
+export function NavigationView({ t, direction, trigger, open, providerMode, loading, failed, managed, applicationStatus, becomeProvider, choosingBusiness, busy, error, close, onOpen, onRetry, onHome, onAccount, onApplication, onSwitchMode, onBusiness, onLogout, onSettings, onTeam }: NavigationViewProps) {
   return <View style={{ direction }} className="border-b border-line bg-surface">
     <View className="mx-auto w-full max-w-3xl flex-row items-center justify-between gap-3 px-5 py-2">
       <Pressable ref={trigger} accessibilityRole="button" accessibilityLabel={t('nav.open')} accessibilityState={{ expanded: open }} onPress={onOpen} className="min-h-12 min-w-12 items-center justify-center rounded-control border border-line"><AppText style={styles.centered} className="text-2xl font-semibold text-brand">☰</AppText></Pressable>
@@ -21,6 +21,8 @@ export function NavigationView({ t, direction, trigger, open, providerMode, load
             <AppText accessibilityRole="header" className="text-xl font-bold text-ink">{t('nav.menu')}</AppText>
             <ActionButton secondary label={t('nav.close')} onPress={close} />
             <ActionButton secondary label={t('nav.home')} onPress={onHome} />
+            {onSettings ? <ActionButton secondary label={t('nav.businessSettings')} onPress={onSettings} /> : null}
+            {onTeam ? <ActionButton secondary label={t('nav.teamAccess')} onPress={onTeam} /> : null}
             <ActionButton secondary label={t('nav.account')} onPress={onAccount} />
             {loading ? <AppText>{t('account.loading')}</AppText> : null}
             {failed ? <><AppText accessibilityRole="alert">{t('account.failure')}</AppText><ActionButton secondary label={t('common.retry')} onPress={onRetry} /></> : <>

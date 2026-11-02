@@ -7,7 +7,7 @@ import { ActionButton } from '../ActionButton';
 import { useAppLocale } from '@/src/i18n/LocaleContext';
 import { apiRequest } from '@/src/lib/api';
 export type BusinessProfile = { id: string; name: string; slug: string; timezone: string; location: string | null; category: string; description: string | null; contactPhone: string | null; contactEmail: string | null; approvalStatus: string; publishedAt: string | null };
-export function BusinessProfileForm({ business }: { business: BusinessProfile }) {
+export function BusinessProfileForm({ business, onSaved }: { business: BusinessProfile; onSaved?: () => void }) {
   const { t } = useAppLocale(), client = useQueryClient();
   const [name, setName] = useState(business.name), [location, setLocation] = useState(business.location ?? ''), [category, setCategory] = useState(business.category);
   const [description, setDescription] = useState(business.description ?? ''), [phone, setPhone] = useState(business.contactPhone ?? ''), [email, setEmail] = useState(business.contactEmail ?? '');
@@ -15,7 +15,7 @@ export function BusinessProfileForm({ business }: { business: BusinessProfile })
   const validPhone = !phone.trim() || /^\+[1-9]\d{7,14}$/.test(phone.trim()), validEmail = !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   async function save() {
     if (busy) return; setBusy(true); setFeedback('');
-    try { await apiRequest(`/v1/provider/businesses/${business.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim(), location: location.trim(), category: category.trim(), description: description.trim() || null, contactPhone: phone.trim() || null, contactEmail: email.trim() || null }) }); setFeedback('saved'); await client.invalidateQueries({ queryKey: ['provider', business.id] }); }
+    try { await apiRequest(`/v1/provider/businesses/${business.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim(), location: location.trim(), category: category.trim(), description: description.trim() || null, contactPhone: phone.trim() || null, contactEmail: email.trim() || null }) }); setFeedback('saved'); await client.invalidateQueries({ queryKey: ['provider', business.id] }); onSaved?.(); }
     catch { setFeedback('error'); } finally { setBusy(false); }
   }
   return <View className="gap-4"><AppText>{t('setup.publicHint')}</AppText>

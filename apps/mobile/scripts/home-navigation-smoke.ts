@@ -94,7 +94,15 @@ export async function homeNavigationSmoke({ browser, webUrl, apiUrl, prisma, run
     await drawer.getByRole('button', { name: other.name, exact: true }).click();
     await manager.page.waitForURL(url => url.pathname === '/provider/dashboard' && url.searchParams.get('businessId') === otherId);
     await manager.page.getByRole('heading', { name: other.name, exact: true }).waitFor();
-    await manager.page.getByRole('button', { name: 'Open menu', exact: true }).click();
+    // Business settings and team access are in the provider menu; Home is the agenda (decisions.md, 2026-11-01 and 2026-11-02).
+    assert.equal(await manager.page.getByRole('dialog').getByRole('button', { name: 'Business settings' }).count(), 0);
+    await manager.page.getByRole('button', { name: 'Open menu', exact: true }).click(); await manager.page.getByRole('dialog').getByRole('button', { name: 'Business settings', exact: true }).click();
+    await manager.page.waitForURL(url => url.pathname === `/provider/${otherId}`); await manager.page.getByRole('heading', { name: 'Business settings', exact: true }).filter({ visible: true }).waitFor();
+    await manager.page.getByRole('button', { name: 'Open menu', exact: true }).filter({ visible: true }).click(); await manager.page.getByRole('dialog').getByRole('button', { name: 'Team access', exact: true }).click();
+    await manager.page.waitForURL(url => url.pathname === `/provider/team/${otherId}`); await manager.page.getByRole('heading', { name: 'Team access', exact: true }).filter({ visible: true }).waitFor();
+    await manager.page.getByRole('button', { name: 'Open menu', exact: true }).filter({ visible: true }).click(); await manager.page.getByRole('dialog').getByRole('button', { name: 'Home', exact: true }).click();
+    await manager.page.waitForURL(url => url.pathname === '/provider/dashboard' && url.searchParams.get('businessId') === otherId); await manager.page.getByRole('heading', { name: other.name, exact: true }).filter({ visible: true }).waitFor();
+    await manager.page.getByRole('button', { name: 'Open menu', exact: true }).filter({ visible: true }).click();
     await manager.page.getByRole('dialog').getByRole('button', { name: 'Switch to customer mode', exact: true }).click(); await manager.page.waitForURL(webUrl + '/');
     const hebrew = await person('hebrew', 'he'); await hebrew.page.goto(webUrl);
     await hebrew.page.getByRole('heading', { name: 'הזמן שלכם, מנוצל היטב.', exact: true }).waitFor();

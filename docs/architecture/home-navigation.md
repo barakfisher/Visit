@@ -10,7 +10,7 @@ The Home appointment summary is read-only at this milestone. Reschedule/cancel a
 
 ## Menu and routes
 
-The bottom tab navigator is replaced by an Expo Router Stack. The authenticated shell has one hamburger menu with Home, Account, appropriate application entry/status, approved provider-mode switch and sign out. The account screen is canonically `/account`; `/two` safely redirects for old bookmarks. `/discover` still redirects to Home and performs no directory query. Authentication pages retain their focused login UI.
+The bottom tab navigator is replaced by an Expo Router Stack. The authenticated shell has one hamburger menu with Home, Account, appropriate application entry/status, approved provider-mode switch and sign out. In provider mode Home opens the active business's agenda, and the menu adds Business settings and Team access. The account screen is canonically `/account`; `/two` safely redirects for old bookmarks. `/discover` still redirects to Home and performs no directory query. Authentication pages retain their focused login UI.
 
 Capabilities come from the authenticated `/v1/me` projection, filtered to ACTIVE OWNER/MANAGER memberships in APPROVED businesses. Pending/rejected applications offer status and grant no management rights. Multiple approved memberships plus a pending application retain both valid options. With multiple businesses, mode switching requires an explicit business choice; it never guesses the first business. The profile must agree with the selected membership before navigation, and every backend provider endpoint still authorizes access. Customer-mode switching clears the selected workspace. Full revoked/invitation/provider route recovery is VIS-27, with VIS-33 as its prerequisite.
 

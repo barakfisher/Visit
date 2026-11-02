@@ -1,6 +1,6 @@
 # Resumable business setup and sharing (VIS-35)
 
-An approved OWNER/MANAGER opens `/provider/<businessId>` from the provider workspace. The server-authorized setup screen links business details, services, staff/assignments, business hours, policy and sharing. Checkmarks come from publication readiness, including service/staff/hour blockers; no staff step is marked complete before an active service exists. Approval and publication remain separate. Draft changes save to PostgreSQL and resume from another device. A clean approved business can configure and publish through these screens without database configuration edits.
+An approved OWNER/MANAGER opens business settings at `/provider/<businessId>` from the provider menu. The server-authorized settings screen lists business details, services, business hours, staff/assignments, policy and publishing, each opening its own screen at `/provider/<businessId>/<section>`. Sharing is at `/provider/<businessId>/share`, linked from the agenda once published (decisions.md, 2026-11-02). Checkmarks come from publication readiness, including service/staff/hour blockers; no staff step is marked complete before an active service exists. Approval and publication remain separate. Draft changes save to PostgreSQL and resume from another device. A clean approved business can configure and publish through these screens without database configuration edits.
 
 ## Details and schedules
 

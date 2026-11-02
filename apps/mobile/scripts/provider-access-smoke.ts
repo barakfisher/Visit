@@ -21,34 +21,40 @@ export async function providerAccessSmoke({ browser, webUrl, apiUrl }: { browser
     await page.route(`${apiUrl}/api/auth/me`, async route => { reached!(); await held; await route.continue().catch(error => { if (!page.isClosed()) throw error; }); });
     await page.goto(`${webUrl}/provider/dashboard`);
     await intercepted;
-    assert.equal(await page.getByRole('tab', { name: 'Service Catalog' }).count(), 0, 'private screens cannot render while identity hydrates'); releaseHolding(); await page.unrouteAll({ behavior: 'wait' });
-    await page.getByRole('heading', { name: 'Choose the business to manage', exact: true }).waitFor(); assert.equal(await page.getByRole('tab', { name: 'Service Catalog' }).count(), 0);
-    await page.getByRole('button', { name: 'Protected studio 0', exact: true }).click(); await page.getByRole('heading', { name: 'Protected studio 0', exact: true }).waitFor();
+    assert.equal(await page.getByTestId(/^(setup-guide|dashboard)-/).count(), 0, 'private screens cannot render while identity hydrates'); releaseHolding(); await page.unrouteAll({ behavior: 'wait' });
+    await page.getByRole('heading', { name: 'Choose the business to manage', exact: true }).waitFor(); assert.equal(await page.getByTestId(/^(setup-guide|dashboard)-/).count(), 0);
+    // Unset businesses open business settings (decisions.md, 2026-11-01); its switcher still changes business.
+    await page.getByRole('button', { name: 'Protected studio 0', exact: true }).click(); await page.waitForURL(url => url.pathname === `/provider/${businesses[0]}`);
+    await page.getByRole('heading', { name: 'Business settings', exact: true }).filter({ visible: true }).waitFor(); await page.getByRole('heading', { name: 'Protected studio 0', exact: true }).filter({ visible: true }).waitFor();
+    await page.getByRole('button', { name: 'Protected studio 1', exact: true }).click(); await page.waitForURL(url => url.pathname === `/provider/${businesses[1]}`); await page.getByRole('heading', { name: 'Protected studio 1', exact: true }).filter({ visible: true }).waitFor();
+    // The draft check needs the agenda, which a published business always has.
+    await prisma.business.updateMany({ where: { id: { in: businesses } }, data: { publishedAt: new Date() } });
+    await page.goto(`${webUrl}/provider/dashboard?businessId=${businesses[0]}`); await page.getByRole('heading', { name: 'Protected studio 0', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Block time / add a break', exact: true }).click(); await page.getByLabel('Break reason').fill('Private draft that must be discarded');
     await page.getByRole('button', { name: 'Protected studio 1', exact: true }).click(); await page.getByRole('heading', { name: 'Protected studio 1', exact: true }).waitFor(); assert.equal(await page.getByLabel('Break reason').count(), 0);
-    await page.goto(`${webUrl}/provider/dashboard?businessId=foreign-business`); await page.getByRole('alert').filter({ hasText: 'An approved provider account is required' }).waitFor(); assert.equal(await page.getByRole('tab', { name: 'Service Catalog' }).count(), 0);
+    await page.goto(`${webUrl}/provider/dashboard?businessId=foreign-business`); await page.getByRole('alert').filter({ hasText: 'An approved provider account is required' }).waitFor(); assert.equal(await page.getByTestId(/^(setup-guide|dashboard)-/).count(), 0);
     await page.goto(`${webUrl}/provider/team/${businesses[0]}`); await page.getByLabel('Verified recipient contact').waitFor();
     await page.getByRole('button', { name: 'Manager', exact: true }).waitFor();
     await prisma.membership.updateMany({ where: { identityId: id.id, businessId: businesses[0] }, data: { role: 'MANAGER' } });
     await page.getByRole('button', { name: 'Manager', exact: true }).waitFor({ state: 'hidden' });
     await page.getByLabel('Verified recipient contact').waitFor();
     assert.equal(await page.getByLabel('Verified recipient contact').count(), 1, 'role downgrade keeps permitted Staff invitations available');
-    await page.goto(`${webUrl}/provider/${businesses[0]}`); await page.getByRole('heading', { name: 'Set up your business', exact: true }).waitFor();
+    await page.goto(`${webUrl}/provider/${businesses[0]}`); await page.getByRole('heading', { name: 'Business settings', exact: true }).filter({ visible: true }).waitFor();
     await prisma.membership.updateMany({ where: { businessId: businesses[0], identityId: id.id }, data: { status: 'REVOKED' } });
-    await page.getByTestId('setup-section-services').click(); // A real protected API read denies and invalidates the stale workspace.
+    await page.getByTestId('setup-guide-services').click(); // A real protected API read denies and invalidates the stale workspace.
     await page.getByRole('alert').filter({ hasText: 'An approved provider account is required' }).waitFor();
-    assert.equal(await page.getByRole('heading', { name: 'Set up your business', exact: true }).count(), 0);
+    assert.equal(await page.getByRole('heading', { name: 'Services', exact: true }).filter({ visible: true }).count(), 0);
     assert.equal((await context.request.get(`${apiUrl}/v1/me`)).status(), 200, 'customer identity remains signed in');
-    await page.goto(`${webUrl}/provider/${businesses[1]}`); await page.getByRole('heading', { name: 'Set up your business', exact: true }).waitFor();
+    await page.goto(`${webUrl}/provider/${businesses[1]}`); await page.getByRole('heading', { name: 'Business settings', exact: true }).filter({ visible: true }).waitFor();
     await prisma.session.updateMany({ where: { identityId: id.id }, data: { revokedAt: new Date() } });
-    await page.getByTestId('setup-section-services').click(); await page.getByRole('link', { name: 'Sign in', exact: true }).waitFor();
-    assert.equal(await page.getByRole('heading', { name: 'Set up your business', exact: true }).count(), 0);
-    await page.getByRole('link', { name: 'Sign in', exact: true }).click(); await page.waitForURL(url => url.pathname === '/auth/login' && url.searchParams.get('returnTo') === `/provider/${businesses[1]}`);
+    await page.getByTestId('setup-guide-services').click(); await page.getByRole('link', { name: 'Sign in', exact: true }).waitFor();
+    assert.equal(await page.getByRole('heading', { name: 'Services', exact: true }).filter({ visible: true }).count(), 0);
+    await page.getByRole('link', { name: 'Sign in', exact: true }).click(); await page.waitForURL(url => url.pathname === '/auth/login' && url.searchParams.get('returnTo') === `/provider/${businesses[1]}/services`);
     await page.getByLabel('Phone number', { exact: true }).fill(phone); await page.getByRole('button', { name: 'Send verification code', exact: true }).click();
     await page.getByLabel('Six-digit verification code').waitFor();
     const otp = await (await context.request.get(`${apiUrl}/__dev/otp?phone=${encodeURIComponent(phone)}`)).json();
     await page.getByLabel('Six-digit verification code').fill(otp.code); await page.getByRole('button', { name: 'Verify & continue', exact: true }).click();
-    await page.waitForURL(url => url.pathname === `/provider/${businesses[1]}`); await page.getByRole('heading', { name: 'Set up your business', exact: true }).waitFor();
+    await page.waitForURL(url => url.pathname === `/provider/${businesses[1]}/services`); await page.getByRole('heading', { name: 'Services', exact: true }).filter({ visible: true }).waitFor();
     assert.equal((await context.request.get(`${apiUrl}/api/auth/me`)).status(), 200);
     assert.equal((await prisma.savedProvider.findUniqueOrThrow({ where: { id: saved.id } })).identityId, id.id);
     await page.getByRole('button', { name: 'Open menu', exact: true }).click(); await page.getByRole('dialog').getByRole('button', { name: 'Sign out', exact: true }).click(); await page.waitForURL(url => url.pathname === '/auth/login');

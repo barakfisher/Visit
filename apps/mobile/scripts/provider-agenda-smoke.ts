@@ -36,7 +36,9 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     failAgenda = true; await page.getByRole('button', { name: 'Next period', exact: true }).click(); await page.getByRole('alert').filter({ hasText: 'The agenda could not load.' }).waitFor();
     failAgenda = false; await page.getByRole('button', { name: 'Try again', exact: true }).click(); await page.getByText('No appointments for this week.', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Previous period', exact: true }).click(); await firstCard.waitFor();
-    await page.getByRole('tab', { name: 'Working Hours', exact: true }).click();
+    // Hours live in business settings (decisions.md, 2026-11-02).
+    await page.getByRole('button', { name: 'Open menu', exact: true }).filter({ visible: true }).click(); await page.getByRole('dialog').getByRole('button', { name: 'Business settings', exact: true }).click();
+    await page.getByTestId('setup-guide-hours').filter({ visible: true }).click(); await page.getByRole('heading', { name: 'Business hours', exact: true }).filter({ visible: true }).waitFor();
     await page.getByRole('button', { name: 'Add date exception', exact: true }).click();
     await page.getByLabel('Exception date 1 (YYYY-MM-DD)', { exact: true }).fill(date);
     const hoursBefore = await prisma.businessWeeklyAvailability.findMany({ where: { businessId: business.id }, orderBy: { id: 'asc' } });
@@ -57,8 +59,11 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     const gate = new Promise<void>(resolve => { releaseSave = resolve; });
     await page.route(base, async route => { if (route.request().method() === 'PUT') { await gate; await route.continue(); } else await route.continue(); });
     await impact.getByRole('button', { name: 'Confirm schedule change', exact: true }).click(); assert.equal(await impact.getByRole('button', { name: 'Confirm schedule change', exact: true }).isDisabled(), true);
-    releaseSave?.(); await page.getByText('Changes saved.', { exact: true }).waitFor(); await page.unroute(base);
-    await page.getByRole('tab', { name: 'Agenda View', exact: true }).click(); await firstCard.waitFor();
+    // A saved schedule returns to the settings hub.
+    releaseSave?.(); await page.waitForURL(url => url.pathname === `/provider/${business.id}`); await page.unroute(base);
+    await page.getByRole('button', { name: 'Open menu', exact: true }).filter({ visible: true }).click(); await page.getByRole('dialog').getByRole('button', { name: 'Home', exact: true }).click();
+    // Leaving the agenda clears its draft by design, so the date is chosen again.
+    await page.getByLabel('Agenda date', { exact: true }).filter({ visible: true }).fill(date); await firstCard.waitFor();
     page.once('dialog', dialog => dialog.dismiss()); await firstCard.getByRole('button', { name: 'Cancel appointment', exact: true }).click(); assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: first.id } })).status, 'CONFIRMED');
     const cancelUrl = `${apiUrl}/v1/provider/businesses/${business.id}/bookings/${first.id}/cancel`;
     await page.route(cancelUrl, route => route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":{"code":"UNAVAILABLE"}}' }));

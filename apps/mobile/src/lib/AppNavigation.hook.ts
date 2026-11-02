@@ -12,7 +12,7 @@ import { menuCapabilities, type AccountNavigation } from '@/src/lib/navigation';
 export function useAppNavigation() {
   const { t, direction } = useAppLocale();
   const pathname = usePathname(), identity = useSessionStore(s => s.identityId);
-  const selectBusiness = useSessionStore(s => s.selectBusiness);
+  const selectBusiness = useSessionStore(s => s.selectBusiness), activeBusiness = useSessionStore(s => s.activeBusinessId);
   const trigger = useRef<ComponentRef<typeof View>>(null);
   const [open, setOpen] = useState(false), [choosingBusiness, setChoosingBusiness] = useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -47,7 +47,10 @@ export function useAppNavigation() {
   return { t, direction, trigger, open, providerMode, loading: account.isFetching && !account.data,
     failed: account.isError, managed, applicationStatus, becomeProvider, choosingBusiness, busy, error,
     close, onOpen: () => { setError(''); setOpen(true); void account.refetch(); },
-    onRetry: () => void account.refetch(), onHome: () => go('/'), onAccount: () => go('/account'),
+    // Business settings and team access live in the provider menu (decisions.md, 2026-11-01 and 2026-11-02).
+    ...(providerMode && activeBusiness ? { onSettings: () => go({ pathname: '/provider/[businessId]', params: { businessId: activeBusiness } }), onTeam: () => go({ pathname: '/provider/team/[businessId]', params: { businessId: activeBusiness } }) } : {}),
+    // In provider mode Home is the business's agenda; leaving provider mode is its own menu item.
+    onRetry: () => void account.refetch(), onHome: () => go(providerMode && activeBusiness ? { pathname: '/provider/dashboard', params: { businessId: activeBusiness } } : '/'), onAccount: () => go('/account'),
     onApplication: () => go('/register/provider'), onSwitchMode: switchMode,
     onBusiness: (id: string) => void provider(id), onLogout: () => void logout() };
 }

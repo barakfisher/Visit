@@ -36,7 +36,8 @@ export function safeAuthReturnTo(value) {
   if (pathname === '/discover' && value === '/discover') return '/'; // Retired route.
   if (/^\/p\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(pathname) && pathname.length <= 83 && value === pathname) return pathname;
   if ((pathname === '/' || pathname === '/register/provider') && value === pathname) return pathname;
-  if (/^\/provider\/(?:dashboard|[A-Za-z0-9_-]{1,128}|team\/[A-Za-z0-9_-]{1,128})$/.test(pathname)) {
+  // Business settings sections are their own routes (decisions.md, 2026-11-02); only these names are accepted.
+  if (/^\/provider\/(?:dashboard|[A-Za-z0-9_-]{1,128}(?:\/(?:profile|services|hours|staff|policy|publish|share))?|team\/[A-Za-z0-9_-]{1,128})$/.test(pathname)) {
     if (pathname !== '/provider/dashboard') return value === pathname ? pathname : undefined;
     try {
       const url = new URL(value, 'https://visit.invalid');

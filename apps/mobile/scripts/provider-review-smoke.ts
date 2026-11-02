@@ -38,7 +38,18 @@ export async function providerReviewSmoke({ browser, webUrl, apiUrl, prisma, run
     assert.equal((await prisma.business.findUniqueOrThrow({ where: { id: business.id } })).publishedAt, null);
     assert.equal(await prisma.membership.count({ where: { businessId: business.id, identityId: applicant.person.id, status: 'ACTIVE' } }), 1);
     await applicant.page.screenshot({ path: 'test-results/provider-review-approved-en-mobile.png', fullPage: true });
-    const { configureBusinessSmoke, sharingBusinessSmoke } = await import('./business-setup-smoke.js');
+    // Decided 2026-11-01: until the business can publish, its dashboard opens business settings.
+    await applicant.page.goto(`${webUrl}/provider/dashboard?businessId=${business.id}`);
+    await applicant.page.waitForURL(url => url.pathname === `/provider/${business.id}`);
+    await applicant.page.getByRole('heading', { name: 'Business settings', exact: true }).filter({ visible: true }).waitFor();
+    await applicant.page.getByText(/^\d of 6 steps complete$/).filter({ visible: true }).waitFor();
+    assert.equal(await applicant.page.getByRole('tab').count(), 0, 'agenda tools wait for setup');
+    assert.equal(await applicant.page.getByRole('button', { name: 'Publish business', exact: true }).count(), 0);
+    await applicant.page.screenshot({ path: 'test-results/provider-setup-guide-en-mobile.png', fullPage: true });
+    await applicant.page.getByRole('button', { name: 'Booking policy, Needs attention', exact: true }).click();
+    await applicant.page.waitForURL(url => url.pathname === `/provider/${business.id}/policy`);
+    await applicant.page.getByRole('button', { name: 'Save booking policy', exact: true }).waitFor();
+    const { configureBusinessSmoke, openSettings, sharingBusinessSmoke } = await import('./business-setup-smoke.js');
     const setup = await configureBusinessSmoke({ page: applicant.page, context: applicant.context, webUrl, apiUrl, businessId: business.id });
     assert.equal((await applicant.context.request.get(`${apiUrl}/api/providers/${business.id}`)).status(), 404);
     await applicant.page.getByRole('button', { name: 'Publish business', exact: true }).click();
@@ -49,11 +60,24 @@ export async function providerReviewSmoke({ browser, webUrl, apiUrl, prisma, run
     const bookableDate = new Date(Date.now() + 4 * 86400000).toISOString().slice(0, 10);
     const open = await (await applicant.context.request.get(`${apiUrl}/api/providers/${business.id}/availability?serviceId=${setup.serviceId}&date=${bookableDate}`)).json(); assert.ok(open.slots.some((slot: { available: boolean }) => slot.available));
     await applicant.page.screenshot({ path: 'test-results/provider-published-en-mobile.png', fullPage: true });
-    await applicant.page.getByRole('button', { name: 'Unpublish business', exact: true }).click();
-    await applicant.page.getByText('Not published', { exact: true }).waitFor();
-    await applicant.page.getByTestId('provider-sharing-qr').waitFor({ state: 'hidden' });
+    await openSettings(applicant.page, webUrl, business.id, 'publish');
+    await applicant.page.getByRole('button', { name: 'Unpublish business', exact: true }).filter({ visible: true }).click();
+    await applicant.page.getByText('Not published', { exact: true }).filter({ visible: true }).waitFor();
+    await openSettings(applicant.page, webUrl, business.id, 'share');
+    await applicant.page.getByText('Publish your business to enable its customer link and QR code.', { exact: true }).filter({ visible: true }).waitFor();
+    assert.equal(await applicant.page.getByTestId('provider-sharing-qr').count(), 0);
     assert.equal(await applicant.page.getByRole('button', { name: 'Copy booking link', exact: true }).isDisabled(), true);
     assert.equal((await applicant.context.request.get(`${apiUrl}/api/providers/${business.id}`)).status(), 404);
+    // A ready but unpublished business reaches its agenda, which only warns and links to the publish step (decisions.md, 2026-11-02).
+    await applicant.page.goto(`${webUrl}/provider/dashboard?businessId=${business.id}`);
+    const unpublished = applicant.page.getByTestId('dashboard-unpublished').filter({ visible: true }); await unpublished.waitFor();
+    assert.equal(await applicant.page.getByRole('tab').count(), 0, 'catalog and hours live only in business settings');
+    assert.equal(await applicant.page.getByRole('heading', { name: 'Booking publication', exact: true }).count(), 0);
+    assert.equal(await applicant.page.getByTestId('dashboard-share').count(), 0);
+    await applicant.page.screenshot({ path: 'test-results/provider-agenda-unpublished-en-mobile.png', fullPage: true });
+    await unpublished.getByRole('link', { name: 'Publish your business', exact: true }).click();
+    await applicant.page.waitForURL(url => url.pathname === `/provider/${business.id}/publish`);
+    await applicant.page.getByRole('button', { name: 'Publish business', exact: true }).filter({ visible: true }).waitFor();
     console.log('PASS: business setup -> readiness -> publish -> direct public detail -> unpublish through the provider UI.');
     assert.deepEqual(errors, []);
     console.log('PASS: unified business application, admin-only reasoned review, applicant refresh/fallback, intended membership and unpublished state.');

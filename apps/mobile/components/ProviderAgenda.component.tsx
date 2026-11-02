@@ -1,25 +1,24 @@
 import { tokens } from '@/src/design/tokens';
 import { ManualBooking } from './ManualBooking.component';
 import { AppointmentAudit } from './AppointmentAudit.component';
-import { AvailabilityEditor } from './setup/AvailabilityEditor';
 import { AppText as Text } from './AppText';
-import { PublicationPanel } from './PublicationPanel';
-import { ServiceCatalog } from './ServiceCatalog';
+import { BusinessSwitcher } from './BusinessSwitcher.component';
 import { Link } from 'expo-router';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { ActionButton } from './ActionButton';
 import { formatMoney } from '../src/types/flows';
 import type { ProviderAgendaView } from '../src/types/ProviderAgenda.types';
 const field = 'rounded-control border border-line bg-surface px-4 py-3 text-ink';
-export function ProviderAgenda(view: ProviderAgendaView) {
+/** `published` comes from publication readiness; the agenda itself does not load it. */
+export function ProviderAgenda({ published, ...view }: ProviderAgendaView & { published: boolean }) {
   const { business, profile, t, day, draft, agenda, busy, feedback, update } = view;
-  const { tab, blockOpen, staffId, from, to, reason } = draft;
+  const { blockOpen, staffId, from, to, reason } = draft;
   return <ScrollView contentContainerClassName="mx-auto w-full max-w-3xl gap-5 px-5 py-6 pb-10" className="flex-1 bg-canvas">
     <View className="gap-2"><Text className="text-xs font-semibold uppercase tracking-widest text-brand">{t('dashboard.workspace')}</Text><Text accessibilityRole="header" className="text-3xl font-bold text-ink">{business.name}</Text></View>
-    {(profile?.businesses.length ?? 0) > 1 ? <View className="flex-row flex-wrap gap-2">{profile?.businesses.map((item) => <Pressable key={item.id} accessibilityRole="button" accessibilityState={{ selected: item.id === business.id }} onPress={() => view.selectBusiness(item.id)} className={`rounded-control border px-4 py-3 ${item.id === business.id ? 'border-brand bg-brand-soft' : 'border-line bg-surface'}`}><Text className="font-semibold text-brand">{item.name}</Text></Pressable>)}</View> : null}
-    <PublicationPanel key={business.id} businessId={business.id} />
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">{(['agenda', 'services', 'hours'] as const).map((name) => <Pressable key={name} accessibilityRole="tab" accessibilityState={{ selected: tab === name }} onPress={() => update({ tab: name })} className={`rounded-control px-4 py-3 ${tab === name ? 'bg-brand' : 'bg-surface'}`}><Text className={`font-semibold ${tab === name ? 'text-white' : 'text-body'}`}>{t(name === 'agenda' ? 'dashboard.agenda' : name === 'services' ? 'dashboard.services' : 'dashboard.hours')}</Text></Pressable>)}</ScrollView>
-    {tab === 'agenda' ? <>
+    <BusinessSwitcher businesses={profile?.businesses ?? []} activeId={business.id} onSelect={view.selectBusiness} />
+    {/* Publishing lives in business settings; the agenda only points there (decisions.md, 2026-11-02). */}
+    {published ? <Link testID="dashboard-share" href={{ pathname: '/provider/[businessId]/share', params: { businessId: business.id } }} className="min-h-touch py-3 font-semibold text-brand">{t('dashboard.share')}</Link>
+      : <View testID="dashboard-unpublished" className="flex-row flex-wrap items-center gap-x-3 gap-y-1 rounded-control border border-amber-300 bg-amber-50 px-4 py-3"><Text className="flex-1 text-sm text-warning">{t('dashboard.unpublished')}</Text><Link href={{ pathname: '/provider/[businessId]/[section]', params: { businessId: business.id, section: 'publish' } }} className="min-h-touch py-2 font-semibold text-warning underline">{t('dashboard.publishLink')}</Link></View>}
       <ManualBooking {...view.manual} />
       <View className="flex-row flex-wrap gap-2"><ActionButton secondary label={t('agendaEdit.day')} onPress={() => update({ mode: 'day' })} disabled={busy || draft.mode === 'day'} /><ActionButton secondary label={t('agendaEdit.week')} onPress={() => update({ mode: 'week' })} disabled={busy || draft.mode === 'week'} /><ActionButton secondary label={t('agendaEdit.previous')} onPress={view.previous} disabled={busy || !view.validDate} /><ActionButton secondary label={t('agendaEdit.next')} onPress={view.next} disabled={busy || !view.validDate} /></View>
       {draft.mode === 'week' && agenda.data ? <Text accessibilityRole="header">{agenda.data.fromDate} – {agenda.data.toDate}</Text> : null}
@@ -33,7 +32,5 @@ export function ProviderAgenda(view: ProviderAgendaView) {
         <Text className="text-xl font-semibold text-ink">{t(draft.mode === 'week' ? 'agendaEdit.weekly' : 'dashboard.daily')}</Text>{!agenda.data?.bookings.length ? <Text className="text-body">{t(draft.mode === 'week' ? 'agendaEdit.emptyWeek' : 'dashboard.empty')}</Text> : agenda.data.bookings.map((booking) => <View key={booking.id} testID={`agenda-booking-${booking.id}`} className="gap-3 rounded-card border border-line bg-surface p-5"><Text className="font-bold text-brand">{view.when(booking.startsAt)} – {view.when(booking.endsAt)}</Text><Text className="text-lg font-semibold text-ink">{booking.service.name}</Text>{booking.source === 'MANUAL' ? <Text className="text-sm text-muted">{t('manual.tag')}{booking.manualReason ? ` · ${booking.manualReason}` : ''}</Text> : null}<AppointmentAudit key={`${business.id}:${booking.id}`} booking={booking} timezone={business.timezone} businessId={business.id} />{booking.customer.displayName ? <Text className="font-semibold text-ink">{booking.customer.displayName}</Text> : null}<Text className="text-sm text-body">{booking.staff.displayName} · {booking.customer.phone ?? booking.customer.email ?? t('dashboard.customer')}</Text><View className="flex-row gap-2"><View className="flex-1"><ActionButton secondary label={t(booking.customer.phone ? 'dashboard.call' : 'dashboard.noPhoneCall')} disabled={!booking.customer.phone} onPress={() => view.contact(booking.customer.phone, 'call')}/></View><View className="flex-1"><ActionButton secondary label={t(booking.customer.phone ? 'dashboard.whatsapp' : 'dashboard.noPhoneWhatsapp')} disabled={!booking.customer.phone} onPress={() => view.contact(booking.customer.phone, 'whatsapp')}/></View></View></View>)}
         {agenda.data?.blocks.map((item) => <View key={item.id} className="gap-2 rounded-control border border-line bg-slate-100 p-4"><Text className="font-semibold text-body">{view.when(item.startsAt)} – {view.when(item.endsAt)} · {item.reason || t('dashboard.blocked')}</Text><Text className="text-sm text-muted">{item.staff.displayName}</Text><ActionButton secondary label={t('dashboard.removeBlock')} onPress={() => view.removeBlock(item.id)} busy={busy}/></View>)}
       </>}
-    </> : tab === 'services' ? <ServiceCatalog key={business.id} businessId={business.id}/> : <AvailabilityEditor key={business.id} businessId={business.id}/>}
-    <Link href={{ pathname: '/provider/[businessId]', params: { businessId: business.id } }} className="text-center font-semibold text-brand">{t('setup.manage')}</Link>
   </ScrollView>;
 }

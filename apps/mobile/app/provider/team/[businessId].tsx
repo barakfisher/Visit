@@ -52,6 +52,6 @@ function TeamContent({ businessId }: { businessId: string }) {
       <AppText accessibilityRole="header" className="text-xl font-semibold">{m.invitations}</AppText>
       {query.data.invitations.map(item => <View key={item.id} className="gap-3 rounded-card border border-line bg-surface p-card"><AppText>{item.recipientHint} · {roleLabel(item.role)}</AppText><AppText>{item.acceptedAt ? m.accepted : item.revokedAt ? m.revoked : new Date(item.expiresAt) <= new Date() ? m.expired : m.pending} · {new Date(item.expiresAt).toLocaleString(locale === 'he' ? 'he-IL' : 'en-GB', { timeZone: 'Asia/Jerusalem' })}</AppText>{!item.acceptedAt && !item.revokedAt && (query.data?.role === 'OWNER' || item.role === 'STAFF') ? <ActionButton secondary label={m.revoke} disabled={busy} onPress={() => void act(`invitations/${item.id}`)} /> : null}</View>)}
     </>}
-    {feedback ? <AppText accessibilityRole="alert">{feedback}</AppText> : null}<ActionButton secondary label={m.retry} disabled={busy} onPress={() => void query.refetch()} /><Link href={{ pathname: '/provider/[businessId]', params: { businessId } }}>{m.back}</Link>
+    {feedback ? <AppText accessibilityRole="alert">{feedback}</AppText> : null}<ActionButton secondary label={m.retry} disabled={busy} onPress={() => void query.refetch()} /><Link href={{ pathname: '/provider/dashboard', params: { businessId } }}>{t('setup.backAgenda')}</Link>
   </ScrollView>;
 }

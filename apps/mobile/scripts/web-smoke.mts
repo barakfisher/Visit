@@ -234,7 +234,18 @@ try {
     await providerPage.getByRole('button', { name: 'Save blocked time' }).click();
     await providerPage.getByRole('button', { name: 'Remove blocked time' }).waitFor();
     console.log('PASS: provider login lands Home; explicit dashboard navigation, agenda verification and manual break.');
-    await providerPage.getByRole('tab', { name: 'Service Catalog', exact: true }).click();
+    // The catalog lives in business settings (decisions.md, 2026-11-02). Reach it in-app, through the menu and the
+    // settings business switcher, so switching keeps the same page and query cache instead of reloading.
+    const catalogOf = async (business: string) => {
+      await providerPage.getByRole('button', { name: 'Open menu', exact: true }).filter({ visible: true }).click();
+      await providerPage.getByRole('dialog').getByRole('button', { name: 'Business settings', exact: true }).click();
+      await providerPage.getByRole('heading', { name: 'Business settings', exact: true }).filter({ visible: true }).waitFor();
+      const switcher = providerPage.getByRole('button', { name: business, exact: true }).filter({ visible: true });
+      if (await switcher.getAttribute('aria-selected') !== 'true') { await switcher.click(); await providerPage.getByRole('heading', { name: business, exact: true }).filter({ visible: true }).waitFor(); }
+      await providerPage.getByTestId('setup-guide-services').filter({ visible: true }).click();
+      await providerPage.getByRole('heading', { name: 'Services', exact: true }).filter({ visible: true }).waitFor();
+    };
+    await catalogOf(`Visit QA North ${run.slice(0, 6)}`);
     // Hold an old-workspace response across the switch. Late replies must not
     // restore the old private catalog or its draft after Query cancellation.
     const northCatalogUrl = `${apiUrl}/v1/provider/businesses/${businessIds[0]}/services`;
@@ -251,15 +262,12 @@ try {
     try {
       // Switching away and back clears the fresh 15s query cache, guaranteeing
       // a real new North request without waiting for a stale-time timer.
-      await providerPage.getByRole('button', { name: `Visit QA South ${run.slice(0, 6)}`, exact: true }).click();
-      await providerPage.getByRole('tab', { name: 'Service Catalog', exact: true }).click();
+      await catalogOf(`Visit QA South ${run.slice(0, 6)}`);
       await providerPage.getByText('South consultation', { exact: true }).waitFor();
-      await providerPage.getByRole('button', { name: `Visit QA North ${run.slice(0, 6)}`, exact: true }).click();
-      await providerPage.getByRole('tab', { name: 'Service Catalog', exact: true }).click();
+      await catalogOf(`Visit QA North ${run.slice(0, 6)}`);
       await Promise.race([oldObserved, new Promise<never>((_, reject) => { const timer = setTimeout(() => reject(new Error('Old catalog request was not observed')), 10000); oldObserved.then(() => clearTimeout(timer)); })]);
       await providerPage.getByLabel('Service name', { exact: true }).fill('Unsaved North draft');
-    await providerPage.getByRole('button', { name: `Visit QA South ${run.slice(0, 6)}`, exact: true }).click();
-    await providerPage.getByRole('tab', { name: 'Service Catalog', exact: true }).click();
+    await catalogOf(`Visit QA South ${run.slice(0, 6)}`);
     await providerPage.getByText('South consultation', { exact: true }).waitFor();
     assert.equal(await providerPage.getByLabel('Service name', { exact: true }).inputValue(), '');
     assert.equal(await providerPage.getByText('QA consultation', { exact: true }).count(), 0);
@@ -274,8 +282,7 @@ try {
       assert.equal(storage.includes('Unsaved North draft') || storage.includes('QA consultation') || storage.includes('South consultation'), false);
     } finally { clearTimeout(oldDeadline); releaseOld(); await providerPage.unroute(northCatalogUrl, delayOld); }
 
-    await providerPage.getByRole('button', { name: `Visit QA North ${run.slice(0, 6)}`, exact: true }).click();
-    await providerPage.getByRole('tab', { name: 'Service Catalog', exact: true }).click();
+    await catalogOf(`Visit QA North ${run.slice(0, 6)}`);
     await providerPage.getByText('QA consultation', { exact: true }).waitFor();
     assert.equal(await providerPage.getByLabel('Service name', { exact: true }).inputValue(), '');
     console.log('PASS: business switching discards delayed old-workspace responses, clears drafts, and leaves browser caches/private storage empty.');
@@ -328,11 +335,13 @@ try {
     await form.getByLabel('Price', { exact: true }).fill('99');
     await form.getByRole('button', { name: 'Save changes', exact: true }).click();
     await original.getByText('Repriced catalog label', { exact: true }).waitFor();
-    await providerPage.getByRole('tab', { name: 'Agenda View', exact: true }).click();
-    await providerPage.getByLabel('Agenda date').fill(date);
+    // In provider mode Home is the agenda.
+    await providerPage.getByRole('button', { name: 'Open menu', exact: true }).filter({ visible: true }).click();
+    await providerPage.getByRole('dialog').getByRole('button', { name: 'Home', exact: true }).click();
+    await providerPage.getByLabel('Agenda date').filter({ visible: true }).fill(date);
     await providerPage.getByText('QA consultation', { exact: true }).waitFor();
     assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: hold.holdId } })).servicePriceMinor, 6500);
-    await providerPage.getByRole('tab', { name: 'Service Catalog', exact: true }).click();
+    await catalogOf(`Visit QA North ${run.slice(0, 6)}`);
     await original.getByRole('button', { name: 'Delete or archive', exact: true }).click();
     await original.getByRole('button', { name: 'Confirm deletion or archive', exact: true }).click();
     await providerPage.getByText('Service archived. Booking history is preserved.', { exact: true }).waitFor();
@@ -348,7 +357,7 @@ try {
     await providerPage.getByTestId('language-he').click();
     await providerPage.goto(`${webUrl}/provider/${businessIds[0]}`);
     await providerPage.setViewportSize({ width: 390, height: 844 });
-    await providerPage.getByTestId('setup-section-services').click();
+    await providerPage.getByTestId('setup-guide-services').filter({ visible: true }).click();
     await providerPage.getByRole('heading', { name: 'קטלוג שירותים', exact: true }).waitFor();
     assert.equal(await providerPage.getByLabel('מחיר', { exact: true }).evaluate(node => getComputedStyle(node).direction), 'ltr');
     await providerPage.screenshot({ path: path.join(diagnostics, 'service-catalog-he-mobile.png'), fullPage: true });
