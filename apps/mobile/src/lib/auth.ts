@@ -3,6 +3,7 @@ import { router, type Href } from 'expo-router';
 import { ApiError, apiRequest } from './api';
 import { readSessionToken, saveSessionToken } from './sessionToken';
 import { useAuthStore } from '../state/auth';
+import { forgetProviderMode } from './ProviderMode.service';
 import type { AuthProfile } from '../types/flows';
 export async function completeSignIn(sessionToken?: string, returnTo?: string, expectedIdentityId?: string, isCurrent: () => boolean = () => true) {
   if (sessionToken) await saveSessionToken(sessionToken);
@@ -15,6 +16,8 @@ export async function completeSignIn(sessionToken?: string, returnTo?: string, e
 }
 
 export async function signOut() {
+  // First, so a failed logout never leaves this account's business id on a shared device.
+  await forgetProviderMode();
   try { await apiRequest('/v1/auth/logout', { method: 'POST' }); }
   catch (error) {
     if (!(error instanceof ApiError) || error.status !== 401) throw error;

@@ -35,6 +35,12 @@ test('the first chosen day loads its hours; later days keep the form hours', () 
   assert.deepEqual(toggleFormDay(emptyHoursForm(), 6, week), { days: [6], closed: true, intervals: [DEFAULT_INTERVAL] });
 });
 
+test('on first setup, with no hours on any day, choosing days opens the form with the default range instead of closed', () => {
+  const unset: Week = WEEKDAYS.map(() => []);
+  assert.deepEqual(toggleFormDay(emptyHoursForm(), 0, unset), { days: [0], closed: false, intervals: [DEFAULT_INTERVAL] });
+  assert.deepEqual(toggleFormDay(toggleFormDay(emptyHoursForm(), 0, unset), 4, unset), { days: [0, 4], closed: false, intervals: [DEFAULT_INTERVAL] });
+});
+
 test('saving applies the form to the chosen days only, sorted, without touching the source week', () => {
   const before = structuredClone(week);
   const next = applyHoursForm(week, { days: [0, 6], closed: false, intervals: [evening, morning] });

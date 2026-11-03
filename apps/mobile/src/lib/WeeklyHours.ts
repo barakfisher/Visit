@@ -47,13 +47,14 @@ export function groupWeek(week: Week): HoursGroup[] {
 export const formatIntervals = (intervals: ScheduleInterval[]) => intervals.map(row => `${row.startLocal}–${row.endLocal}`).join(' | ');
 
 export const emptyHoursForm = (): HoursForm => ({ days: [], closed: false, intervals: [{ ...DEFAULT_INTERVAL }] });
-/** The first chosen day loads its current hours into the form; later days take the form's hours. */
+/** The first chosen day loads its current hours into the form; later days take the form's hours.
+ *  On first setup no day has hours yet, so the form starts open with the default range instead of "closed". */
 export function toggleFormDay(form: HoursForm, day: number, week: Week): HoursForm {
   if (form.days.includes(day)) return { ...form, days: form.days.filter(item => item !== day) };
   const days = [...form.days, day].sort((a, b) => a - b);
   if (form.days.length) return { ...form, days };
   const current = week[day] ?? [];
-  return { days, closed: !current.length, intervals: current.length ? current.map(row => ({ ...row })) : [{ ...DEFAULT_INTERVAL }] };
+  return { days, closed: !current.length && !isClosedWeek(week), intervals: current.length ? current.map(row => ({ ...row })) : [{ ...DEFAULT_INTERVAL }] };
 }
 
 export function validateHoursForm(form: HoursForm, week: Week, staff: boolean): HoursFormErrors {

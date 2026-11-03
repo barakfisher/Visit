@@ -20,14 +20,14 @@ test('VIS-11 menu capability matrix denies every unsupported membership boundary
       }
     }
   }
-  assert.deepEqual(menuCapabilities(undefined), { managed: [], applicationStatus: false, becomeProvider: false });
+  assert.deepEqual(menuCapabilities(undefined), { managed: [], applicationStatus: false, becomeProvider: false, reviewApplications: false });
 });
 
 test('VIS-11 completed applications do not masquerade as pending and input is unchanged', () => {
   for (const status of ['APPROVED', 'WITHDRAWN', '']) {
     const input = account([], [{ id: 'application', status, business: { name: 'Business' } }]);
     const before = structuredClone(input);
-    assert.deepEqual(menuCapabilities(input), { managed: [], applicationStatus: false, becomeProvider: true });
+    assert.deepEqual(menuCapabilities(input), { managed: [], applicationStatus: false, becomeProvider: true, reviewApplications: false });
     assert.deepEqual(input, before);
   }
   for (const status of ['PENDING', 'REJECTED']) {

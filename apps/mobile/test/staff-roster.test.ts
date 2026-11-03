@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ApiError } from '../src/lib/apiClient';
 import { staffEn, staffHe } from '../src/i18n/staffMessages';
-import { MAX_CAPACITY, MAX_STAFF_NAME, MIN_CAPACITY, MIN_STAFF_NAME, STAFF_HAS_APPOINTMENTS, assignedServiceNames, capacityText, emptyStaffDraft, isCapacityInUse, staffDraft, staffInput, staffRemovalConflicts, validateStaffDraft, type RosterStaff } from '../src/lib/StaffRoster';
+import { MAX_CAPACITY, MAX_STAFF_NAME, MIN_CAPACITY, MIN_STAFF_NAME, STAFF_HAS_APPOINTMENTS, assignedServiceNames, capacityText, emptyStaffDraft, isCapacityInUse, selfStaffDraft, staffDraft, staffInput, staffRemovalConflicts, validateStaffDraft, type RosterStaff } from '../src/lib/StaffRoster';
 
 const staff: RosterStaff = { id: 'p1', displayName: 'Noa', active: false, parallelCapacity: 3, services: [
   { serviceId: 'paused', service: { id: 'paused', name: 'Colour' } },
@@ -71,4 +71,12 @@ test('Hebrew has every staff message, and the availability hint names the person
   assert.deepEqual(Object.keys(staffHe).sort(), Object.keys(staffEn).sort());
   assert.match(staffEn['roster.availableHint'], /\{name\}/);
   assert.match(staffHe['roster.availableHint'], /\{name\}/);
+});
+
+test('"Add myself" starts from the account name and every active service, ready to save', () => {
+  const services = [{ id: 'cut', name: 'Cut', active: true }, { id: 'paused', name: 'Colour', active: false }, { id: 'beard', name: 'Beard', active: true }];
+  const draft = selfStaffDraft('  Dana  ', services);
+  assert.deepEqual(draft, { name: 'Dana', capacity: String(MIN_CAPACITY), serviceIds: ['cut', 'beard'], active: true });
+  assert.deepEqual(validateStaffDraft(draft), {});
+  assert.equal(selfStaffDraft(null, services).name, '', 'no name on the account leaves the field for the owner');
 });

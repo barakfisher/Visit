@@ -115,6 +115,25 @@ test('Redis failure refuses sign-in and sign-up instead of skipping the limits',
   assert.equal(await prisma.identity.count({ where: { email: address } }), 0);
 });
 
+test('/v1/me returns the account name and whether each managed business is published', async () => {
+  const app = Fastify();
+  app.setErrorHandler((error, _request, reply) => reply.code(error instanceof AppError ? error.statusCode : 500).send({ code: error instanceof AppError ? error.code : 'generic' }));
+  await registerAuthRoutes(app, { passwordLogin: fixture() });
+  const slug = `me-${randomUUID()}`, publishedAt = new Date();
+  try {
+    const address = email();
+    const signUp = await app.inject({ method: 'POST', url: '/v1/auth/password/sign-up', payload: { email: address, password, displayName: 'Dana' } });
+    const cookie = signUp.cookies.find(item => item.name.endsWith('visit_session'))!;
+    const business = await prisma.business.create({ data: { name: 'Me fixture', slug, timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED', publishedAt } });
+    await prisma.membership.create({ data: { identityId: signUp.json().identity.id, businessId: business.id, role: 'OWNER', status: 'ACTIVE' } });
+    const me = await app.inject({ method: 'GET', url: '/v1/me', headers: { cookie: `${cookie.name}=${cookie.value}` } });
+    assert.equal(me.statusCode, 200);
+    assert.equal(me.json().identity.displayName, 'Dana');
+    assert.equal(me.json().memberships[0].business.publishedAt, publishedAt.toISOString());
+    assert.equal(JSON.stringify(me.json()).includes(password), false);
+  } finally { await prisma.business.deleteMany({ where: { slug } }); await app.close(); }
+});
+
 test('HTTP routes issue the session cookie and map invalid input to validation errors', async () => {
   const app = Fastify();
   app.setErrorHandler((error, _request, reply) => reply.code(error instanceof AppError ? error.statusCode : 500).send({ code: error instanceof AppError ? error.code : 'generic' }));

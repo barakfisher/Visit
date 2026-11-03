@@ -4,6 +4,7 @@ import { AppText } from './AppText';
 import { ActionButton } from './ActionButton';
 import { Control } from './Control';
 import { BusinessSwitcher } from './BusinessSwitcher.component';
+import { PublishedNextSteps } from './PublishedNextSteps.component';
 import { useSessionStore } from '@/src/state/session';
 import { useAppLocale } from '@/src/i18n/LocaleContext';
 import { blockerMessages, outsideBlockers, sectionComplete, sectionHints, SETUP_SECTIONS, type BusinessReadiness, type SetupSection } from '@/src/lib/BusinessReadiness';
@@ -27,6 +28,7 @@ export function BusinessSettings({ business, readiness }: { business: { id: stri
       <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" className="h-2 overflow-hidden rounded-control bg-line"><View className="h-2 bg-brand" style={{ width: `${(done / steps.length) * 100}%` }} /></View>
       </> : null}
     </View>
+    {!next ? <PublishedNextSteps t={t} onShare={() => router.push({ pathname: '/provider/[businessId]/share', params: { businessId: business.id } })} onAgenda={() => router.push({ pathname: '/provider/dashboard', params: { businessId: business.id } })} /> : null}
     {outsideBlockers(readiness).map(code => <AppText key={code} accessibilityRole="alert" className="text-danger">{t(blockerMessages[code] ?? 'publish.failure')}</AppText>)}
     <View className="gap-3">{steps.map((step, index) => <Control key={step.key} testID={`setup-guide-${step.key}`} accessibilityRole="button" accessibilityLabel={`${t(`setup.${step.key}`)}, ${t(step.done ? 'setup.complete' : 'setup.incomplete')}`} onPress={() => open(step.key)} className="flex-row items-center gap-4 rounded-card border border-line bg-surface p-card active:bg-brand-soft">
       <View className={`h-9 w-9 items-center justify-center rounded-control ${step.done ? 'bg-brand' : 'border border-line bg-canvas'}`}><AppText className={`font-bold ${step.done ? 'text-white' : 'text-body'}`}>{step.done ? '✓' : String(index + 1)}</AppText></View>
