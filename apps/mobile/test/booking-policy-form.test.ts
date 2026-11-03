@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { advanceHint, HOUR_FIELDS, hoursText, MINUTES_PER_HOUR, noticeHint, policyFormValues, policyNumbers, type PolicyNumbers } from '../src/lib/BookingPolicyForm';
+import { advanceHint, HOUR_FIELDS, hoursText, MINUTES_PER_HOUR, noticeHint, policyFormValues, policyNumbers, policySaveFailure, VERIFIED_PHONE_UNAVAILABLE, verifiedPhoneSwitch, type PolicyNumbers } from '../src/lib/BookingPolicyForm';
+import { ApiError } from '../src/lib/apiClient';
 import { translate } from '../src/i18n/messages';
 
 const saved: PolicyNumbers = { minimumNoticeMinutes: 60, maximumAdvanceDays: 30, bufferBeforeMinutes: 5, bufferAfterMinutes: 10, cancellationCutoffMinutes: 24 * MINUTES_PER_HOUR, rescheduleCutoffMinutes: 2 * MINUTES_PER_HOUR };
@@ -43,4 +44,26 @@ test('the live sentences say which way each number works, in both languages', ()
   }
   assert.equal(noticeHint(''), null);
   assert.equal(advanceHint('x'), null);
+});
+
+test('the verified phone switch is locked while SMS is off unless the requirement is already on', () => {
+  assert.deepEqual(verifiedPhoneSwitch(true, false), { disabled: false, hint: null });
+  assert.deepEqual(verifiedPhoneSwitch(true, true), { disabled: false, hint: null });
+  assert.deepEqual(verifiedPhoneSwitch(false, false), { disabled: true, hint: 'setup.verifiedPhoneUnavailable' });
+  assert.deepEqual(verifiedPhoneSwitch(false, true), { disabled: false, hint: 'setup.verifiedPhoneOn' });
+});
+
+test('while SMS availability is loading only turning the requirement off is possible', () => {
+  assert.deepEqual(verifiedPhoneSwitch(undefined, false), { disabled: true, hint: null });
+  assert.deepEqual(verifiedPhoneSwitch(undefined, true), { disabled: false, hint: null });
+});
+
+test('the server refusing the verified phone requirement gets its own localized message', () => {
+  assert.equal(policySaveFailure(new ApiError('Phone verification is not available yet.', VERIFIED_PHONE_UNAVAILABLE, 409)), 'setup.verifiedPhoneRefused');
+  assert.equal(policySaveFailure(new ApiError('Review the fields.', 'VALIDATION_ERROR', 400)), 'setup.saveFailure');
+  assert.equal(policySaveFailure(new TypeError('offline')), 'setup.saveFailure');
+  assert.equal(translate('he', 'setup.verifiedPhoneRefused'), 'אימות טלפון עדיין לא זמין. יש לכבות את דרישת הטלפון המאומת ולשמור שוב.');
+  assert.equal(translate('en', 'setup.verifiedPhoneRefused'), 'Phone verification isn’t available yet. Turn off the verified phone requirement and save again.');
+  assert.equal(translate('he', 'setup.verifiedPhoneUnavailable'), 'אימות טלפון עדיין לא זמין, ולכן לקוחות לא יוכלו לעמוד בדרישה הזו.');
+  assert.equal(translate('en', 'setup.verifiedPhoneOn'), 'Phone verification isn’t available yet, so no customer can book while this is on. Turn it off and save.');
 });
