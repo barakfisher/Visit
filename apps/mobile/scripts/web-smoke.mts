@@ -448,7 +448,7 @@ try {
     await page.getByRole('alert').waitFor();
     assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: hold.holdId } })).startsAt.toISOString(), `${date}T14:00:00.000Z`);
     await page.getByRole('button', { name: 'Check or retry this booking', exact: true }).click();
-    await page.getByRole('heading', { name: 'You’re all set' }).waitFor();
+    await page.getByRole('heading', { name: 'Appointment rescheduled' }).waitFor();
     assert.equal(moveKeys.length, 2); assert.equal(moveKeys[0], moveKeys[1]);
     assert.equal(await prisma.bookingReschedule.count({ where: { bookingId: hold.holdId } }), movesBefore + 1);
     assert.equal(await prisma.bookingNotification.count({ where: { bookingId: hold.holdId, kind: 'BOOKING_RESCHEDULED' } }), 1);

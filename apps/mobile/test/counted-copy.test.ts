@@ -1,0 +1,52 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { translate, type Locale } from '../src/i18n/messages';
+import { pluralCategory, translateCount } from '../src/i18n/plural';
+import { cancellationCutoffText, MINUTES_PER_HOUR } from '../src/i18n/cancellationCutoff';
+
+const locales: Locale[] = ['he', 'en'];
+
+test('plural categories: Hebrew keeps its dual, English folds two into other', () => {
+  assert.equal(pluralCategory('he', 1), 'one');
+  assert.equal(pluralCategory('he', 2), 'two');
+  assert.equal(pluralCategory('he', 3), 'other');
+  assert.equal(pluralCategory('he', 0), 'other');
+  assert.equal(pluralCategory('en', 1), 'one');
+  assert.equal(pluralCategory('en', 2), 'other');
+  assert.equal(pluralCategory('en', 0), 'other');
+});
+
+test('every counted message family has all three forms in both languages', () => {
+  for (const base of ['upcoming.more', 'bookingCommit.cancelHours', 'bookingCommit.cancelMinutes'] as const) {
+    for (const locale of locales) for (const form of ['one', 'two', 'other'] as const) {
+      const key = `${base}.${form}` as const;
+      assert.notEqual(translate(locale, key), key, `${locale} ${key}`);
+    }
+  }
+});
+
+test('one more upcoming appointment is singular in Hebrew and counted from two on', () => {
+  assert.equal(translateCount('he', 'upcoming.more', 1), translate('he', 'upcoming.more.one'));
+  assert.doesNotMatch(translateCount('he', 'upcoming.more', 1), /1 תורים/);
+  assert.equal(translateCount('he', 'upcoming.more', 2), translate('he', 'upcoming.more.two', { count: 2 }));
+  assert.equal(translateCount('he', 'upcoming.more', 5), translate('he', 'upcoming.more.other', { count: 5 }));
+  assert.match(translateCount('en', 'upcoming.more', 2), /^2 more upcoming/);
+});
+
+test('a cutoff in whole hours reads as hours, never as a large number of minutes', () => {
+  const day = 24 * MINUTES_PER_HOUR;
+  for (const locale of locales) {
+    assert.equal(cancellationCutoffText(locale, day), translate(locale, 'bookingCommit.cancelHours.other', { count: 24 }));
+    assert.equal(cancellationCutoffText(locale, MINUTES_PER_HOUR), translate(locale, 'bookingCommit.cancelHours.one', { count: 1 }));
+    assert.doesNotMatch(cancellationCutoffText(locale, day), new RegExp(String(day)));
+  }
+  assert.equal(cancellationCutoffText('he', 2 * MINUTES_PER_HOUR), translate('he', 'bookingCommit.cancelHours.two'));
+});
+
+test('a cutoff that is not a whole number of hours, or zero, stays in minutes', () => {
+  const ninety = MINUTES_PER_HOUR + MINUTES_PER_HOUR / 2;
+  for (const locale of locales) {
+    assert.equal(cancellationCutoffText(locale, ninety), translate(locale, 'bookingCommit.cancelMinutes.other', { count: ninety }));
+    assert.equal(cancellationCutoffText(locale, 0), translate(locale, 'bookingCommit.cancelMinutes.other', { count: 0 }));
+  }
+});

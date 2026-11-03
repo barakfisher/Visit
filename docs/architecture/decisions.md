@@ -195,3 +195,14 @@ Task 4 of the business-settings redesign (handoff `2026-11-02-settings.md`), the
 - **Choice: assigned services are chips on the card,** paused services included, in alphabetical order.
 - **Choice: "Simultaneous appointments" accepts digits only;** letters, signs and decimal points are dropped as typed or pasted (`capacityText`). Empty, 0 or above 100 is a field error and nothing is sent; the server's "lower than booked" refusal shows under the field. *Rejected:* − / + buttons (19 presses to reach 20, and a new control the app does not have).
 - The screen's view (`StaffRoster.component.tsx`) takes the Hours tab's content and the idempotency-key generator from the screen (`StaffRoster.tsx`), because Storybook cannot bundle `expo-router` or `expo-crypto`.
+
+## Booking confirmation copy after the manual run — 2026-11-02
+
+Package A of the findings from the first manual end-to-end run with real accounts. The user approved the scope and acceptance criteria.
+
+- **Choice: the confirmation route hides the stack header** (`confirmation/[bookingId]` in the root `Stack`, which has no folder layout). Without it every booking showed the raw route name with a back arrow.
+- **Choice: the cancellation cutoff reads in hours when it is a whole number of hours, otherwise in minutes** (`cancellationCutoffText`), in the review step and on the confirmation. Owners enter the cutoff in hours, so 24 hours never shows as 1440 minutes. *Rejected:* days for multiples of 24 hours — the owner typed hours, and "1 day" would not match what they set.
+- **Choice: counted copy uses `Intl.PluralRules` with `.one`, `.two` and `.other` message forms** (`translateCount`). Hebrew needs its dual ("שעתיים"); English folds `two` into `other`. *Rejected:* a pluralisation package — the platform API covers both languages at no bundle cost. Applied to "1 more upcoming" and the cutoff; staff, block and hours conflict counts are still unpluralised.
+- **Choice: a reschedule lands on `/confirmation/[id]?outcome=rescheduled`** and says "Appointment rescheduled". A reschedule keeps the booking ID, so the route is the only place that knows how the customer got there. The marker only changes the heading; reloading that URL still says rescheduled, which stays true. *Rejected:* reading the booking's event history — a second request to choose a heading.
+- **Choice: a cancelled, completed or no-show appointment hides the cutoff line and the confirmation-message block** (the recorded note and the disabled SMS/WhatsApp buttons). The "Persisted booking success" decision still holds for a scheduled appointment.
+- `.ics` in the Hebrew calendar button is an isolated left-to-right run, so it reads "(.ics)" and not "(ics.)".
