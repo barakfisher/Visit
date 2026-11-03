@@ -45,6 +45,9 @@ test('approved business configures, publishes and shares through scoped setup AP
     await t.test('profile is strict, explicit public contact does not change identity or sharing slug/timezone', async () => {
       for (const payload of [{ slug: 'changed' }, { timezone: 'UTC' }, { approvalStatus: 'APPROVED' }, { contactEmail: 'bad' }, { contactPhone: '0501234567' }, { name: { set: 'spoof' } }]) assert.equal((await request('PATCH', '', payload)).statusCode, 400);
       assert.equal((await request('PATCH', '', { name: 'Attack studio' }, outsider.headers)).statusCode, 403);
+      assert.equal((await app.inject({ url: base, headers: owner.headers })).json().business.category, null);
+      assert.equal((await request('PATCH', '', { location: 'Jerusalem' })).statusCode, 200);
+      assert.equal((await app.inject({ url: base + '/publication', headers: owner.headers })).json().blockers.profile, 'COMPLETE_BUSINESS_PROFILE');
       const updated = await request('PATCH', '', { location: 'Jerusalem', category: 'Wellness', description: 'Public studio details', contactEmail: 'studio@example.test', contactPhone: '+972501234567' }); assert.equal(updated.statusCode, 200, updated.body);
       const saved = (await app.inject({ url: base, headers: owner.headers })).json().business; assert.equal(saved.description, 'Public studio details'); assert.equal(saved.timezone, 'Asia/Jerusalem'); assert.equal(saved.slug, `setup-${run}`);
       assert.notEqual((await prisma.identity.findUniqueOrThrow({ where: { id: owner.id } })).email, saved.contactEmail);
