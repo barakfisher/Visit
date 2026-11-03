@@ -78,7 +78,7 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     const moved = rescheduleResponse(owner.page, bookingId);
     await rescheduleButton(owner, owner.page).click();
     assert.equal((await moved).status(), 200);
-    await owner.page.getByRole('heading', { name: owner.t('details.success'), exact: true }).filter({ visible: true }).waitFor();
+    await owner.page.getByRole('heading', { name: owner.t('details.rescheduled'), exact: true }).filter({ visible: true }).waitFor();
     const row = await booking(bookingId);
     assert.equal(row.status, 'CONFIRMED'); assert.equal(row.startsAt.toISOString(), slot.startsAt);
     assert.equal(await prisma.booking.count({ where: { businessId: business.businessId, customerId: owner.id, status: 'CONFIRMED' } }), 1);

@@ -3,6 +3,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import type { Browser } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
+import { translate } from '../src/i18n/messages';
 
 export async function bookingSuccessSmoke({ browser, webUrl, apiUrl, prisma, run, businessIds, identityIds }: { browser: Browser; webUrl: string; apiUrl: string; prisma: typeof Prisma; run: string; businessIds: string[]; identityIds: string[] }) {
   const business = await prisma.business.create({ data: { name: `Success studio ${run.slice(0, 6)}`, slug: `success-web-${run}`, timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED', publishedAt: new Date() } });
@@ -110,8 +111,10 @@ export async function bookingSuccessSmoke({ browser, webUrl, apiUrl, prisma, run
     await page.goto(`${webUrl}/appointment/${owned.id}`);
     await detailsView.getByRole('heading', { name: 'פרטי התור', exact: true }).waitFor();
     await detailsView.getByText('בוטל', { exact: true }).waitFor();
-    await detailsView.getByText('האישור תועד ב־Visit. לא נשלחה הודעת SMS או WhatsApp.', { exact: true }).waitFor();
-    assert.equal(await detailsView.getByRole('button', { name: 'הוספה ליומן (.ics)', exact: true }).count(), 0);
+    // A cancelled appointment no longer claims a recorded confirmation or offers SMS/WhatsApp or calendar export.
+    assert.equal(await detailsView.getByText(translate('he', 'details.recorded'), { exact: true }).count(), 0);
+    assert.equal(await detailsView.getByRole('button', { name: translate('he', 'details.sms'), exact: true }).count(), 0);
+    assert.equal(await detailsView.getByRole('button', { name: translate('he', 'details.export'), exact: true }).count(), 0);
     assert.equal(await page.locator('html').getAttribute('dir'), 'rtl');
     assert.equal(await prisma.bookingNotification.count({ where: { businessId: business.id } }), noticeCount + 2);
     console.log('PASS: persisted owned confirmation reload/download, delayed/error/foreign/held success guards, stack-focus cancellation refetch, cancellation reload, notification deduplication and Hebrew RTL.');
