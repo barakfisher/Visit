@@ -13,7 +13,7 @@ export async function publicationReadiness(tx: Prisma.TransactionClient, busines
   if (business.deletedAt) blockers.business = 'BUSINESS_UNAVAILABLE';
   if (business.approvalStatus !== 'APPROVED') blockers.approval = 'ADMIN_APPROVAL_REQUIRED';
   if (business.timezone !== PILOT_TIMEZONE) blockers.timezone = 'ISRAEL_TIME_REVIEW_REQUIRED';
-  if (business.name.trim().length < 2 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(business.slug) || !business.category.trim() || !business.location?.trim()) blockers.profile = 'COMPLETE_BUSINESS_PROFILE';
+  if (business.name.trim().length < 2 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(business.slug) || !business.category?.trim() || !business.location?.trim()) blockers.profile = 'COMPLETE_BUSINESS_PROFILE';
   if (!business.services.length) blockers.services = 'ACTIVE_SERVICE_REQUIRED';
   if (!business.bookingPolicy) blockers.policy = 'EXPLICIT_POLICY_REQUIRED';
   if (!business.weeklyAvailability.length) blockers.hours = 'WORKING_HOURS_REQUIRED';
