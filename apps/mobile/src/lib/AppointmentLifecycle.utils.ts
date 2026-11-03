@@ -23,3 +23,22 @@ export function appointmentRefusalKey(code: string | undefined) {
 export function bookingLoadRefusalKey(code: string | undefined, status: number | undefined) {
   return appointmentRefusalKey(code) ?? (status === 404 ? 'providers.unavailable' as const : 'compact.detailsFailed' as const);
 }
+// The cancel refusal shown on an Appointments card: a cutoff says why, anything else is the general failure.
+export function appointmentCancelFailureKey(code: string | undefined) {
+  return appointmentRefusalKey(code) ?? 'lifecycle.failure' as const;
+}
+// A scheduled appointment whose changes the server no longer accepts says so instead of losing its buttons silently.
+export function appointmentLockedKey(actions: { canCancel: boolean; canReschedule: boolean }) {
+  if (actions.canCancel && actions.canReschedule) return null;
+  return !actions.canCancel && !actions.canReschedule ? 'lifecycle.lockedBoth' as const : !actions.canCancel ? 'lifecycle.lockedCancel' as const : 'lifecycle.lockedReschedule' as const;
+}
+const MINUTE_MS = 60000;
+// A time chosen inside the business's change window can still be booked, but the review says it cannot be undone in the app.
+// Uses the device clock as a hint; the server's cutoff stays authoritative.
+export function bookingWindowWarningKey(startsAt: string, now: number, policy: { cancellationCutoffMinutes?: number; rescheduleCutoffMinutes?: number } | null | undefined) {
+  const start = Date.parse(startsAt);
+  if (!policy || !Number.isFinite(start) || !Number.isFinite(now)) return null;
+  const inside = (minutes: number | undefined) => minutes !== undefined && start < now + minutes * MINUTE_MS;
+  const cancel = inside(policy.cancellationCutoffMinutes), reschedule = inside(policy.rescheduleCutoffMinutes);
+  return cancel && reschedule ? 'bookingCommit.insideBoth' as const : cancel ? 'bookingCommit.insideCancel' as const : reschedule ? 'bookingCommit.insideReschedule' as const : null;
+}

@@ -45,7 +45,7 @@ export function useUpcomingAppointment(businessId?: string, enabled = true): Upc
     if (!ready || !booking?.actions.canCancel || operation.current) return;
     operation.current = true; setBusy(true); setFailure(null); const isCurrent = capture();
     try {
-      if (!await confirmAppointmentCancellation({ title: t('upcoming.cancelTitle'), message: t('upcoming.cancelMessage'), keep: t('upcoming.keep'), cancel: t('details.cancel') }) || !isCurrent()) return;
+      if (!await confirmAppointmentCancellation(locale) || !isCurrent()) return;
       await cancelDetailedBooking(booking.id, booking.revision);
       if (isCurrent()) await Promise.allSettled([client.invalidateQueries({ predicate: query => isBookingQuery(query.queryKey) })]);
     } catch (reason) {

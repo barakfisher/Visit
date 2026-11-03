@@ -4,7 +4,8 @@ import path from 'node:path';
 import type { Browser, Locator, Page } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
 import type { redis as Redis } from '../../api/src/infra/redis.js';
-import { translate } from '../src/i18n/messages';
+import { translate, type Locale } from '../src/i18n/messages';
+import { webCancellationPrompt } from '../src/i18n/cancellationConfirm';
 import { translateCount } from '../src/i18n/plural';
 import { SETUP_SERVICE } from './business-setup-smoke';
 import { preferBookingTime } from './booking-controls.utils';
@@ -84,12 +85,15 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     assert.equal(await prisma.booking.count({ where: { businessId: business.businessId, customerId: owner.id, status: 'CONFIRMED' } }), 1);
     return row;
   }
-  // window.confirm on web; the app cancels only after the customer accepts it.
-  async function cancelWith(page: Page, button: ReturnType<Page['getByRole']>, bookingId: string) {
-    page.once('dialog', dialog => void dialog.accept());
+  // window.confirm on web, in the customer's language; the app cancels only after the customer accepts it.
+  async function cancelWith(page: Page, button: ReturnType<Page['getByRole']>, bookingId: string, locale: Locale) {
+    let prompt = '';
+    page.once('dialog', dialog => { prompt = dialog.message(); void dialog.accept(); });
     const reply = cancelResponse(page, bookingId);
     await button.click();
-    return reply;
+    const response = await reply;
+    assert.equal(prompt, webCancellationPrompt(locale));
+    return response;
   }
   // The provider's agenda for one date: which appointments it lists and the day's count and revenue tiles.
   async function agenda(provider: Page, date: string) {
@@ -178,7 +182,7 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     await he.page.goto(webUrl);
     await homeCard(he.page, h1).getByRole('button', { name: oneMore, exact: true }).waitFor();
     await he.page.goto(`${webUrl}/appointment/${h2}`);
-    const cancelled = await cancelWith(he.page, he.page.getByRole('button', { name: he.t('details.cancel'), exact: true }).filter({ visible: true }), h2);
+    const cancelled = await cancelWith(he.page, he.page.getByRole('button', { name: he.t('details.cancel'), exact: true }).filter({ visible: true }), h2, 'he');
     assert.equal(cancelled.status(), 200);
     assert.equal((await booking(h2)).status, 'CANCELLED');
     const audit = await prisma.bookingEvent.findFirstOrThrow({ where: { bookingId: h2, newStatus: 'CANCELLED' } });
@@ -248,7 +252,7 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     await he.page.getByRole('heading', { name: he.t('details.title'), exact: true }).filter({ visible: true }).waitFor();
     await he.page.getByText(SETUP_SERVICE.name, { exact: true }).filter({ visible: true }).first().waitFor();
     await he.page.goto(webUrl);
-    const heCancelled = await cancelWith(he.page, homeCard(he.page, h1).getByRole('button', { name: he.t('details.cancel'), exact: true }), h1);
+    const heCancelled = await cancelWith(he.page, homeCard(he.page, h1).getByRole('button', { name: he.t('details.cancel'), exact: true }), h1, 'he');
     assert.equal(heCancelled.status(), 200); assert.equal((await booking(h1)).status, 'CANCELLED');
     // Rescheduling an existing appointment needs business approval, not publication.
     const unpublishedDate = await freshDate(), unpublishedMove = (await rescheduleSlots(en, e1, unpublishedDate))[0]!;
@@ -295,6 +299,12 @@ export async function appointmentRetentionSmoke(deps: Deps) {
       const page = await newPage(owner.context); details.set(id, page);
       await page.goto(`${webUrl}/appointment/${id}`); await page.getByRole('button', { name: owner.t('details.cancel'), exact: true }).filter({ visible: true }).waitFor();
     }
+    // The Appointments page opened before the window starts still offers Cancel; pressing it afterwards is refused on its card.
+    const lists = new Map<string, Page>();
+    for (const { owner, id } of raced) {
+      const page = await newPage(owner.context); lists.set(id, page);
+      await page.goto(`${webUrl}/appointments`); await homeCard(page, id).getByRole('button', { name: owner.t('ui.cancel'), exact: true }).waitFor();
+    }
     await provider.page.goto(`${webUrl}/provider/${business.businessId}/policy`);
     await provider.page.getByRole('textbox', { name: translate('en', 'setup.cancelCutoff'), exact: true }).fill(String(CUTOFF_MINUTES / MINUTES_PER_HOUR)); // typed in hours
     await provider.page.getByRole('textbox', { name: translate('en', 'setup.rescheduleCutoff'), exact: true }).fill(String(CUTOFF_MINUTES / MINUTES_PER_HOUR)); // typed in hours
@@ -302,14 +312,22 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     await provider.page.getByRole('button', { name: translate('en', 'setup.savePolicy'), exact: true }).click();
     assert.equal((await policySaved).status(), 200);
     for (const { owner, id, locale, home, move } of raced) {
-      const cancelRefused = await cancelWith(home, homeCard(home, id).getByRole('button', { name: owner.t('details.cancel'), exact: true }), id);
+      const cancelRefused = await cancelWith(home, homeCard(home, id).getByRole('button', { name: owner.t('details.cancel'), exact: true }), id, locale);
       assert.equal(cancelRefused.status(), 409); assert.equal(await errorCode(cancelRefused), CANCELLATION_CUTOFF);
       await alert(home, owner.t('lifecycle.cancelCutoff')).waitFor();
       await home.screenshot({ path: path.join(evidence, `cutoff-cancel-refused-${locale}-mobile.png`), fullPage: true });
       const detailsPage = details.get(id)!;
-      const detailsRefused = await cancelWith(detailsPage, detailsPage.getByRole('button', { name: owner.t('details.cancel'), exact: true }).filter({ visible: true }), id);
+      const detailsRefused = await cancelWith(detailsPage, detailsPage.getByRole('button', { name: owner.t('details.cancel'), exact: true }).filter({ visible: true }), id, locale);
       assert.equal(detailsRefused.status(), 409); assert.equal(await errorCode(detailsRefused), CANCELLATION_CUTOFF);
       await alert(detailsPage, owner.t('lifecycle.cancelCutoff')).waitFor();
+      const listPage = lists.get(id)!, listCard = homeCard(listPage, id);
+      const listRefused = await cancelWith(listPage, listCard.getByRole('button', { name: owner.t('ui.cancel'), exact: true }), id, locale);
+      assert.equal(listRefused.status(), 409); assert.equal(await errorCode(listRefused), CANCELLATION_CUTOFF);
+      await listCard.getByRole('alert').filter({ hasText: owner.t('lifecycle.cancelCutoff') }).waitFor();
+      // The refetched card stops offering changes the server refuses, and says so.
+      await listCard.getByText(owner.t('lifecycle.lockedBoth'), { exact: true }).waitFor();
+      assert.equal(await listCard.getByRole('button').count(), 0);
+      await listPage.screenshot({ path: path.join(evidence, `cutoff-appointments-refused-${locale}-mobile.png`), fullPage: true });
       const moveRefused = rescheduleResponse(move, id);
       await rescheduleButton(owner, move).click();
       const moveReply = await moveRefused; assert.equal(moveReply.status(), 409); assert.equal(await errorCode(moveReply), RESCHEDULE_CUTOFF);
@@ -326,7 +344,7 @@ export async function appointmentRetentionSmoke(deps: Deps) {
       await assertNothingHeld(owner.id, 1);
     }
     assert.deepEqual(errors, []);
-    console.log('PASS: VIS-14 inside the cutoff, cancel (Home and details) and reschedule are refused with their own localized reason in Hebrew and English, the appointment is unchanged, and a fresh Home no longer offers them.');
+    console.log('PASS: VIS-14 inside the cutoff, cancel (Home, details and Appointments) and reschedule are refused with their own localized reason in Hebrew and English, the appointment is unchanged, and a fresh Home no longer offers them.');
   } catch (error) {
     let index = 0;
     for (const context of contexts) for (const page of context.pages()) await page.screenshot({ path: path.join(evidence, `retention-failure-${index++}.png`), fullPage: true }).catch(() => undefined);

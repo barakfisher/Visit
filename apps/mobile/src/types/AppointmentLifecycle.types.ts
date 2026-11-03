@@ -8,3 +8,4 @@ export type LifecycleView = { status: string; toggleLabel: string; expanded: boo
 export type AppointmentActionScope = { identityId: string | null; contextVersion: number; activeBusinessId: string | null };
 
 export type AppointmentAuditProps = { booking: LifecycleAppointment; timezone: string; businessId?: string };
+export type ActiveAppointment = HistoricalAppointment & { actions: { canCancel: boolean; canReschedule: boolean } };

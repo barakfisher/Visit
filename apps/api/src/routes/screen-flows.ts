@@ -14,7 +14,7 @@ import { authenticate } from '../security/sessions.js';
 import { requirePublicBusiness, requireBusinessMembership } from '../security/tenant-context.js';
 import { AppError, conflict, notFound } from '../http/errors.js';
 import { requireHold, releaseHold } from '../scheduling/reservations.js';
-import { listCustomerBookings } from '../repositories/bookings.js';
+import { listActiveCustomerBookings } from '../repositories/bookings.js';
 
 // Compatibility boundary: reuse the existing validated, tenant-scoped v1 handlers.
 // Error details are not forwarded: a v1 handler's details must not reach a route with other callers.
@@ -42,7 +42,7 @@ export async function registerScreenFlows(app: FastifyInstance) {
     const { bookingId } = z.object({ bookingId: z.string().min(1) }).parse(request.params);
     const { context, serviceId, booking } = await requireOwnedReschedule(await authenticate(request), bookingId);
     const provider = await prisma.business.findUniqueOrThrow({ where: { id: context.businessId }, select: { id: true, name: true, timezone: true, location: true, category: true, services: { where: { id: serviceId } }, weeklyAvailability: true, bookingPolicy: true } });
-    return { revision: booking.revision, provider: { ...provider, services: provider.services.map(service => ({ ...service, name: booking.serviceName, durationMinutes: booking.serviceDurationMinutes, priceMinor: booking.servicePriceMinor, currency: booking.serviceCurrency })) } };
+    return { revision: booking.revision, startsAt: booking.startsAt, provider: { ...provider, services: provider.services.map(service => ({ ...service, name: booking.serviceName, durationMinutes: booking.serviceDurationMinutes, priceMinor: booking.servicePriceMinor, currency: booking.serviceCurrency })) } };
   });
   app.get('/api/bookings/:bookingId/availability', async request => {
     const { bookingId } = z.object({ bookingId: z.string().min(1) }).parse(request.params);
@@ -73,7 +73,7 @@ export async function registerScreenFlows(app: FastifyInstance) {
     return invoke(app, request, 'GET', `/v1/businesses/${encodeURIComponent(providerId)}/availability?${new URLSearchParams({ ...query, includeUnavailable: 'true' })}`);
   });
   app.get('/api/consumer/bookings/active', async (request) => {
-    return { bookings: await listCustomerBookings(await authenticate(request), true) };
+    return { bookings: await listActiveCustomerBookings(await authenticate(request)) };
   });
   app.get('/api/bookings/attempts', async request => {
     const { identity } = await authenticate(request);
