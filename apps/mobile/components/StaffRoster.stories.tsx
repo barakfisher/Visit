@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { expect, userEvent, within } from 'storybook/test';
+import { translate } from '@/src/i18n/messages';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { LocalePreview } from '@/src/i18n/LocaleContext';
@@ -23,6 +24,7 @@ function RosterPreview({ locale, data = 'staff', conflicts }: { locale: Locale; 
     const he = locale === 'he';
     const cut = { id: 'cut', name: he ? 'תספורת' : 'Haircut', active: data !== 'noServices' }, colour = { id: 'colour', name: he ? 'צבע' : 'Colour', active: false };
     client.setQueryData(['provider', 'preview', 'services'], { services: [cut, colour] });
+    client.setQueryData(['me', null], { identity: { platformRole: 'USER', displayName: he ? 'דנה' : 'Dana' }, memberships: [], providerApplications: [] });
     client.setQueryData(['provider', 'preview', 'staff'], { staff: data !== 'staff' ? [] : [
       { id: 'noa', displayName: he ? 'נועה' : 'Noa', active: true, parallelCapacity: 2, services: [{ serviceId: 'cut', service: cut }, { serviceId: 'colour', service: colour }] },
       { id: 'dan', displayName: he ? 'דן' : 'Dan', active: false, parallelCapacity: 1, services: [{ serviceId: 'cut', service: cut }] },
@@ -55,11 +57,19 @@ export const English: Story = { args: { locale: 'en' }, play: async ({ canvas })
 } };
 export const Empty: Story = { args: { locale: 'en', data: 'empty' }, play: async ({ canvas }) => {
   await expect(canvas.getByText('No staff members yet.')).toBeVisible();
+  await expect(canvas.getByRole('button', { name: translate('en', 'roster.addSelf') })).toBeEnabled();
   await expect(canvas.getByRole('button', { name: 'Add staff member' })).toBeEnabled();
+} };
+export const AddMyself: Story = { args: { locale: 'he', data: 'empty' }, play: async ({ canvas, canvasElement }) => {
+  await userEvent.click(canvas.getByRole('button', { name: translate('he', 'roster.addSelf') }));
+  const dialog = within(canvasElement.ownerDocument.body);
+  await expect(dialog.getByDisplayValue('דנה')).toBeVisible();
+  await expect(dialog.getByRole('checkbox', { name: 'תספורת' })).toBeChecked();
 } };
 export const NoServices: Story = { args: { locale: 'en', data: 'noServices' }, play: async ({ canvas }) => {
   await expect(canvas.getByText('Add an active service first, then add the staff members who provide it.')).toBeVisible();
   await expect(canvas.queryByRole('button', { name: 'Add staff member' })).toBeNull();
+  await expect(canvas.queryByRole('button', { name: translate('en', 'roster.addSelf') })).toBeNull();
 } };
 export const LoadFailed: Story = { args: { locale: 'he', data: 'failed' }, play: async ({ canvas }) => {
   await expect(await canvas.findByRole('alert')).toHaveTextContent('לא הצלחנו לטעון את הצוות. בדקו את החיבור ונסו שוב.');

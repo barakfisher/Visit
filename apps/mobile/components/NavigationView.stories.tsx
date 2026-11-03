@@ -7,7 +7,7 @@ import { NavigationView } from './NavigationView.component';
 import { translate } from '../src/i18n/messages';
 import { useAppLocale } from '../src/i18n/LocaleContext';
 import type { NavigationViewProps } from '../src/types/NavigationView.types';
-type FixtureProps = Pick<NavigationViewProps, 'managed' | 'applicationStatus' | 'becomeProvider' | 'providerMode' | 'loading' | 'failed' | 'busy' | 'error' | 'onLogout' | 'onSettings' | 'onTeam'>;
+type FixtureProps = Pick<NavigationViewProps, 'managed' | 'applicationStatus' | 'becomeProvider' | 'providerMode' | 'loading' | 'failed' | 'busy' | 'error' | 'onLogout' | 'onSettings' | 'onTeam' | 'onReview'>;
 function Fixture(props: FixtureProps) {
   const { t, direction } = useAppLocale();
   const trigger = useRef<ComponentRef<typeof View>>(null);
@@ -24,6 +24,7 @@ const meta = { globals: { locale: 'he' }, title: 'Home/Navigation', component: F
     if (!args.failed) {
       if (args.becomeProvider) await expect(body.getByRole('button', { name: t('account.becomeProvider') })).toBeVisible(); else await expect(body.queryByRole('button', { name: t('account.becomeProvider') })).toBeNull();
       if (args.applicationStatus) await expect(body.getByRole('button', { name: t('account.applicationStatus') })).toBeVisible();
+      if (!args.onReview) await expect(body.queryByRole('button', { name: t('review.admin') })).toBeNull();
       if (args.managed.length) {
         await userEvent.click(body.getByRole('button', { name: t(args.providerMode ? 'nav.customerMode' : 'account.switchProvider') }));
         for (const membership of args.managed) await expect(body.getByRole('button', { name: membership.business.name })).toBeVisible();
@@ -58,3 +59,9 @@ export const ProviderMode: Story = { args: { ...Approved.args, providerMode: tru
 export const Failed: Story = { args: { failed: true, becomeProvider: false } };
 export const Loading: Story = { args: { loading: true, becomeProvider: false } };
 export const English: Story = { globals: { locale: 'en' } };
+export const Administrator: Story = { args: { onReview: fn() }, play: async ({ canvas, canvasElement, args, globals }) => {
+  const t = (key: Parameters<typeof translate>[1]) => translate(globals.locale === 'en' ? 'en' : 'he', key);
+  await userEvent.click(canvas.getByRole('button', { name: t('nav.open') }));
+  await userEvent.click(within(canvasElement.ownerDocument.body).getByRole('button', { name: t('review.admin') }));
+  await expect(args.onReview).toHaveBeenCalledOnce();
+} };

@@ -22,6 +22,8 @@ export interface NavigationViewProps {
   /** Provider mode with an active business only; omitted otherwise. */
   onSettings?: () => void;
   onTeam?: () => void;
+  /** Administrators only; omitted otherwise. */
+  onReview?: () => void;
   onHome: () => void;
   onAccount: () => void;
   onApplication: () => void;

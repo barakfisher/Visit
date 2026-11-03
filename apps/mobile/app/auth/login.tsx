@@ -13,6 +13,7 @@ import { PasswordSignIn } from '@/components/auth/PasswordSignIn.component';
 import { AuthHeader } from '@/components/auth/AuthHeader.component';
 import { GoogleSigninButton } from '@/components/auth/GoogleSigninButton';
 import { apiRequest } from '@/src/lib/api';
+import { PROVIDER_REGISTRATION_PATH, showsProviderEntry } from '@/src/lib/navigation';
 
 // Email + password is the MVP's primary sign-in (decisions.md, 2026-11-01). Phone sign-in appears only
 // where SMS is configured; email-link sign-in stays reachable at /auth/email but is not offered here.
@@ -33,6 +34,7 @@ export default function LoginScreen() {
     {googleError ? <Text accessibilityRole="alert" className="text-sm text-danger">{googleError}</Text> : null}
     {sms ? <><View className="flex-row items-center gap-4"><View className="h-px flex-1 bg-line"/><Text className="text-xs uppercase tracking-wider text-muted">{t('auth.phoneAlternative')}</Text><View className="h-px flex-1 bg-line"/></View>
       <PhoneSignIn {...phone} enabled blocked={password.busy || googleBusy} send={() => void phone.send()} verify={() => void phone.verify()} /></> : null}
-    <Link href="/register/provider" onPress={event => { if (blocked) event.preventDefault(); }} className="min-h-touch py-3 text-center text-sm font-semibold text-brand">{t('auth.providerEntry')}</Link>
+    {/* Someone already on the provider path does not need the link back to where they came from. */}
+    {showsProviderEntry(returnTo) ? <Link href={PROVIDER_REGISTRATION_PATH} onPress={event => { if (blocked) event.preventDefault(); }} className="min-h-touch py-3 text-center text-sm font-semibold text-brand">{t('auth.providerEntry')}</Link> : null}
   </ScreenContent></ScrollView></KeyboardAvoidingView>;
 }

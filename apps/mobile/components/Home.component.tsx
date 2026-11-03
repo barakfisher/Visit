@@ -4,12 +4,15 @@ import { AppText } from './AppText';
 import { ActionButton } from './ActionButton';
 import { SessionLoading } from './SessionLoading';
 import { UpcomingAppointment } from './UpcomingAppointment.component';
+import { ManagedBusinessCard } from './ManagedBusinessCard.component';
 import type { HomeView } from '../src/types/Home.types';
 export function Home(view: HomeView) {
   const { t } = view;
   if (view.bootstrapping) return <SessionLoading />;
   return <ScrollView testID="home-screen" className="flex-1 bg-canvas" contentContainerClassName="mx-auto w-full max-w-2xl gap-5 px-5 py-6 md:px-8">
     <View className="gap-2"><AppText accessibilityRole="header" className="text-3xl font-bold tracking-tight text-ink">{t('home.title')}</AppText><AppText className="text-base leading-6 text-body">{t('home.intro')}</AppText></View>
+      {view.businesses.map(item => <ManagedBusinessCard key={item.id} t={t} item={item} opening={view.openingBusiness === item.id} disabled={!!view.openingBusiness} onManage={() => view.onManage(item.id)} />)}
+      {view.businessError ? <AppText accessibilityRole="alert" className="text-danger">{t(view.businessError)}</AppText> : null}
       <UpcomingAppointment {...view.upcoming} />
       <ActionButton secondary label={t('appointments.all')} onPress={view.onAppointments} />
       <AppText accessibilityRole="header" className="text-xl font-bold text-ink">{t('home.providers')}</AppText>

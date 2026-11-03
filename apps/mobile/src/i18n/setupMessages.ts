@@ -15,6 +15,7 @@ export const setupEn = {
   'setup.back': 'Back to business settings', 'setup.backAgenda': 'Return to agenda',
   'setup.invalidPhone': 'Enter a phone number such as 050-1234567 or +972501234567.', 'setup.phoneHint': 'Israeli numbers can be typed as usual, for example 050-1234567.',
   'setup.invalidEmail': 'Enter a valid email address or leave this optional field empty.',
+  'published.title': 'Your business is open for bookings', 'published.intro': 'Share your link or QR code so customers can find you. New appointments appear in your agenda.', 'published.share': 'Share link and QR code', 'published.agenda': 'Open the agenda',
   'guide.title': 'Business settings', 'guide.intro': 'Complete these steps to open your business for bookings. Your agenda and tools open once you can publish.',
   'guide.progress': '{done} of {total} steps complete', 'guide.continue': 'Continue setup', 'guide.open': 'Open', 'guide.publishReady': 'Ready to publish', 'guide.publishWaiting': 'Available once the steps above are complete.',
 } as const;
@@ -35,6 +36,7 @@ export const setupHe: Record<keyof typeof setupEn, string> = {
   'setup.back': 'חזרה להגדרות העסק', 'setup.backAgenda': 'חזרה ליומן',
   'setup.invalidPhone': 'הזינו מספר טלפון, לדוגמה \u2066050-1234567\u2069 או \u2066+972501234567\u2069.', 'setup.phoneHint': 'אפשר להקליד מספר ישראלי כרגיל, לדוגמה \u2066050-1234567\u2069.',
   'setup.invalidEmail': 'הזינו כתובת דואר תקינה או השאירו שדה זה ריק.',
+  'published.title': 'העסק פתוח להזמנות', 'published.intro': 'שתפו את הקישור או את קוד ה־QR כדי שלקוחות ימצאו אתכם. תורים חדשים יופיעו ביומן.', 'published.share': 'שיתוף הקישור וקוד ה־QR', 'published.agenda': 'ליומן',
   'guide.title': 'הגדרות העסק', 'guide.intro': 'השלימו את השלבים האלה כדי לפתוח את העסק להזמנות. היומן והכלים ייפתחו כשאפשר יהיה לפרסם.',
   'guide.progress': '{done} מתוך {total} שלבים הושלמו', 'guide.continue': 'המשך בהגדרת העסק', 'guide.open': 'פתיחה', 'guide.publishReady': 'אפשר לפרסם', 'guide.publishWaiting': 'יתאפשר אחרי השלמת השלבים הקודמים.',
 };

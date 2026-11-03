@@ -18,6 +18,11 @@ export type StaffRemovalConflicts = { total: number; timezone: string; conflicts
 
 export function emptyStaffDraft(): StaffDraft { return { name: '', capacity: String(MIN_CAPACITY), serviceIds: [], active: true }; }
 
+/** "Add myself": a solo owner usually gives every service, under the name on their account (decisions.md, 2026-11-03). */
+export function selfStaffDraft(accountName: string | null | undefined, services: readonly RosterService[]): StaffDraft {
+  return { name: accountName?.trim() ?? '', capacity: String(MIN_CAPACITY), serviceIds: services.filter(service => service.active).map(service => service.id), active: true };
+}
+
 /** Only services that can still be assigned are pre-selected, so saving never sends a paused one back. */
 export function staffDraft(staff: RosterStaff, services: readonly RosterService[]): StaffDraft {
   const assignable = new Set(services.filter(service => service.active).map(service => service.id));

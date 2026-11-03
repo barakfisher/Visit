@@ -4,7 +4,9 @@ import { apiRequest } from './api';
 import { appointmentDate, appointmentTime } from './appointmentTime';
 import { useAppLocale } from '../i18n/LocaleContext';
 import type { MessageKey } from '../i18n/messages';
-import { emptyStaffDraft, isCapacityInUse, staffDraft, staffInput, staffRemovalConflicts, validateStaffDraft, type RosterService, type RosterStaff, type StaffDraft, type StaffDraftErrors, type StaffRemovalConflicts } from './StaffRoster';
+import { useSessionStore } from '../state/session';
+import type { AccountNavigation } from './navigation';
+import { emptyStaffDraft, selfStaffDraft, isCapacityInUse, staffDraft, staffInput, staffRemovalConflicts, validateStaffDraft, type RosterService, type RosterStaff, type StaffDraft, type StaffDraftErrors, type StaffRemovalConflicts } from './StaffRoster';
 
 export type StaffTab = 'general' | 'hours';
 type Action = { kind: 'add' } | { kind: 'edit'; id: string } | { kind: 'remove'; id: string };
@@ -17,6 +19,10 @@ export function useStaffRoster(businessId: string, newKey: () => string) {
   const staff = useQuery({ queryKey: ['provider', businessId, 'staff'], queryFn: () => apiRequest<{ staff: RosterStaff[] }>(`${base}/staff`) });
   const services = useQuery({ queryKey: ['provider', businessId, 'services'], queryFn: () => apiRequest<{ services: RosterService[] }>(`${base}/services`) });
   const assignable = services.data?.services.filter(service => service.active) ?? [];
+  // Same query key as the menu; only the account's own name is used, to prefill "Add myself".
+  const identity = useSessionStore(state => state.identityId);
+  const account = useQuery({ queryKey: ['me', identity], queryFn: () => apiRequest<AccountNavigation>('/v1/me'), enabled: !!identity });
+  const canAddSelf = staff.isSuccess && services.isSuccess && !staff.data.staff.length && assignable.length > 0;
   // One draft serves whichever form is open: the add dialog or one card's "General" tab.
   const [addOpen, setAddOpen] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -58,7 +64,7 @@ export function useStaffRoster(businessId: string, newKey: () => string) {
   const busy = mutation.isPending;
   function resetForm(next: StaffDraft) { setDraft(next); setErrors({}); setFormError(''); setSaved(false); }
   function closeAdd() { setAddOpen(false); resetForm(emptyStaffDraft()); creationKey.current = null; }
-  function openAdd() { resetForm(emptyStaffDraft()); creationKey.current = null; setExpanded(null); setRemoving(null); setConflicts(null); setMessage(''); setAddOpen(true); }
+  function openAdd(draft = emptyStaffDraft()) { resetForm(draft); creationKey.current = null; setExpanded(null); setRemoving(null); setConflicts(null); setMessage(''); setAddOpen(true); }
   /** A pending save keeps the form open, so its result always lands where the owner is looking. */
   function cancelAdd() { if (!busy) closeAdd(); }
   /** "Edit" opens one card's section on "General" with that card's saved values; pressing it again collapses it. */
@@ -83,7 +89,7 @@ export function useStaffRoster(businessId: string, newKey: () => string) {
   return {
     t, locale, direction, businessId, staff, services, assignable, addOpen, expanded, tab, draft, errors, formError, saved, removing, conflicts, message, busy,
     removingPending: pending?.kind === 'remove' ? pending.id : null,
-    openAdd, cancelAdd, toggleEdit, cancelEdit, setTab, update, toggleService, save, askRemove, confirmRemove,
+    canAddSelf, openAdd: () => openAdd(), openAddSelf: () => openAdd(selfStaffDraft(account.data?.identity.displayName, assignable)), cancelAdd, toggleEdit, cancelEdit, setTab, update, toggleService, save, askRemove, confirmRemove,
     when: (instant: string) => conflicts?.timezone ? `${appointmentDate(instant, conflicts.timezone, locale)} · ${appointmentTime(instant, conflicts.timezone, locale)}` : '',
   };
 }

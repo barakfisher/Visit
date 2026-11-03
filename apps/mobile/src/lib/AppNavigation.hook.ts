@@ -5,8 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useAppLocale } from '@/src/i18n/LocaleContext';
 import { useSessionStore } from '@/src/state/session';
 import { apiRequest } from '@/src/lib/api';
-import type { AuthProfile } from '@/src/types/flows';
 import { signOut } from '@/src/lib/auth';
+import { forgetProviderMode, openProviderWorkspace } from '@/src/lib/ProviderMode.service';
 import { menuCapabilities, type AccountNavigation } from '@/src/lib/navigation';
 
 export function useAppNavigation() {
@@ -17,7 +17,7 @@ export function useAppNavigation() {
   const [open, setOpen] = useState(false), [choosingBusiness, setChoosingBusiness] = useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const account = useQuery({ queryKey: ['me', identity], queryFn: () => apiRequest<AccountNavigation>('/v1/me'), enabled: !!identity, staleTime: 0 });
-  const { managed, applicationStatus, becomeProvider } = menuCapabilities(account.isError ? undefined : account.data);
+  const { managed, applicationStatus, becomeProvider, reviewApplications } = menuCapabilities(account.isError ? undefined : account.data);
   const providerMode = pathname.startsWith('/provider/');
   function close() { setOpen(false); setChoosingBusiness(false); }
   function go(href: Href) { close(); router.push(href); }
@@ -25,17 +25,13 @@ export function useAppNavigation() {
   async function provider(businessId: string) {
     if (switching.current || busy || !managed.some(m => m.business.id === businessId)) return;
     switching.current = true; setBusy(true); setError('');
-    const expected = identity;
     try {
-      const { profile } = await apiRequest<{ profile: AuthProfile }>('/api/auth/me');
-      const state = useSessionStore.getState();
-      if (profile.id !== expected || state.identityId !== expected || !profile.businesses.some(b => b.id === businessId)) { setError(t('nav.changed')); void account.refetch(); return; }
-      state.setAuth(state.token, profile);
-      selectBusiness(businessId); close(); router.replace({ pathname: '/provider/dashboard', params: { businessId } });
+      if (await openProviderWorkspace(businessId)) close(); else { setError(t('nav.changed')); void account.refetch(); }
     } catch { setError(t('nav.changed')); } finally { switching.current = false; setBusy(false); }
   }
   function switchMode() {
-    if (providerMode) { selectBusiness(null); close(); router.replace('/'); }
+    // Forget before Home mounts, or Home would reopen the business it just left.
+    if (providerMode) { selectBusiness(null); close(); void forgetProviderMode().then(() => router.replace('/')); }
     else if (managed.length === 1) void provider(managed[0]!.business.id);
     else setChoosingBusiness(true);
   }
@@ -52,5 +48,6 @@ export function useAppNavigation() {
     // In provider mode Home is the business's agenda; leaving provider mode is its own menu item.
     onRetry: () => void account.refetch(), onHome: () => go(providerMode && activeBusiness ? { pathname: '/provider/dashboard', params: { businessId: activeBusiness } } : '/'), onAccount: () => go('/account'),
     onApplication: () => go('/register/provider'), onSwitchMode: switchMode,
+    ...(reviewApplications ? { onReview: () => go('/admin/applications') } : {}),
     onBusiness: (id: string) => void provider(id), onLogout: () => void logout() };
 }

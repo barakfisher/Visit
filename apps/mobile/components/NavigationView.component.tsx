@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from './AppText';
 import { ActionButton } from './ActionButton';
 import type { NavigationViewProps } from '../src/types/NavigationView.types';
-export function NavigationView({ t, direction, trigger, open, providerMode, loading, failed, managed, applicationStatus, becomeProvider, choosingBusiness, busy, error, close, onOpen, onRetry, onHome, onAccount, onApplication, onSwitchMode, onBusiness, onLogout, onSettings, onTeam }: NavigationViewProps) {
+export function NavigationView({ t, direction, trigger, open, providerMode, loading, failed, managed, applicationStatus, becomeProvider, choosingBusiness, busy, error, close, onOpen, onRetry, onHome, onAccount, onApplication, onSwitchMode, onBusiness, onLogout, onSettings, onTeam, onReview }: NavigationViewProps) {
   return <View style={{ direction }} className="border-b border-line bg-surface">
     <View className="mx-auto w-full max-w-3xl flex-row items-center justify-between gap-3 px-5 py-2">
       <Pressable ref={trigger} accessibilityRole="button" accessibilityLabel={t('nav.open')} accessibilityState={{ expanded: open }} onPress={onOpen} className="min-h-12 min-w-12 items-center justify-center rounded-control border border-line"><AppText style={styles.centered} className="text-2xl font-semibold text-brand">☰</AppText></Pressable>
@@ -29,6 +29,7 @@ export function NavigationView({ t, direction, trigger, open, providerMode, load
               {becomeProvider ? <ActionButton secondary label={t('account.becomeProvider')} onPress={onApplication} /> : null}
               {applicationStatus ? <ActionButton secondary label={t('account.applicationStatus')} onPress={onApplication} /> : null}
               {managed.length ? <ActionButton secondary label={t(providerMode ? 'nav.customerMode' : 'account.switchProvider')} onPress={onSwitchMode} /> : null}
+              {onReview ? <ActionButton secondary label={t('review.admin')} onPress={onReview} /> : null}
               {choosingBusiness ? <View className="gap-3 rounded-control border border-line p-3"><AppText className="font-semibold">{t('nav.chooseBusiness')}</AppText>{managed.map(m => <ActionButton key={m.business.id} secondary label={m.business.name} disabled={busy} onPress={() => onBusiness(m.business.id)} />)}</View> : null}
             </>}
             <ActionButton secondary label={t('account.signOut')} busy={busy} onPress={onLogout} />

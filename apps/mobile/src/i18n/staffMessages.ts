@@ -1,7 +1,7 @@
 export const staffEn = {
   'roster.title': 'Staff members', 'roster.add': 'Add staff member', 'roster.addSubmit': 'Add staff member',
   'roster.hint': 'Staff members receive appointments. Adding one does not invite them to manage your account.',
-  'roster.empty': 'No staff members yet.', 'roster.needsService': 'Add an active service first, then add the staff members who provide it.',
+  'roster.empty': 'No staff members yet.', 'roster.addSelf': 'Add myself as staff', 'roster.addSelfHint': 'Working on your own? Add yourself so customers can book you.', 'roster.needsService': 'Add an active service first, then add the staff members who provide it.',
   'roster.loadFailed': 'Could not load your staff. Check your connection and try again.',
   'roster.capacityLine': 'Simultaneous appointments: {count}', 'roster.unavailable': 'Not available for new appointments',
   'roster.edit': 'Edit', 'roster.editLabel': 'Edit {name}', 'roster.remove': 'Remove', 'roster.removeLabel': 'Remove {name}',
@@ -22,7 +22,7 @@ export const staffEn = {
 export const staffHe: Record<keyof typeof staffEn, string> = {
   'roster.title': 'אנשי הצוות', 'roster.add': 'הוספת איש צוות', 'roster.addSubmit': 'הוספת איש צוות',
   'roster.hint': 'אנשי הצוות מקבלים תורים. הוספת איש צוות אינה מזמינה אותו לנהל את החשבון.',
-  'roster.empty': 'עדיין אין אנשי צוות.', 'roster.needsService': 'הוסיפו קודם שירות פעיל, ואז את אנשי הצוות שנותנים אותו.',
+  'roster.empty': 'עדיין אין אנשי צוות.', 'roster.addSelf': 'הוספת עצמי לצוות', 'roster.addSelfHint': 'עובדים לבד? הוסיפו את עצמכם כדי שלקוחות יוכלו לקבוע אצלכם תור.', 'roster.needsService': 'הוסיפו קודם שירות פעיל, ואז את אנשי הצוות שנותנים אותו.',
   'roster.loadFailed': 'לא הצלחנו לטעון את הצוות. בדקו את החיבור ונסו שוב.',
   'roster.capacityLine': 'תורים במקביל: {count}', 'roster.unavailable': 'לא זמין לתורים חדשים',
   'roster.edit': 'עריכה', 'roster.editLabel': 'עריכה: {name}', 'roster.remove': 'הסרה', 'roster.removeLabel': 'הסרה: {name}',

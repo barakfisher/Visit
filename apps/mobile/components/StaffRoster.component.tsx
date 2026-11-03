@@ -16,7 +16,7 @@ type RosterProps = StaffRosterState & { hours: (staffId: string) => ReactNode };
 
 /** The staff settings screen: a list of cards, an add dialog, and one card's settings open at a time. */
 export function StaffRosterView(state: RosterProps) {
-  const { t, direction, staff, services, assignable, addOpen, expanded, message, busy, openAdd, cancelAdd } = state;
+  const { t, direction, staff, services, assignable, addOpen, expanded, message, busy, openAdd, cancelAdd, canAddSelf, openAddSelf } = state;
   const loading = staff.isLoading || services.isLoading, failed = staff.isError || services.isError;
   return <View className="gap-4" style={{ direction }}>
     <View className="flex-row flex-wrap items-center justify-between gap-3">
@@ -28,7 +28,10 @@ export function StaffRosterView(state: RosterProps) {
       : failed ? <><AppText accessibilityRole="alert">{t('roster.loadFailed')}</AppText><ActionButton secondary label={t('common.retry')} onPress={() => { void staff.refetch(); void services.refetch(); }} /></>
       : <>
         {!assignable.length ? <AppText>{t('roster.needsService')}</AppText> : null}
-        {!staff.data?.staff.length ? <AppText>{t('roster.empty')}</AppText> : staff.data.staff.map(row => <StaffCard key={row.id} row={row} {...state} />)}
+        {!staff.data?.staff.length ? <>
+          <AppText>{t('roster.empty')}</AppText>
+          {canAddSelf ? <View testID="staff-add-self" className="gap-3 rounded-control border border-line bg-canvas p-3"><AppText className="text-body">{t('roster.addSelfHint')}</AppText><ActionButton label={t('roster.addSelf')} disabled={busy} onPress={openAddSelf} /></View> : null}
+        </> : staff.data.staff.map(row => <StaffCard key={row.id} row={row} {...state} />)}
       </>}
     {message ? <AppText accessibilityRole={message === 'roster.removeFailed' ? 'alert' : 'status'} className={message === 'roster.removeFailed' ? 'text-danger' : 'text-ink'}>{t(message)}</AppText> : null}
     {/* The add dialog and an open card share one draft, so the dialog never opens over an open card. */}
