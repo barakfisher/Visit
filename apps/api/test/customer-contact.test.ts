@@ -99,7 +99,8 @@ test('tenant contact policy guards HTTP holds, direct confirmations, snapshots a
       await prisma.membership.create({ data: { businessId: f.b.id, identityId: person.id, role: 'OWNER', status: 'ACTIVE' } });
       const context = await requireBusinessMembership(person.id, f.b.id, ['OWNER']);
       const held = await prisma.booking.create({ data: { ...f.input(), status: 'HELD', holdExpiresAt: new Date(Date.now() + 60000) } });
-      await saveBusinessPolicy(context, { ...DEFAULT_BOOKING_POLICY, requireVerifiedPhone: true });
+      // SMS on: with it off the requirement is refused (verified-phone-policy.test.ts).
+      await saveBusinessPolicy(context, { ...DEFAULT_BOOKING_POLICY, requireVerifiedPhone: true }, { phoneVerification: true });
       assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: held.id } })).status, 'EXPIRED');
       assert.equal((await saveBusinessPolicy(context, DEFAULT_BOOKING_POLICY)).requireVerifiedPhone, true);
       await rejected(() => prisma.booking.create({ data: f.input() }));
