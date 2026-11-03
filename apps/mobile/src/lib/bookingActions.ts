@@ -1,7 +1,10 @@
 import { Alert, Platform } from 'react-native';
+import { appointmentCancellationCopy, webCancellationPrompt } from '../i18n/cancellationConfirm';
+import type { Locale } from '../i18n/messages';
 
-export function confirmAppointmentCancellation(copy = { title: 'Cancel this appointment?', message: 'Your appointment will be released after you confirm.', keep: 'Keep appointment', cancel: 'Cancel appointment' }) {
-  if (Platform.OS === 'web') return Promise.resolve(typeof window !== 'undefined' && window.confirm(copy.title));
+export function confirmAppointmentCancellation(locale: Locale) {
+  if (Platform.OS === 'web') return Promise.resolve(typeof window !== 'undefined' && window.confirm(webCancellationPrompt(locale)));
+  const copy = appointmentCancellationCopy(locale);
   return new Promise<boolean>((resolve) => {
     Alert.alert(copy.title, copy.message, [
       { text: copy.keep, style: 'cancel', onPress: () => resolve(false) },

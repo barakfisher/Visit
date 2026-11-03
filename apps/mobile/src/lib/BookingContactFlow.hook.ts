@@ -15,8 +15,8 @@ import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest, ApiError } from '@/src/lib/api';
-import { appointmentRefusalKey, bookingLoadRefusalKey } from './AppointmentLifecycle.utils';
-import { localDate } from './appointmentTime';
+import { appointmentRefusalKey, bookingLoadRefusalKey, bookingWindowWarningKey } from './AppointmentLifecycle.utils';
+import { appointmentDate, appointmentTime, localDate } from './appointmentTime';
 import { useCompactBooking } from './CompactBooking.hook';
 import { bookingSlotId, validBookingDate } from './CompactBooking.utils';
 import type { AdvisorySelection } from '../types/CompactBooking.types';
@@ -34,6 +34,8 @@ export function useBookingContactFlow() {
   const [serviceId, setServiceId] = useState(params.serviceId ?? '');
   const [date, setDate] = useState(params.date ?? '');
   const [selection, setSelection] = useState<AdvisorySelection | null>(null);
+  // When the customer picked the time; the review's change-window warning is judged against it.
+  const [chosenAt, setChosenAt] = useState(Date.now);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -73,7 +75,7 @@ export function useBookingContactFlow() {
     catch (reason) { setError(reason instanceof Error ? reason.message : t('compact.nameFailed')); }
     finally { setBusy(false); }
   }
-  const details = useQuery({ queryKey: ['provider', identityId, contextVersion, providerId, fromBookingId ?? 'public'], queryFn: () => apiRequest<{ provider: ProviderDetail; revision?: number }>(`/api/${fromBookingId ? `bookings/${fromBookingId}/provider` : `providers/${providerId}`}`) });
+  const details = useQuery({ queryKey: ['provider', identityId, contextVersion, providerId, fromBookingId ?? 'public'], queryFn: () => apiRequest<{ provider: ProviderDetail; revision?: number; startsAt?: string }>(`/api/${fromBookingId ? `bookings/${fromBookingId}/provider` : `providers/${providerId}`}`) });
   const provider = details.data?.provider;
   useProviderActivation(provider && !fromBookingId ? { businessId: provider.id } : undefined);
   const chosenService = provider?.services.some(service => service.id === serviceId) ? serviceId : !serviceId && provider?.services.length === 1 ? provider.services[0]?.id ?? '' : '';
@@ -94,7 +96,7 @@ export function useBookingContactFlow() {
   async function choose(slot: Slot) {
     if (operation.current || pendingAttempt) return;
     if (!slot.available || slot.locked || slotId(slot) === conflictSlot) return;
-    sequence.current += 1; setSelection({ providerId, serviceId: chosenService, date: chosenDate, slot }); setError(''); setNotice('');
+    sequence.current += 1; setSelection({ providerId, serviceId: chosenService, date: chosenDate, slot }); setChosenAt(Date.now()); setError(''); setNotice('');
   }
   async function confirm() {
     if (operation.current) return;
@@ -163,15 +165,22 @@ export function useBookingContactFlow() {
     setSelection(null); setServiceId(params.serviceId ?? ''); setDate(params.date ?? '');
   }, [routeScope, params.serviceId, params.date]);
   const reviewedService = provider?.services.find(service => service.id === chosenService);
+  // Inside the cancellation window the usual "can cancel up to…" line would mislead, so the warning takes its place.
+  function reviewWindow(startsAt: string, detail: ProviderDetail) {
+    const key = bookingWindowWarningKey(startsAt, chosenAt, detail.bookingPolicy);
+    const cancelLocked = key === 'bookingCommit.insideBoth' || key === 'bookingCommit.insideCancel';
+    return { cancellation: cancelLocked ? '' : cancellationCutoffText(locale, detail.bookingPolicy?.cancellationCutoffMinutes ?? 0), warning: key ? t(key) : '' };
+  }
   const review = selected && provider && reviewedService ? {
     businessAndService: `${provider.name} · ${reviewedService.name}`,
     timeAndStaff: `${new Intl.DateTimeFormat(locale === 'he' ? 'he-IL' : 'en-US', { dateStyle: 'full', timeStyle: 'short', timeZone: provider.timezone }).format(new Date(selected.startsAt))} · ${selected.staffName}`,
     durationAndPrice: `${reviewedService.durationMinutes} ${t('bookingCommit.minutes')} · ${formatMoney(reviewedService.priceMinor, reviewedService.currency)}`,
-    cancellation: cancellationCutoffText(locale, provider.bookingPolicy?.cancellationCutoffMinutes ?? 0),
+    ...reviewWindow(selected.startsAt, provider),
   } : null;
+  const movingFrom = fromBookingId && provider && details.data?.startsAt ? t('compact.movingFrom', { when: `${appointmentDate(details.data.startsAt, provider.timezone, locale)} · ${appointmentTime(details.data.startsAt, provider.timezone, locale)}` }) : '';
   const detailsFailure = details.error instanceof ApiError ? details.error : null;
   const detailsError = details.isError ? t(bookingLoadRefusalKey(detailsFailure?.code, detailsFailure?.status)) : '';
   const reauthReturnTo = `/booking/${providerId}?${new URLSearchParams({ serviceId: chosenService, date: chosenDate })}`;
   function saveReauthDraft() { if (identityId) useBookingContactDraft.getState().save({ identityId, providerId, serviceId: chosenService, date: chosenDate, selected }); }
-  return { upcoming, controls, review, reauthReturnTo, saveReauthDraft, locale, t, providerId, fromBookingId, serviceId, date, selected, busy, editingDisabled: busy || Boolean(pendingAttempt), pendingAttempt, pendingElsewhere, notice, error, detailsError, conflictSlot, identityId, details, provider, chosenService, chosenDate, slots, contacts, name, setName, setServiceId, setDate, setNotice, reset, choose, confirm, saveName };
+  return { upcoming, controls, review, movingFrom, reauthReturnTo, saveReauthDraft, locale, t, providerId, fromBookingId, serviceId, date, selected, busy, editingDisabled: busy || Boolean(pendingAttempt), pendingAttempt, pendingElsewhere, notice, error, detailsError, conflictSlot, identityId, details, provider, chosenService, chosenDate, slots, contacts, name, setName, setServiceId, setDate, setNotice, reset, choose, confirm, saveName };
 }
