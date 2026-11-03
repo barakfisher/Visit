@@ -1,4 +1,5 @@
 import type { MessageKey } from '../i18n/messages';
+import { ApiError } from './apiClient';
 
 export const MINUTES_PER_HOUR = 60;
 /** Fields the owner types in hours; the API stores every cutoff in minutes. */
@@ -40,3 +41,20 @@ function countHint(text: string, keys: { none?: MessageKey; one: MessageKey; man
 /** The live sentence under "latest booking before start" and "how far ahead", so the number's direction is explicit. */
 export const noticeHint = (text: string) => countHint(text, { none: 'setup.noticeHintNone', one: 'setup.noticeHintOne', many: 'setup.noticeHint' });
 export const advanceHint = (text: string) => countHint(text, { one: 'setup.advanceHintOne', many: 'setup.advanceHint' });
+
+/** The server's refusal to save the verified-phone requirement while SMS delivery is off. */
+export const VERIFIED_PHONE_UNAVAILABLE = 'VERIFIED_PHONE_UNAVAILABLE';
+/**
+ * Whether the owner may change "require verified phone", and what to tell them.
+ * `sms` is `/api/auth/capabilities`: undefined while loading, false when off or unreadable.
+ * A requirement that is already on stays switchable so the owner can always turn it off (decisions.md, 2026-11-03 verified phone).
+ */
+export function verifiedPhoneSwitch(sms: boolean | undefined, on: boolean): { disabled: boolean; hint: MessageKey | null } {
+  if (sms) return { disabled: false, hint: null };
+  if (sms === undefined) return { disabled: !on, hint: null };
+  return on ? { disabled: false, hint: 'setup.verifiedPhoneOn' } : { disabled: true, hint: 'setup.verifiedPhoneUnavailable' };
+}
+/** The message for a failed policy save: the verified-phone refusal gets its own, anything else the generic one. */
+export function policySaveFailure(error: unknown): MessageKey {
+  return error instanceof ApiError && error.code === VERIFIED_PHONE_UNAVAILABLE ? 'setup.verifiedPhoneRefused' : 'setup.saveFailure';
+}

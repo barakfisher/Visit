@@ -11,6 +11,7 @@ import { releaseHold } from '../scheduling/reservations.js';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { validateBusinessContext, type AuthorizedBusinessContext } from '../security/tenant-context.js';
+import { env } from '../env.js';
 
 const managers = ['OWNER', 'MANAGER'] as const;
 const staffProjection = { id: true, businessId: true, displayName: true, active: true, parallelCapacity: true } as const;
@@ -36,9 +37,12 @@ export async function getBusinessPolicy(context: AuthorizedBusinessContext) {
   return { policy: await prisma.bookingPolicy.findUnique({ where: { businessId: context.businessId } }), defaults: DEFAULT_BOOKING_POLICY };
 }
 
-export async function saveBusinessPolicy(context: AuthorizedBusinessContext, input: PolicyInput) {
+export const VERIFIED_PHONE_UNAVAILABLE = 'VERIFIED_PHONE_UNAVAILABLE';
+// Without SMS delivery no customer can prove a phone, so the requirement would make the business unbookable (decisions.md, 2026-11-03 verified phone).
+export async function saveBusinessPolicy(context: AuthorizedBusinessContext, input: PolicyInput, { phoneVerification = env.SMS_DELIVERY_MODE !== 'disabled' }: { phoneVerification?: boolean } = {}) {
   await validateBusinessContext(context, managers);
   input = parseBookingPolicy(input);
+  if (input.requireVerifiedPhone && !phoneVerification) throw new AppError(409, VERIFIED_PHONE_UNAVAILABLE, 'Phone verification is not available yet, so customers could not meet this requirement.');
   const data = {
     ...(input.requireCustomerName !== undefined ? { requireCustomerName: input.requireCustomerName } : {}),
     ...(input.requireVerifiedPhone !== undefined ? { requireVerifiedPhone: input.requireVerifiedPhone } : {}),
