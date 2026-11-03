@@ -7,6 +7,7 @@ import { useAuthStore } from '../state/auth';
 import { useAppLocale } from '../i18n/LocaleContext';
 import { ApiError, apiRequest } from './api';
 import { confirmAppointmentCancellation } from './bookingActions';
+import { historyEntries } from './AppointmentHistory';
 import type { ActiveAppointment, HistoricalAppointment } from '../types/AppointmentLifecycle.types';
 import type { ActiveBooking } from '../types/flows';
 export function useAppointments() {
@@ -19,6 +20,7 @@ export function useAppointments() {
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const bookings = useQuery({ queryKey: ['consumer', 'active', identity, contextVersion], queryFn: () => apiRequest<{ bookings: ActiveAppointment[] }>('/api/consumer/bookings/active'), enabled: Boolean(identity) });
   const history = useQuery({ queryKey: ['me', 'bookings', identity, contextVersion], queryFn: () => apiRequest<{ bookings: HistoricalAppointment[] }>('/v1/me/bookings'), enabled: Boolean(identity) });
+  const historyList = history.data ? historyEntries(history.data.bookings, { status: bookings.status, ids: bookings.data?.bookings.map(booking => booking.id) ?? [] }) : null;
   async function cancel(booking: ActiveBooking) {
     if (pending.current) return;
     const current = bookings.data?.bookings.find(item => item.id === booking.id);
@@ -39,5 +41,5 @@ export function useAppointments() {
     if (!bookings.data?.bookings.find(item => item.id === booking.id)?.actions.canReschedule) return;
     router.push({ pathname: '/booking/[providerId]', params: { providerId: booking.business.id, serviceId: booking.service.id, fromBookingId: booking.id } });
   }
-  return { t, locale, identity, error, busyBookingId, bookings, history, cancel, reschedule };
+  return { t, locale, identity, error, busyBookingId, bookings, history, historyList, cancel, reschedule };
 }

@@ -1,14 +1,15 @@
+import type { ReactNode } from 'react';
 import { timePolicyNote } from '@/src/lib/appointmentTime';
 import { View } from 'react-native';
 import { useAppLocale } from '@/src/i18n/LocaleContext';
 import { AppText as Text } from './AppText';
 import { ActionButton } from './ActionButton';
-export type ActiveBookingCardProps = { service: string; provider: string; dateLabel: string; timeLabel: string; timezone: string; onReschedule?: () => void; onCancel?: () => void; actionsPending?: boolean; busy?: boolean; note?: string; error?: string };
-export function ActiveBookingCard({ service, provider, dateLabel, timeLabel, timezone, onReschedule, onCancel, actionsPending = false, busy = false, note = '', error = '' }: ActiveBookingCardProps) {
+export type ActiveBookingCardProps = { service: string; provider: string; dateLabel: string; timeLabel: string; timezone: string; onReschedule?: () => void; onCancel?: () => void; actionsPending?: boolean; busy?: boolean; note?: string; error?: string; label?: string; footer?: ReactNode };
+export function ActiveBookingCard({ service, provider, dateLabel, timeLabel, timezone, onReschedule, onCancel, actionsPending = false, busy = false, note = '', error = '', label = '', footer = null }: ActiveBookingCardProps) {
   const { t, locale } = useAppLocale();
   return <View accessibilityLabel={t('ui.upcoming')} className="gap-4 rounded-card border border-line bg-surface p-card shadow-card">
     <View className="gap-1">
-      <Text className="text-sm font-semibold text-brand">{t('ui.nextVisit')}</Text>
+      {label ? <Text className="text-sm font-semibold text-brand">{label}</Text> : null}
       <Text className="text-lg font-semibold text-ink">{service}</Text>
       <Text className="text-sm text-body">{t('ui.provider', { provider })}</Text>
     </View>
@@ -22,5 +23,6 @@ export function ActiveBookingCard({ service, provider, dateLabel, timeLabel, tim
     </View> : null}
     {note ? <Text className="text-sm text-muted">{note}</Text> : null}
     {error ? <Text accessibilityRole="alert" accessibilityLiveRegion="assertive" className="rounded-control bg-red-50 p-3 text-danger">{error}</Text> : null}
+    {footer}
   </View>;
 }
