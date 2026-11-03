@@ -43,7 +43,9 @@ export async function upcomingAppointmentsSmoke({ browser, webUrl, apiUrl, prism
     const top = await firstCard.boundingBox(), providers = await page.getByRole('heading', { name: 'My Providers', exact: true }).boundingBox(); assert.ok(top && providers && top.y < providers.y);
     assert.equal(await firstCard.getByText('Times are in local Israeli time, even when your device is abroad.', { exact: true }).count(), 1);
     await firstCard.getByRole('button', { name: '2 more upcoming · View all appointments', exact: true }).click();
-    await page.getByTestId(`history-booking-${third.id}`).waitFor();
+    // An upcoming appointment is listed once, with the upcoming cards, and not again under history.
+    await page.getByTestId(`active-booking-${third.id}`).filter({ visible: true }).getByRole('link', { name: 'View appointment details', exact: true }).waitFor();
+    assert.equal(await page.getByTestId(`history-booking-${third.id}`).count(), 0);
     await page.goto(webUrl); await firstCard.waitFor();
     failRead = true; await page.reload();
     await page.getByRole('alert').filter({ hasText: 'Your upcoming appointment could not load.' }).waitFor();

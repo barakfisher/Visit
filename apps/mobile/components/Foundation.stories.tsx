@@ -34,7 +34,7 @@ function Examples({ onAction }: { onAction: () => void }) {
     <SectionNavigation label={t('account.workspace')} items={[{ id: 'agenda', label: t('agenda.title') }, { id: 'catalog', label: t('catalog.title') }, { id: 'future', label: t('nav.businessSettings'), disabled: true }]} selectedId={section} onSelect={setSection} />
     <TimeChips slots={[{ id: 'a', label: '09:00' }, { id: 'b', label: '09:30' }, { id: 'c', label: '10:00', locked: true }]} timezone="Asia/Jerusalem" selectedId={time} onSelect={setTime} />
     <AvailabilityState state="error" onRetry={onAction} />
-    <ActiveBookingCard service={name} provider={name} dateLabel={locale === 'he' ? 'יום שני, 2 בנובמבר' : 'Monday, November 2'} timeLabel="10:30" timezone="Asia/Jerusalem" onReschedule={onAction} onCancel={onAction} />
+    <ActiveBookingCard service={name} provider={name} dateLabel={locale === 'he' ? 'יום שני, 2 בנובמבר' : 'Monday, November 2'} timeLabel="10:30" timezone="Asia/Jerusalem" label={t('ui.nextVisit')} onReschedule={onAction} onCancel={onAction} />
   </ScreenContent>;
 }
 function Foundation({ locale, width, onAction }: { locale: Locale; width: number; onAction: () => void }) {

@@ -26,6 +26,8 @@ const SCENARIO_DAYS = 25;
 const CUTOFF_MINUTES = 60 * 24 * 60;
 // The agenda's revenue tile for a day without revenue (ProviderAgenda.component.tsx).
 const NO_REVENUE = '—';
+// The phone width of the 2026-11-02 manual run, where the Appointments cards were clipped.
+const NARROW_PHONE = { width: 375, height: 812 };
 
 type Deps = { browser: Browser; webUrl: string; apiUrl: string; prisma: typeof Prisma; redis: typeof Redis; identityIds: string[]; business: PilotBusiness; resetSignInLimits: () => Promise<unknown> };
 type ApiFailure = { error: { code: string } };
@@ -181,6 +183,24 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     const oneMore = translateCount('he', 'upcoming.more', 1);
     await he.page.goto(webUrl);
     await homeCard(he.page, h1).getByRole('button', { name: oneMore, exact: true }).waitFor();
+    // On a narrow phone the Appointments page stacks the upcoming cards whole, labels only the first as the next visit,
+    // and does not list them again under history.
+    for (const [owner, ids, locale] of [[he, [h1, h2], 'he'], [en, [e1], 'en']] as const) {
+      const page = await newPage(owner.context); await page.setViewportSize(NARROW_PHONE);
+      await page.goto(`${webUrl}/appointments`);
+      const cards = ids.map(id => homeCard(page, id)); for (const card of cards) await card.waitFor();
+      await page.getByRole('heading', { name: owner.t('lifecycle.history'), exact: true }).waitFor();
+      await page.getByText(owner.t('common.loading'), { exact: true }).filter({ visible: true }).waitFor({ state: 'detached' }); // history has settled
+      const boxes = await Promise.all(cards.map(card => card.boundingBox()));
+      for (const box of boxes) assert.ok(box && box.x >= 0 && box.x + box.width <= NARROW_PHONE.width, `a card leaves the screen: ${JSON.stringify(box)}`);
+      for (let index = 1; index < boxes.length; index++) assert.ok(boxes[index]!.y >= boxes[index - 1]!.y + boxes[index - 1]!.height, 'cards are not stacked');
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'the page scrolls sideways');
+      assert.equal(await page.getByText(owner.t('ui.nextVisit'), { exact: true }).filter({ visible: true }).count(), 1);
+      assert.equal(await cards[0]!.getByText(owner.t('ui.nextVisit'), { exact: true }).count(), 1);
+      for (const id of ids) { await homeCard(page, id).getByRole('link', { name: owner.t('details.open'), exact: true }).waitFor(); assert.equal(await page.getByTestId(`history-booking-${id}`).count(), 0); }
+      await page.screenshot({ path: path.join(evidence, `appointments-upcoming-${locale}-narrow.png`), fullPage: true });
+      await page.close();
+    }
     await he.page.goto(`${webUrl}/appointment/${h2}`);
     const cancelled = await cancelWith(he.page, he.page.getByRole('button', { name: he.t('details.cancel'), exact: true }).filter({ visible: true }), h2, 'he');
     assert.equal(cancelled.status(), 200);
@@ -326,7 +346,8 @@ export async function appointmentRetentionSmoke(deps: Deps) {
       await listCard.getByRole('alert').filter({ hasText: owner.t('lifecycle.cancelCutoff') }).waitFor();
       // The refetched card stops offering changes the server refuses, and says so.
       await listCard.getByText(owner.t('lifecycle.lockedBoth'), { exact: true }).waitFor();
-      assert.equal(await listCard.getByRole('button').count(), 0);
+      // Its only button left is the change history, which never changes the appointment.
+      assert.deepEqual((await listCard.getByRole('button').allInnerTexts()).map(text => text.trim()), [owner.t('lifecycle.show')]);
       await listPage.screenshot({ path: path.join(evidence, `cutoff-appointments-refused-${locale}-mobile.png`), fullPage: true });
       const moveRefused = rescheduleResponse(move, id);
       await rescheduleButton(owner, move).click();
