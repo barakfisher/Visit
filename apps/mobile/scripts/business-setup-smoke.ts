@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import jsQR from 'jsqr';
 import type { Page, BrowserContext, Locator } from 'playwright';
+import { translate } from '../src/i18n/messages';
 // The catalog this setup flow creates through the UI; journeys that book it assert against these values.
 export const SETUP_SERVICE = { name: 'Pilot consultation', durationMinutes: 30, price: 100, currency: 'ILS' } as const;
 export const SETUP_STAFF_NAME = 'Pilot expert edited';
@@ -162,7 +163,7 @@ export async function configureBusinessSmoke({ page, context, webUrl, apiUrl, bu
   assert.equal(await page.getByRole('button', { name: 'Copy booking link', exact: true }).isDisabled(), true);
   await openSettings(page, webUrl, businessId, 'profile');
   assert.equal(await page.getByRole('textbox', { name: 'Public business email', exact: true }).inputValue(), 'public-studio@example.test');
-  assert.equal(await page.getByRole('textbox', { name: 'Business timezone', exact: true }).inputValue(), 'Asia/Jerusalem');
+  assert.equal(await page.getByTestId('business-timezone').textContent(), translate('en', 'time.israel'));
   assert.equal((await (await context.request.get(`${base}/staff`)).json()).staff.length, 1);
   // Callers publish next, from the last settings step.
   await openSettings(page, webUrl, businessId); await openFromHub(page, 'publish');

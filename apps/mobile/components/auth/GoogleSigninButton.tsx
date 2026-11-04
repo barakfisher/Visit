@@ -3,8 +3,9 @@ import { useAppLocale } from '@/src/i18n/LocaleContext';
 import { beginGoogleSignIn, googleNativeAvailable } from '@/src/lib/googleFlow';
 import type { GoogleStart } from '@/src/lib/googleCallback';
 import { ActionButton } from '../ActionButton';
-export type GoogleSigninButtonProps = GoogleStart & { enabled?: boolean; disabled?: boolean; onError: (message: string) => void; onBusyChange?: (busy: boolean) => void };
-export function GoogleSigninButton({ enabled, disabled, intent, returnTo, onError, onBusyChange }: GoogleSigninButtonProps) {
+// Shown only where the server offers Google (`offersGoogle`), so it has no "not configured" state of its own.
+export type GoogleSigninButtonProps = GoogleStart & { disabled?: boolean; onError: (message: string) => void; onBusyChange?: (busy: boolean) => void };
+export function GoogleSigninButton({ disabled, intent, returnTo, onError, onBusyChange }: GoogleSigninButtonProps) {
   const { t } = useAppLocale();
   const running = useRef(false);
   const [busy, setBusy] = useState(false);
@@ -16,5 +17,5 @@ export function GoogleSigninButton({ enabled, disabled, intent, returnTo, onErro
     catch { onError(t('auth.failure')); }
     finally { running.current = false; onBusyChange?.(false); setBusy(false); }
   }
-  return <ActionButton secondary disabled={disabled || !enabled || !supported} busy={busy} label={!enabled ? t('auth.googleUnavailable') : !supported ? t('auth.googleBuild') : t(intent === 'link' ? 'auth.googleLink' : 'auth.google')} onPress={() => void signIn()} />;
+  return <ActionButton secondary disabled={disabled || !supported} busy={busy} label={!supported ? t('auth.googleBuild') : t(intent === 'link' ? 'auth.googleLink' : 'auth.google')} onPress={() => void signIn()} />;
 }

@@ -7,10 +7,11 @@ import { ActionButton } from '../ActionButton';
 import { useAppLocale } from '@/src/i18n/LocaleContext';
 import { apiRequest } from '@/src/lib/api';
 import { internationalBusinessPhone } from '@/src/lib/BusinessPhone';
+import { businessTimezoneLabel } from '@/src/lib/appointmentTime';
 import { businessListingLine } from '@/src/lib/BusinessListing';
 export type BusinessProfile = { id: string; name: string; slug: string; timezone: string; location: string | null; category: string | null; description: string | null; contactPhone: string | null; contactEmail: string | null; approvalStatus: string; publishedAt: string | null };
 export function BusinessProfileForm({ business, onSaved }: { business: BusinessProfile; onSaved?: () => void }) {
-  const { t } = useAppLocale(), client = useQueryClient();
+  const { t, locale } = useAppLocale(), client = useQueryClient();
   const [name, setName] = useState(business.name), [location, setLocation] = useState(business.location ?? ''), [category, setCategory] = useState(business.category ?? '');
   const [description, setDescription] = useState(business.description ?? ''), [phone, setPhone] = useState(business.contactPhone ?? ''), [email, setEmail] = useState(business.contactEmail ?? '');
   const [busy, setBusy] = useState(false), [feedback, setFeedback] = useState<'saved' | 'error' | ''>('');
@@ -23,7 +24,8 @@ export function BusinessProfileForm({ business, onSaved }: { business: BusinessP
   return <View className="gap-4"><AppText>{t('setup.publicHint')}</AppText>
     <TextField label={t('setup.name')} value={name} onChangeText={setName} maxLength={120} />
     <TextField label={t('setup.slug')} hint={t('setup.slugHint')} identifier value={business.slug} editable={false} />
-    <TextField label={t('setup.timezone')} identifier value={business.timezone} editable={false} />
+    {/* The zone is fixed for the pilot, so it is shown as text, not as a field that looks editable. */}
+    <View className="gap-2"><AppText className="font-medium text-ink">{t('setup.timezone')}</AppText><AppText testID="business-timezone" className="text-body">{businessTimezoneLabel(business.timezone, locale)}</AppText></View>
     <TextField label={t('setup.category')} value={category} onChangeText={setCategory} maxLength={80} />
     <TextField label={t('setup.location')} value={location} onChangeText={setLocation} maxLength={200} />
     <TextField label={t('setup.description')} value={description} onChangeText={setDescription} multiline maxLength={2000} />

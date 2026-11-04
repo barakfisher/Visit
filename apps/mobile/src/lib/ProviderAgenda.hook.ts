@@ -11,7 +11,7 @@ import { useBlockRemoval, useTimeBlockDialog } from './TimeBlocks.hook';
 import { canContinueAppointmentAction } from './AppointmentLifecycle.utils';
 import { todayInTimezone } from './calendar';
 import { addBookingDays, validBookingDate } from './CompactBooking.utils';
-import { appointmentDate, appointmentTime, timePolicyNote } from './appointmentTime';
+import { appointmentSpan, dateRange, timePolicyNote } from './appointmentTime';
 import type { AgendaDraft, ProviderAgendaView } from '../types/ProviderAgenda.types';
 export function useProviderAgenda(): ProviderAgendaView {
   const business = useProviderWorkspace(), { t, locale } = useAppLocale(), router = useRouter();
@@ -41,7 +41,8 @@ export function useProviderAgenda(): ProviderAgendaView {
   return { manual, business, profile, t, day, validDate, retry: () => { if (validDate && focused) void agenda.refetch(); }, draft: stored, agenda: { data: agenda.data, isError: agenda.isError, isLoading: agenda.isLoading }, busy, feedback: !validDate ? t('agendaEdit.invalidDate') : blockRemoval.removeFailure ? t(blockRemoval.removeFailure) : feedback, update,
     selectBusiness: (id: string) => { if (id !== business.id && !busy) { useSessionStore.getState().selectBusiness(id); router.replace({ pathname: '/provider/dashboard', params: { businessId: id } }); } },
     previous: () => { if (validDate) update({ date: addBookingDays(day, stored.mode === 'week' ? -7 : -1) }); }, next: () => { if (validDate) update({ date: addBookingDays(day, stored.mode === 'week' ? 7 : 1) }); },
-    when: (instant: string) => `${stored.mode === 'week' ? `${appointmentDate(instant, business.timezone, locale)} · ` : ''}${appointmentTime(instant, business.timezone, locale)}`,
+    span: (startsAt: string, endsAt: string) => appointmentSpan(startsAt, endsAt, business.timezone, locale, stored.mode === 'week'),
+    range: (fromDate: string, toDate: string) => dateRange(fromDate, toDate, locale),
     timeNote: timePolicyNote(business.timezone, locale), blockDialog, blockRemoval, contact: (phone: string | null, mode: 'call' | 'whatsapp') => void contact(phone, mode),
   };
 }

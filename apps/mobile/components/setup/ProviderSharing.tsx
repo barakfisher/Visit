@@ -35,10 +35,12 @@ export function ProviderSharing({ businessId }: { businessId: string }) {
     <AppText>{t('setup.shareHint')}</AppText>
     {query.isError || query.data?.available && !qr ? <><AppText accessibilityRole="alert">{t('setup.shareUnavailable')}</AppText><ActionButton secondary label={t('common.retry')} onPress={() => void query.refetch()} /></> : !query.data ? <AppText>{t('common.loading')}</AppText> : !query.data.available ? <AppText>{t('setup.shareLocked')}</AppText> : <>
       <AppText selectable testID="provider-sharing-url" style={{ writingDirection: 'ltr' }}>{query.data.url}</AppText>
-      {qr ? <View style={{ alignSelf: 'center', backgroundColor: 'white', maxWidth: '100%' }}><Svg testID="provider-sharing-qr" accessibilityLabel={t('setup.qr')} accessible role="img" width={240} height={240} viewBox={`0 0 ${qr.size} ${qr.size}`}><Rect width={qr.size} height={qr.size} fill="white" /><Path d={qr.path} fill="black" /></Svg></View> : null}
+      {/* The image role and label sit on the View: react-native-svg passes `accessible` to the web DOM as an invalid attribute. */}
+      {qr ? <View testID="provider-sharing-qr" accessible accessibilityRole="image" accessibilityLabel={t('setup.qr')} style={{ alignSelf: 'center', backgroundColor: 'white', maxWidth: '100%' }}><Svg width={240} height={240} viewBox={`0 0 ${qr.size} ${qr.size}`}><Rect width={qr.size} height={qr.size} fill="white" /><Path d={qr.path} fill="black" /></Svg></View> : null}
     </>}
     <ActionButton secondary label={t('setup.copy')} disabled={!query.data?.available || !qr || busy} onPress={() => void act('copy')} />
-    <ActionButton secondary label={t(shareSupported ? 'setup.share' : 'setup.shareUnsupported')} disabled={!query.data?.available || !qr || !shareSupported || busy} onPress={() => void act('share')} />
+    {/* Browsers without the Web Share API get no system share button; copying the link covers them. */}
+    {shareSupported ? <ActionButton secondary label={t('setup.share')} disabled={!query.data?.available || !qr || busy} onPress={() => void act('share')} /> : null}
     <ActionButton secondary label={t('setup.downloadQr')} disabled={!query.data?.available || !qr || busy} onPress={() => void act('qr')} />
     {feedback ? <AppText accessibilityRole={feedback === 'error' ? 'alert' : 'status'}>{t(feedback === 'copied' ? 'setup.copied' : 'setup.shareFailure')}</AppText> : null}
   </View>;

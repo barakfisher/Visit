@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { expect, userEvent } from 'storybook/test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { LocalePreview } from '@/src/i18n/LocaleContext';
-import type { Locale } from '@/src/i18n/messages';
+import { translate, type Locale } from '@/src/i18n/messages';
 import { BusinessProfileForm, type BusinessProfile } from './BusinessProfileForm';
 function Preview({ locale, business }: { locale: Locale; business?: Partial<BusinessProfile> }) {
   const [client] = useState(() => new QueryClient());
@@ -28,4 +28,10 @@ export const IsraeliPhoneHebrew: Story = { args: { locale: 'he', business: { con
   await userEvent.type(input, '050-123 4567');
   await expect(canvas.queryByRole('alert')).toBeNull();
   await expect(canvas.getByRole('button', { name: 'שמירת פרטי העסק' })).toBeEnabled();
+} };
+// The pilot zone is fixed: it reads as its name in the viewer's language, never as an IANA id in a field that looks editable.
+export const TimezoneHebrew: Story = { args: { locale: 'he' }, play: async ({ canvas }) => {
+  await expect(canvas.getByTestId('business-timezone')).toHaveTextContent(translate('he', 'time.israel'));
+  await expect(canvas.queryByRole('textbox', { name: translate('he', 'setup.timezone') })).toBeNull();
+  await expect(canvas.queryByText('Asia/Jerusalem')).toBeNull();
 } };
