@@ -18,5 +18,5 @@ export type ProviderAgendaView = {
   day: string; validDate: boolean; draft: Readonly<AgendaDraft>; agenda: { data: ProviderAgenda | undefined; isError: boolean; isLoading: boolean };
   busy: boolean; feedback: string; timeNote: string; update: (patch: Partial<AgendaDraft>) => void;
   selectBusiness: (id: string) => void; previous: () => void; next: () => void; retry: () => void;
-  when: (instant: string) => string; blockDialog: TimeBlockDialogState; blockRemoval: BlockRemovalState; contact: (phone: string | null, mode: 'call' | 'whatsapp') => void;
+  span: (startsAt: string, endsAt: string) => string; range: (fromDate: string, toDate: string) => string; blockDialog: TimeBlockDialogState; blockRemoval: BlockRemovalState; contact: (phone: string | null, mode: 'call' | 'whatsapp') => void;
 };

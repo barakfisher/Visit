@@ -1,21 +1,25 @@
 import { safeAuthReturnTo } from '@visit/contracts';
 import { useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useAppLocale } from '@/src/i18n/LocaleContext';
 import { apiRequest, ApiError } from '@/src/lib/api';
 import { refreshAccountAfterChange } from '@/src/lib/auth';
+import { activeContactChannel, contactChannels, offersGoogle, type AuthCapabilities, type ContactChannel } from '@/src/lib/AuthCapabilities';
 import { useSessionStore } from '@/src/state/session';
 import type { Method, Methods, Issued } from './AccountMethods.types';
 export function useAccountMethods({ onBusyChange, contactOnly = false, returnTo, onReauthenticate }: { onBusyChange?: (busy: boolean) => void; contactOnly?: boolean; returnTo?: string; onReauthenticate?: () => void }) {
   const { t, locale } = useAppLocale();
   const identityId = useSessionStore(state => state.identityId);
   const methods = useQuery({ queryKey: ['account-methods', identityId], queryFn: async () => { const result = await apiRequest<Methods>('/api/account/sign-in-methods'); if (result.identityId !== identityId) throw new ApiError('The signed-in account changed.', 'SESSION_CHANGED', 409); return result; }, enabled: Boolean(identityId), refetchOnMount: 'always', refetchInterval: 30000 });
-  const capabilities = useQuery({ queryKey: ['auth', 'capabilities'], queryFn: () => apiRequest<{ google: boolean; googleNative: boolean }>('/api/auth/capabilities') });
-  const [channel, setChannel] = useState<'email' | 'phone'>('email'), [destination, setDestination] = useState('');
+  const capabilities = useQuery({ queryKey: ['auth', 'capabilities'], queryFn: () => apiRequest<AuthCapabilities>('/api/auth/capabilities') });
+  const [picked, setChannel] = useState<ContactChannel>('email'), [destination, setDestination] = useState('');
   const [challenge, setChallenge] = useState(''), [code, setCode] = useState(''), [cooldown, setCooldown] = useState(0);
   const [removing, setRemoving] = useState<Method | null>(null), [issued, setIssued] = useState<Issued | null>(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [success, setSuccess] = useState(false);
   const reauth = methods.data?.reauthRequired ?? true;
+  const channels = contactChannels(methods.data?.capabilities), channel = activeContactChannel(picked, channels) ?? picked;
+  const google = offersGoogle(capabilities.data, Platform.OS);
   useEffect(() => { onBusyChange?.(busy); return () => onBusyChange?.(false); }, [busy, onBusyChange]);
   useEffect(() => { if (!cooldown) return; const timer = setTimeout(() => setCooldown(value => Math.max(0, value - 1)), 1000); return () => clearTimeout(timer); }, [cooldown]);
   function failure(reason: unknown) {
@@ -55,8 +59,7 @@ export function useAccountMethods({ onBusyChange, contactOnly = false, returnTo,
     catch (reason) { setError(failure(reason)); }
     finally { setBusy(false); }
   }
-  const available = methods.data?.capabilities[channel] ?? false;
   const valid = channel === 'email' ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(destination.trim()) : /^\+[1-9]\d{7,14}$/.test(destination.trim().replace(/[\s()-]/g, ''));
   const reauthReturnTo = safeAuthReturnTo(returnTo);
-  return { reauthReturnTo, onReauthenticate, t, locale, identityId, methods, capabilities, channel, setChannel, destination, setDestination, challenge, code, setCode, cooldown, removing, setRemoving, issued, busy, error, setError, success, reauth, resetDraft, start, finish, loadLocalCode, available, valid, contactOnly };
+  return { reauthReturnTo, onReauthenticate, t, locale, identityId, methods, google, channels, channel, setChannel, destination, setDestination, challenge, code, setCode, cooldown, removing, setRemoving, issued, busy, error, setError, success, reauth, resetDraft, start, finish, loadLocalCode, valid, contactOnly };
 }

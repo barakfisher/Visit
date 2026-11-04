@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import type { Browser, BrowserContext, Page } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
+import { translate } from '../src/i18n/messages';
 
 type Options = { browser: Browser; webUrl: string; apiUrl: string; claims: Map<string, Record<string, unknown>>; run: string; prisma: typeof Prisma; identityIds: string[]; sharedBusinessId: string };
 export async function googleSmoke({ browser, webUrl, apiUrl, claims, run, prisma, identityIds, sharedBusinessId }: Options) {
@@ -79,7 +80,8 @@ export async function googleSmoke({ browser, webUrl, apiUrl, claims, run, prisma
     await page.unroute(`${apiUrl}/api/auth/me`);
     await page.goto(`${webUrl}/account`);
     await page.getByRole('heading', { name: 'Sign-in methods', exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Request reviewed recovery (not available yet)', exact: true }).isDisabled().then(value => assert.equal(value, true));
+    // Recovery is not built yet, so Account no longer offers it.
+    assert.equal(await page.getByRole('button', { name: translate('en', 'methods.recovery'), exact: true }).count(), 0);
     const oldDevice = await context(); await oldDevice.addCookies(await consumer.cookies());
     const newEmail = `changed-google-${run}@example.test`;
     await page.getByLabel('New email address', { exact: true }).fill(newEmail);
