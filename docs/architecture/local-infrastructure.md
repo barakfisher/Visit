@@ -11,7 +11,7 @@ VIS-3 implementation and verification guide. Requires Node.js 22+, npm, Docker E
 
 The Compose API binds localhost:3000; PostgreSQL localhost:5432; Redis localhost:6380. Container-to-container connections use the internal Compose bridge and service names. These exposed ports are for local development only, not a production deployment configuration. Staging is VIS-40.
 
-For API hot reload and the browser's development email inbox, stop the API container with `docker compose stop api`, run `docker compose up -d postgres redis`, then `npm ci`, `npm run db:generate`, `npm run db:deploy --workspace @visit/api` and `npm run dev:api`. Never run the host API and API container on port 3000 together. Docker-forwarded browser requests cannot access the loopback-only development mailbox; run the API on the host for that workflow.
+For API hot reload and the browser's development email inbox, stop the API container with `docker compose stop api`, run `docker compose up -d postgres redis`, then `npm ci`, `npm run db:generate`, `npm run db:deploy --workspace @visit/api` and `npm run dev:api`. `dev:api` runs `prisma generate` first (`predev`): the generated client is gitignored, so a pull that changes the schema leaves an old client that fails at runtime (a missing model reads as `undefined`, which surfaced as a 500 on password sign-up and sign-in). Generation does not touch the database; migrations stay a separate, explicit `db:deploy`. Never run the host API and API container on port 3000 together. Docker-forwarded browser requests cannot access the loopback-only development mailbox; run the API on the host for that workflow.
 
 ## Migrations, fixtures and reset
 

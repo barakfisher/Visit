@@ -14,7 +14,7 @@ Requirements: Node.js 22+, npm, and Docker Compose.
 
 1. Copy `.env.example` to `.env` and adjust local values if needed.
 2. Run `docker compose up -d --build` to start the API, PostgreSQL, and Redis together. The API container applies migrations before starting and becomes ready only when database/migration and Redis checks succeed.
-3. For API hot reload, stop the API container (`docker compose stop api`), run `docker compose up -d postgres redis`, install dependencies with `npm ci`, generate Prisma with `npm run db:generate`, apply committed migrations with `npm run db:deploy --workspace @visit/api`, then run `npm run dev:api` and `npm run dev:mobile` in separate terminals.
+3. For API hot reload, stop the API container (`docker compose stop api`), run `docker compose up -d postgres redis`, install dependencies with `npm ci`, generate Prisma with `npm run db:generate`, apply committed migrations with `npm run db:deploy --workspace @visit/api`, then run `npm run dev:api` and `npm run dev:mobile` in separate terminals. `dev:api` regenerates the Prisma client before it starts, because the generated client is not committed and a stale one fails at runtime on any model it lacks. After pulling a schema change into a running `dev:api`, restart it (or run `npm run db:generate`); after pulling a migration, also run `db:deploy`.
 
 Expo web uses `EXPO_PUBLIC_API_URL=http://localhost:3000`. For a physical device or Android emulator, set it to an API host address reachable from that device. In local-inbox mode, request a sign-in link from the app and use **Load local development link** on the sign-in screen. Production email delivery uses the server-side Resend adapter and must be configured outside the client app.
 
