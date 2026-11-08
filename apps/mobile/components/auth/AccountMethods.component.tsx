@@ -11,7 +11,7 @@ export function AccountMethodsView(props: ReturnType<typeof useAccountMethods>) 
   return <View className="gap-4 rounded-card border border-line bg-surface p-card">
     <Text accessibilityRole="header" className="text-xl font-bold text-ink">{t('methods.title')}</Text>
     <Text className="text-sm leading-5 text-body">{t(google ? 'methods.intro' : 'methods.introWithoutGoogle')}</Text>
-    {methods.isLoading ? <Text accessibilityRole="status">{t('common.loading')}</Text> : methods.isError ? <ActionButton secondary label={t('common.retry')} onPress={() => void methods.refetch()} /> : <>
+    {methods.isLoading ? <Text role="status">{t('common.loading')}</Text> : methods.isError ? <ActionButton secondary label={t('common.retry')} onPress={() => void methods.refetch()} /> : <>
       {reauth ? <View className="gap-2"><Text className="text-warning">{t('methods.reauth')}</Text><Link onPress={onReauthenticate} href={{ pathname: '/auth/login', params: reauthReturnTo ? { returnTo: reauthReturnTo } : {} }} className="font-semibold text-brand">{t('methods.signInAgain')}</Link></View> : null}
       {methods.data?.methods.filter(method => !contactOnly || method.method !== 'google').map(method => <View key={method.id} className="gap-2 rounded-control border border-line p-4">
         <Text className="font-semibold text-ink">{t(`methods.${method.method}`)} · {t(method.verified ? 'methods.verified' : 'methods.unverified')}</Text>
@@ -35,7 +35,7 @@ export function AccountMethodsView(props: ReturnType<typeof useAccountMethods>) 
         </> : null}
         {google && !contactOnly ? <GoogleSigninButton intent="link" disabled={reauth || busy} onError={setError} /> : null}
       </>}
-      {success ? <Text accessibilityRole="status" className="text-brand">{t('methods.saved')}</Text> : null}
+      {success ? <Text role="status" className="text-brand">{t('methods.saved')}</Text> : null}
       {!contactOnly && methods.data?.events.length ? <View className="gap-3"><Text className="font-semibold text-ink">{t('methods.history')}</Text>{methods.data.events.map(event => <View key={event.id} className="gap-1 border-t border-line pt-3"><Text className="text-sm text-body">{t(`methods.${event.method}`)} · {t(`methods.${event.action}`)}</Text><Text className="text-xs text-muted">{new Intl.DateTimeFormat(locale === 'he' ? 'he-IL' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(event.createdAt))}</Text>{event.notifications.map((notification, index) => <Text key={index} className="text-xs text-muted">{t(`methods.${notification.channel}`)} · {t(notification.status === 'ACCEPTED' && notification.provider === 'local-inbox' ? 'methods.localAlert' : `methods.${notification.status}`)}</Text>)}</View>)}</View> : null}
     </>}
     {error ? <Text accessibilityRole="alert" className="text-danger">{error}</Text> : null}

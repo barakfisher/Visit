@@ -32,7 +32,7 @@ export function BusinessProfileForm({ business, onSaved }: { business: BusinessP
     <TextField label={t('setup.phone')} hint={t('setup.phoneHint')} error={validPhone ? undefined : t('setup.invalidPhone')} identifier keyboardType="phone-pad" value={phone} onChangeText={setPhone} maxLength={16} />
     <TextField label={t('setup.email')} error={validEmail ? undefined : t('setup.invalidEmail')} identifier keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} maxLength={254} />
     <ActionButton label={t('setup.saveProfile')} busy={busy} disabled={name.trim().length < 2 || category.trim().length < 2 || location.trim().length < 2 || !validPhone || !validEmail} onPress={() => void save()} />
-    {feedback ? <AppText accessibilityRole={feedback === 'error' ? 'alert' : 'status'}>{t(feedback === 'error' ? 'setup.saveFailure' : 'setup.saved')}</AppText> : null}
+    {feedback ? <AppText role={feedback === 'error' ? 'alert' : 'status'}>{t(feedback === 'error' ? 'setup.saveFailure' : 'setup.saved')}</AppText> : null}
     <View className="gap-2 rounded-control border border-line p-4"><AppText accessibilityRole="header" className="font-semibold">{t('setup.preview')}</AppText><AppText>{t('setup.previewHint')}</AppText><AppText>{business.name}</AppText>{businessListingLine(business.location, business.category) ? <AppText>{businessListingLine(business.location, business.category)}</AppText> : null}{business.description ? <AppText>{business.description}</AppText> : null}{business.contactPhone ? <AppText style={{ writingDirection: 'ltr' }}>{business.contactPhone}</AppText> : null}{business.contactEmail ? <AppText style={{ writingDirection: 'ltr' }}>{business.contactEmail}</AppText> : null}</View>
   </View>;
 }
