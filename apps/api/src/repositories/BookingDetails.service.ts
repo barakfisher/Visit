@@ -6,7 +6,7 @@ import { bookingServiceSnapshot } from './bookings.js';
 import { bookingCalendarBody } from './BookingCalendar.utils.js';
 async function ownedAppointment(session: AuthenticatedSession, id: string) {
   await validateAuthenticatedSession(session);
-  const booking = await prisma.booking.findFirst({ where: { id, customerId: session.identity.id, status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'] }, events: { some: {} } }, include: { business: { select: { id: true, name: true, timezone: true, approvalStatus: true, deletedAt: true, bookingPolicy: true } }, staff: { select: { displayName: true } } } });
+  const booking = await prisma.booking.findFirst({ where: { id, customerId: session.identity.id, status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'] }, events: { some: {} } }, include: { business: { select: { id: true, name: true, timezone: true, location: true, approvalStatus: true, deletedAt: true, bookingPolicy: true } }, staff: { select: { displayName: true } } } });
   if (!booking) throw notFound();
   return booking;
 }
@@ -14,7 +14,7 @@ export async function readBookingDetails(session: AuthenticatedSession, id: stri
   const booking = await ownedAppointment(session, id), policy = booking.business.bookingPolicy, now = Date.now();
   const notification = await prisma.bookingNotification.findFirst({ where: { businessId: booking.businessId, bookingId: booking.id }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } });
   return { id: booking.id, status: booking.status, revision: booking.revision, startsAt: booking.startsAt, endsAt: booking.endsAt, service: bookingServiceSnapshot(booking), staff: booking.staff,
-    business: { id: booking.business.id, name: booking.business.name, timezone: booking.business.timezone }, cancellationCutoffMinutes: policy?.cancellationCutoffMinutes ?? 0,
+    business: { id: booking.business.id, name: booking.business.name, timezone: booking.business.timezone, location: booking.business.location }, cancellationCutoffMinutes: policy?.cancellationCutoffMinutes ?? 0,
     actions: customerBookingActions(booking, now),
     notification: { status: notification ? 'RECORDED' : 'LEGACY', recordedAt: notification?.createdAt ?? null, sms: 'UNSUPPORTED', whatsapp: 'UNSUPPORTED' },
   };

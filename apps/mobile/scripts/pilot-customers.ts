@@ -41,7 +41,7 @@ export function pilotCustomers({ browser, webUrl, apiUrl, prisma, redis, identit
     const otp = await fetch(`${apiUrl}/__dev/otp?phone=${encodeURIComponent(phone)}`); assert.equal(otp.status, 200);
     await codeField.fill((await otp.json() as { code: string }).code);
     await page.getByRole('button', { name: t('auth.verify'), exact: true }).click();
-    await page.getByRole('heading', { name: t('home.title'), exact: true }).filter({ visible: true }).waitFor();
+    await page.getByTestId('home-screen').filter({ visible: true }).waitFor();
     const me = await (await context.request.get(`${apiUrl}/api/auth/me`)).json() as { profile: { id: string } };
     identityIds.push(me.profile.id);
     return { context, page, id: me.profile.id, t };
@@ -55,7 +55,7 @@ export function pilotCustomers({ browser, webUrl, apiUrl, prisma, redis, identit
     await context.addInitScript(value => localStorage.setItem('visit.locale.v1.guest', value), locale);
     const page = await newPage(context);
     await page.goto(webUrl);
-    await page.getByRole('heading', { name: t('home.title'), exact: true }).filter({ visible: true }).waitFor();
+    await page.getByTestId('home-screen').filter({ visible: true }).waitFor();
     const me = await (await context.request.get(`${apiUrl}/api/auth/me`)).json() as { profile: { id: string } };
     return { context, page, id: me.profile.id, t };
   }

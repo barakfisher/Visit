@@ -4,7 +4,7 @@
 
 `apps/mobile/src/design/tokens.json` is the single token source, consumed by Tailwind/NativeWind and the typed runtime export `tokens.ts`. Businesses supply business content, never their own theme. Semantic colors distinguish text, decorative dividers (`line`), interactive boundaries (`controlLine`), selected/pressed, feedback, focus and surfaces. Do not use a decorative divider as the only boundary of an input or outlined button. Disabled controls retain readable text; use a disabled attribute and an explanation, rather than reduced opacity as the only signal. Supported actions stay actionable; future actions remain disabled with an availability explanation.
 
-The normal body scale starts at 16/24, captions at 14, headings at 24/32. Native Text retains default font scaling. No shared card/control truncates or clamps user content. Tokens define 44px minimum target dimensions and 56px primary buttons/inputs. Layouts must allow translated labels to wrap and grow vertically. Larger text must never be constrained by a fixed-height container.
+The normal body scale starts at 16/24, captions at 14, headings at 24/32. Native Text retains default font scaling. No shared card/control truncates or clamps user content. Tokens define 44px minimum target dimensions (buttons look 36px tall through `CompactControl` and keep the 44px target), and primary buttons and inputs use that same 44px. Layouts must allow translated labels to wrap and grow vertically. Larger text must never be constrained by a fixed-height container.
 
 ## Layout and direction
 

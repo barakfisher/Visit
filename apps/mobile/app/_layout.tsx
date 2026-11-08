@@ -14,6 +14,8 @@ import type { AuthProfile } from '@/src/types/flows';
 import { readSessionToken, saveSessionToken } from '@/src/lib/sessionToken';
 import { useSessionStore } from '@/src/state/session';
 import { AppNavigation } from '@/components/AppNavigation';
+import { AppFooter } from '@/components/AppFooter';
+import { AppToast } from '@/components/AppToast.component';
 import { AppLocaleProvider, useAppLocale } from '@/src/i18n/LocaleProvider';
 
 export {
@@ -89,10 +91,11 @@ function RootLayoutNav() {
           <Stack.Screen name="appointment" options={{ headerShown: false }} />
           <Stack.Screen name="confirmation/[bookingId]" options={{ headerShown: false }} />
           <Stack.Screen name="appointments" options={{ headerShown: false }} />
+          <Stack.Screen name="archived-providers" options={{ headerShown: false }} />
           <Stack.Screen name="account" options={{ headerShown: false }} />
           <Stack.Screen name="discover" options={{ headerShown: false }} />
           <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-        </Stack></SafeAreaView></View></LocaleProvider>
+        </Stack><AppFooter /><AppToast /></SafeAreaView></View></LocaleProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

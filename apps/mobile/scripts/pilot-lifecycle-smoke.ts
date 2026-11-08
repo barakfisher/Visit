@@ -111,7 +111,7 @@ export async function pilotLifecycleSmoke({ browser, webUrl, apiUrl, prisma, red
     const business = await prisma.business.findUniqueOrThrow({ where: { slug } }); businessIds.push(business.id);
     await provider.getByText('Pending review', { exact: true }).filter({ visible: true }).waitFor();
     await provider.goto(`${webUrl}/`);
-    await provider.getByRole('heading', { name: en('home.title'), exact: true }).waitFor();
+    await provider.getByTestId('home-screen').waitFor();
     assert.equal(await prisma.membership.count({ where: { businessId: business.id, identityId: providerId, status: 'ACTIVE' } }), 0);
     console.log('PASS: VIS-14 new identity applied from the login provider path, sees pending review and keeps customer Home.');
 
@@ -227,7 +227,7 @@ export async function pilotLifecycleSmoke({ browser, webUrl, apiUrl, prisma, red
       assert.equal(saves, 1);
       // Customer Home leads with the new upcoming appointment.
       await page.goto(`${webUrl}/`);
-      await page.getByRole('heading', { name: t('home.title'), exact: true }).filter({ visible: true }).waitFor();
+      await page.getByTestId('home-screen').filter({ visible: true }).waitFor();
       await page.getByTestId(`active-booking-${booking.id}`).waitFor();
       await page.screenshot({ path: path.join(evidence, `home-${locale}-mobile.png`), fullPage: true });
       console.log(`PASS: VIS-14 ${locale} customer opened the shared link, signed in, saved once, reviewed ${time} Israel time with no hold, confirmed once and sees it on Home.`);

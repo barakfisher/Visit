@@ -18,7 +18,7 @@ export function BusinessSettings({ business, readiness }: { business: { id: stri
   const open = (section: SetupSection) => router.push({ pathname: '/provider/[businessId]/[section]', params: { businessId: business.id, section } });
   const hint = (key: SetupSection) => key !== 'publish' ? t(sectionHints[key]) : t(readiness.ready ? 'guide.publishReady' : 'guide.publishWaiting');
   return <ScrollView contentContainerClassName="mx-auto w-full max-w-3xl gap-5 px-5 py-6 pb-10" className="flex-1 bg-canvas">
-    <View className="gap-2"><AppText className="text-xs font-semibold uppercase tracking-widest text-brand">{t('dashboard.workspace')}</AppText><AppText accessibilityRole="header" className="text-3xl font-bold text-ink">{business.name}</AppText></View>
+    <AppText accessibilityRole="header" className="text-3xl font-bold text-ink">{business.name}</AppText>
     <BusinessSwitcher businesses={profile?.businesses ?? []} activeId={business.id} onSelect={select} />
     <View className="gap-2">
       <AppText accessibilityRole="header" className="text-2xl font-bold text-ink">{t('guide.title')}</AppText>

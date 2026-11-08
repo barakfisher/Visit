@@ -4,7 +4,7 @@
 
 ## Current target journey
 
-Provider link/QR → same-account authentication when needed → idempotent identity-owned save → specific provider booking. Ordinary login → Home (upcoming appointment, My Providers, minimal drawer). No global search/directory, bottom tabs, global single-provider bypass or sticky Back to Visit.
+Provider link/QR → same-account authentication when needed → idempotent identity-owned save → specific provider booking. Ordinary login → Home (upcoming appointment, My Providers, minimal drawer). No global search/directory, global single-provider bypass or sticky Back to Visit.
 
 Booking → compact service dropdown (single service auto-selected) → calendar pop-up → preferred time and nearby available-only chronological slots → exact review/required verified contact → final explicit consent → owned bounded Redis reservation → authoritative PostgreSQL confirmation → success/details/calendar/Home/agenda.
 

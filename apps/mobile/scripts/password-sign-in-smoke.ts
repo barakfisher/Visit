@@ -33,19 +33,18 @@ export async function passwordSignInSmoke({ browser, webUrl, prisma, run, identi
     assert.equal(placeholder, `rgb(${tokens.color.disabled.slice(1).match(/../g)!.map(pair => parseInt(pair, 16)).join(', ')})`);
     await customer.page.getByRole('link', { name: "Don't have an account? Create one", exact: true }).filter({ visible: true }).click(); await customer.page.waitForURL(`${webUrl}/auth/sign-up`);
     await signUp(customer.page, 'Password Customer', customerEmail);
-    await customer.page.waitForURL(`${webUrl}/`); await customer.page.getByRole('heading', { name: 'Your time, well spent.', exact: true }).filter({ visible: true }).waitFor();
+    await customer.page.waitForURL(`${webUrl}/`); await customer.page.getByTestId('home-screen').filter({ visible: true }).waitFor();
     const person = await owned(customerEmail);
     assert.ok(person.emailVerifiedAt); assert.equal(person.displayName, 'Password Customer');
     assert.equal(person.passwordCredential?.unprovenEmail, customerEmail); assert.equal(person.passwordCredential?.hash.includes(password), false);
 
-    await customer.page.getByRole('button', { name: 'Open menu', exact: true }).filter({ visible: true }).click();
-    await customer.page.getByRole('dialog').getByRole('button', { name: 'Sign out', exact: true }).click(); await customer.page.waitForURL(`${webUrl}/auth/login`);
+    await customer.page.getByRole('button', { name: 'Account', exact: true }).click(); await customer.page.getByRole('button', { name: 'Sign out', exact: true }).filter({ visible: true }).click(); await customer.page.waitForURL(`${webUrl}/auth/login`);
     await customer.page.getByLabel('Email', { exact: true }).filter({ visible: true }).fill(customerEmail);
     await customer.page.getByLabel('Password', { exact: true }).filter({ visible: true }).fill(`${password}-wrong`);
     await customer.page.getByRole('button', { name: 'Sign in', exact: true }).filter({ visible: true }).click();
     await customer.page.getByRole('alert').filter({ hasText: 'The email or password is incorrect.' }).waitFor();
     await customer.page.getByLabel('Password', { exact: true }).filter({ visible: true }).fill(password); await customer.page.getByLabel('Password', { exact: true }).filter({ visible: true }).press('Enter');
-    await customer.page.waitForURL(`${webUrl}/`); await customer.page.getByRole('heading', { name: 'Your time, well spent.', exact: true }).filter({ visible: true }).waitFor();
+    await customer.page.waitForURL(`${webUrl}/`); await customer.page.getByTestId('home-screen').filter({ visible: true }).waitFor();
 
     const duplicate = await fresh();
     await duplicate.page.goto(`${webUrl}/auth/sign-up`); await signUp(duplicate.page, 'Someone Else', customerEmail);

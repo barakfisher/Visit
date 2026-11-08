@@ -77,7 +77,7 @@ test('VIS-11 spring and autumn calendar availability uses server local dates acr
 test('VIS-11 application default is Hebrew RTL while English explicitly selects LTR', () => {
   assert.equal(defaultLocale, 'he');
   assert.equal(directionFor(defaultLocale), 'rtl');
-  assert.equal(translate(defaultLocale, 'nav.open'), 'פתיחת תפריט');
+  assert.equal(translate(defaultLocale, 'nav.account'), 'חשבון');
   assert.equal(directionFor('en'), 'ltr');
-  assert.equal(translate('en', 'nav.open'), 'Open menu');
+  assert.equal(translate('en', 'nav.account'), 'Account');
 });

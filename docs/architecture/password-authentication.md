@@ -36,7 +36,7 @@ Run the API and app as usual (`npm run dev:api`, `npm run dev:mobile`) and open 
    ```
 
    Promotion signs the administrator out; sign in again.
-4. **Approve:** as the administrator, Account → application review → approve with a reason. The provider can now switch to provider mode from the menu, set up the business and publish it.
+4. **Approve:** as the administrator, Account → application review → approve with a reason. The provider can now switch to provider mode with the switch in the header, set up the business and publish it.
 
 ## Independent review
 

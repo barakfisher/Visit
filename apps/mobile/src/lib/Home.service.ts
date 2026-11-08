@@ -6,3 +6,9 @@ export function readSavedProviders(cursor: string | null, signal?: AbortSignal) 
 export function removeSavedProvider(businessId: string, identity: string) {
   return apiRequest(`/api/me/providers/${encodeURIComponent(businessId)}`, { method: 'DELETE', headers: { 'X-Visit-Expected-Identity': identity } });
 }
+export function readArchivedProviders(cursor: string | null, signal?: AbortSignal) {
+  return apiRequest<SavedProviderPage>(`/api/me/providers?archived=true${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { signal });
+}
+export function restoreSavedProvider(businessId: string, identity: string) {
+  return apiRequest(`/api/me/providers/${encodeURIComponent(businessId)}/restore`, { method: 'POST', headers: { 'X-Visit-Expected-Identity': identity } });
+}

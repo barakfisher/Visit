@@ -465,6 +465,8 @@ model SavedProvider {
   businessId String
   displayName String
   savedAt DateTime @default(now()) @db.Timestamptz
+  // Set when the customer removes the provider from their list; the row stays so they can restore it.
+  archivedAt DateTime? @db.Timestamptz(3)
   identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
   business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
   @@unique([identityId, businessId])

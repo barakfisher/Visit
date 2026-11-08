@@ -7,15 +7,14 @@ import { useAppLocale } from '../i18n/LocaleContext';
 import { useSessionStore } from '../state/session';
 import { useManualDraft, emptyManualDraft } from '../state/ManualBooking.store';
 import { readManualOptions, submitManualBooking } from './ManualBooking.service';
-import { manualInput } from './ManualBooking.utils';
+import { manualDraftScope, manualInput } from './ManualBooking.utils';
 import { canContinueAppointmentAction } from './AppointmentLifecycle.utils';
 import { isBookingQuery } from './BookingQueries.utils';
-import { timePolicyNote } from './appointmentTime';
 import { ApiError } from './api';
 import type { ManualBookingView, ManualDraft } from '../types/ManualBooking.types';
 export function useManualBooking(business: { id: string; timezone: string }, date: string): ManualBookingView {
   const { t, locale } = useAppLocale(), client = useQueryClient(), identity = useSessionStore(state => state.identityId), version = useSessionStore(state => state.contextVersion);
-  const scope = JSON.stringify([identity, version, business.id]);
+  const scope = manualDraftScope(identity, version, business.id);
   const prepared = useManualDraft(state => state.scope === scope ? state.prepared : null);
   const stored = useManualDraft(state => state.scope === scope ? state.draft : emptyManualDraft), attempt = useManualDraft(state => state.scope === scope ? state.attempt : null), result = useManualDraft(state => state.scope === scope ? state.result : null);
   const [state, setState] = useState({ scope, busy: false, feedback: '' });
@@ -44,7 +43,7 @@ export function useManualBooking(business: { id: string; timezone: string }, dat
       const saved = await submitManualBooking(business.id, input, identity);
       if (!current()) return;
       useManualDraft.getState().finish(scope, saved);
-      setState({ scope, busy: true, feedback: t(saved.status === 'CONFIRMED' ? 'manual.saved' : 'manual.changed') });
+      setState({ scope, busy: true, feedback: '' });
       await client.invalidateQueries({ predicate: query => isBookingQuery(query.queryKey) });
     } catch (error) {
       if (!current()) return;
@@ -56,5 +55,5 @@ export function useManualBooking(business: { id: string; timezone: string }, dat
   }
   const reviewed = (attempt ?? prepared)?.reviewedService;
   const serviceSummary = reviewed ? t('manual.summary', { name: reviewed.name, minutes: reviewed.durationMinutes, price: reviewed.priceMinor !== null && reviewed.currency ? formatPrice(locale, reviewed.priceMinor, reviewed.currency) : t('manual.priceUnknown') }) : '';
-  return { serviceSummary, t, draft, options: options.data, loading: options.isLoading, loadError: options.isError, busy: state.scope === scope && state.busy, locked: Boolean(attempt), feedback: state.scope === scope ? state.feedback : '', success: Boolean(result), timeNote: timePolicyNote(business.timezone, locale), update, retry: () => { void options.refetch(); }, review, confirm: () => void confirm(), close: () => { if (!operation.current && !attempt) useManualDraft.getState().clear(); } };
+  return { serviceSummary, t, draft, options: options.data, loading: options.isLoading, loadError: options.isError, busy: state.scope === scope && state.busy, locked: Boolean(attempt), feedback: result ? t(result.status === 'CONFIRMED' ? 'manual.saved' : 'manual.changed') : state.scope === scope ? state.feedback : '', success: Boolean(result), update, retry: () => { void options.refetch(); }, review, confirm: () => void confirm(), close: () => { if (!operation.current && !attempt) { setState({ scope, busy: false, feedback: '' }); useManualDraft.getState().clear(); } } };
 }

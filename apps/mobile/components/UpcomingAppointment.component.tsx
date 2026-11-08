@@ -1,25 +1,24 @@
 import { View } from 'react-native';
+import { tokens } from '@/src/design/tokens';
 import { AppText } from './AppText';
 import { ActionButton } from './ActionButton';
+import { Control } from './Control';
+import { DirectionalChevron } from './DirectionalChevron.component';
 import type { UpcomingAppointmentView } from '../src/types/UpcomingAppointment.types';
+/** A glance at the appointments ahead; each card opens its own details, where cancelling and rescheduling live. */
 export function UpcomingAppointment(view: UpcomingAppointmentView) {
   if (view.state === 'hidden') return null;
   if (view.state === 'loading') return <AppText accessibilityRole="status">{view.loadingLabel}</AppText>;
   if (view.state === 'error') return <View className="gap-3"><AppText accessibilityRole="alert">{view.error}</AppText><ActionButton secondary label={view.retryLabel} onPress={view.onRetry} /></View>;
-  const appointment = view.appointment;
-  if (!appointment) return null;
-  return <View testID={`active-booking-${appointment.id}`} className="gap-3 rounded-card border border-line bg-surface p-4">
-    <AppText accessibilityRole="header" className="text-sm font-semibold text-brand">{view.heading}</AppText>
-    <AppText className="text-lg font-semibold text-ink">{appointment.service}</AppText>
-    <AppText>{appointment.business} · {appointment.staff}</AppText>
-    <AppText className="font-semibold">{appointment.when}</AppText>
-    <AppText className="text-sm text-muted">{appointment.timeNote}</AppText>
-    <ActionButton secondary label={view.detailsLabel} onPress={view.onDetails} disabled={view.busy} />
-    <View className="flex-row flex-wrap gap-3">
-      {appointment.canReschedule ? <View style={{ flexGrow: 1, flexBasis: 150 }}><ActionButton secondary label={view.rescheduleLabel} onPress={view.onReschedule} disabled={view.busy} /></View> : null}
-      {appointment.canCancel ? <View style={{ flexGrow: 1, flexBasis: 150 }}><ActionButton secondary label={view.cancelLabel} onPress={view.onCancel} busy={view.busy} /></View> : null}
-    </View>
-    {view.error ? <View className="gap-2"><AppText accessibilityRole="alert">{view.error}</AppText><ActionButton secondary label={view.retryLabel} onPress={view.onRetry} disabled={view.busy} /></View> : null}
-    {view.additionalLabel ? <ActionButton secondary label={view.additionalLabel} onPress={view.onAll} disabled={view.busy} /> : null}
+  if (!view.appointments.length) return null;
+  return <View className="gap-2">
+    {view.heading ? <AppText accessibilityRole="header" className="text-sm font-semibold text-brand">{view.heading}</AppText> : null}
+    {view.appointments.map(appointment => <Control key={appointment.id} testID={`active-booking-${appointment.id}`} accessibilityRole="button" onPress={() => view.onOpen(appointment.id)} className="flex-row items-center gap-3 rounded-card border border-line bg-surface px-4 py-2 active:bg-brand-soft">
+      <View className="flex-1">
+        <AppText className="font-semibold text-ink">{appointment.when}</AppText>
+        <AppText className="text-sm text-body">{appointment.place}</AppText>
+      </View>
+      <DirectionalChevron pointing="forward" color={tokens.color.muted} />
+    </Control>)}
   </View>;
 }

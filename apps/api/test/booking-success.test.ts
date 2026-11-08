@@ -8,7 +8,7 @@ import { tokenDigest } from '../src/security/sessions.js';
 after(async () => { redis.disconnect(); await prisma.$disconnect(); });
 test('owned persisted success and notification intent exist only after committed creation', async t => {
   const run = randomUUID();
-  const business = await prisma.business.create({ data: { name: 'Persisted studio', slug: `success-${run}`, timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED', publishedAt: new Date() } });
+  const business = await prisma.business.create({ data: { name: 'Persisted studio', slug: `success-${run}`, timezone: 'Asia/Jerusalem', location: 'Persisted street 1', approvalStatus: 'APPROVED', publishedAt: new Date() } });
   const customer = await prisma.identity.create({ data: { email: `success-${run}@example.test` } }), foreign = await prisma.identity.create({ data: { email: `success-foreign-${run}@example.test` } });
   const token = randomUUID(), otherToken = randomUUID();
   await prisma.session.createMany({ data: [{ identityId: customer.id, tokenHash: tokenDigest(token) }, { identityId: foreign.id, tokenHash: tokenDigest(otherToken) }].map(row => ({ ...row, expiresAt: new Date(Date.now() + 600000) })) });
@@ -33,7 +33,7 @@ test('owned persisted success and notification intent exist only after committed
       for (const path of ['details', 'calendar?revision=0']) assert.equal((await app.inject({ url: `/v1/bookings/${booking.id}/${path}`, headers: foreignHeaders })).statusCode, 404);
       assert.equal((await app.inject({ url: '/v1/bookings/missing/details', headers })).statusCode, 404);
       const response = await app.inject({ url: `/v1/bookings/${booking.id}/details`, headers }); assert.equal(response.statusCode, 200, response.body);
-      const details = response.json(); assert.equal(details.status, 'CONFIRMED'); assert.equal(details.service.name, 'Persisted consultation'); assert.equal(details.service.priceMinor, 12500); assert.equal(details.business.timezone, 'Asia/Jerusalem'); assert.equal(details.notification.status, 'RECORDED'); assert.equal(details.notification.sms, 'UNSUPPORTED'); assert.equal(details.notification.whatsapp, 'UNSUPPORTED');
+      const details = response.json(); assert.equal(details.status, 'CONFIRMED'); assert.equal(details.service.name, 'Persisted consultation'); assert.equal(details.service.priceMinor, 12500); assert.equal(details.business.timezone, 'Asia/Jerusalem'); assert.equal(details.business.location, business.location); assert.equal(details.notification.status, 'RECORDED'); assert.equal(details.notification.sms, 'UNSUPPORTED'); assert.equal(details.notification.whatsapp, 'UNSUPPORTED');
       for (const secret of [customer.email, 'customerId', 'idempotencyKey', 'tokenHash', 'customerPhone', 'actorIdentityId']) if (secret) assert.equal(response.body.includes(secret), false);
       assert.equal(response.headers['cache-control'], 'no-store');
       const calendar = await app.inject({ url: `/v1/bookings/${booking.id}/calendar?revision=0`, headers }); assert.equal(calendar.statusCode, 200, calendar.body); assert.match(calendar.json().body, new RegExp(`UID:${booking.id}@visit.app`));

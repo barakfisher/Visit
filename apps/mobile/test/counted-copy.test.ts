@@ -17,20 +17,12 @@ test('plural categories: Hebrew keeps its dual, English folds two into other', (
 });
 
 test('every counted message family has all three forms in both languages', () => {
-  for (const base of ['upcoming.more', 'bookingCommit.cancelHours', 'bookingCommit.cancelMinutes'] as const) {
+  for (const base of ['bookingCommit.cancelHours', 'bookingCommit.cancelMinutes'] as const) {
     for (const locale of locales) for (const form of ['one', 'two', 'other'] as const) {
       const key = `${base}.${form}` as const;
       assert.notEqual(translate(locale, key), key, `${locale} ${key}`);
     }
   }
-});
-
-test('one more upcoming appointment is singular in Hebrew and counted from two on', () => {
-  assert.equal(translateCount('he', 'upcoming.more', 1), translate('he', 'upcoming.more.one'));
-  assert.doesNotMatch(translateCount('he', 'upcoming.more', 1), /1 תורים/);
-  assert.equal(translateCount('he', 'upcoming.more', 2), translate('he', 'upcoming.more.two', { count: 2 }));
-  assert.equal(translateCount('he', 'upcoming.more', 5), translate('he', 'upcoming.more.other', { count: 5 }));
-  assert.match(translateCount('en', 'upcoming.more', 2), /^2 more upcoming/);
 });
 
 test('a cutoff in whole hours reads as hours, never as a large number of minutes', () => {

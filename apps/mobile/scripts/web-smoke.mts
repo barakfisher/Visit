@@ -171,10 +171,10 @@ try {
     assert.equal(await localePage.getByRole('button', { name: 'שליחת קישור לכניסה', exact: true }).isDisabled(), true);
     await localePage.goto(`${webUrl}/account`);
     await localePage.getByTestId('language-en').click();
-    await localePage.getByRole('heading', { name: 'Account', exact: true }).waitFor();
+    await localePage.getByTestId('language-he').waitFor();
     assert.equal(await localePage.locator('html').getAttribute('dir'), 'ltr');
     await localePage.reload();
-    await localePage.getByRole('heading', { name: 'Account', exact: true }).waitFor();
+    await localePage.getByTestId('language-he').waitFor();
     await localePage.goto(`${webUrl}/auth/login`);
     await localePage.getByRole('heading', { name: 'Welcome to Visit' }).waitFor();
     await localePage.screenshot({ path: path.join(diagnostics, 'login-en-desktop.png'), fullPage: true });
@@ -214,7 +214,8 @@ try {
     await page.getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).click();
     const committed = await commitResponse; assert.equal(committed.status(), 200);
     const hold = { holdId: (await committed.json()).id };
-    await page.getByRole('heading', { name: 'You’re all set' }).waitFor();
+    await page.getByTestId('app-toast').getByText('Your appointment is confirmed and saved.', { exact: true }).waitFor();
+    await page.locator('[data-testid="booking-confirmation"]:visible').getByRole('button', { name: 'Add to calendar (.ics)' }).waitFor();
     assert.equal(await prisma.booking.count({ where: { id: hold.holdId, status: 'CONFIRMED' } }), 1);
     const download = page.waitForEvent('download'); await page.getByRole('button', { name: 'Add to calendar (.ics)' }).click();
     const calendarFile = await download; const calendar = await readFile((await calendarFile.path())!, 'utf8'); assert.ok(calendar.includes(`UID:${hold.holdId}@visit.app`));
@@ -239,8 +240,7 @@ try {
     // The catalog lives in business settings (decisions.md, 2026-11-02). Reach it in-app, through the menu and the
     // settings business switcher, so switching keeps the same page and query cache instead of reloading.
     const catalogOf = async (business: string) => {
-      await providerPage.getByRole('button', { name: 'Open menu', exact: true }).filter({ visible: true }).click();
-      await providerPage.getByRole('dialog').getByRole('button', { name: 'Business settings', exact: true }).click();
+      await providerPage.getByRole('button', { name: 'Account', exact: true }).click(); await providerPage.getByRole('button', { name: 'Business settings', exact: true }).filter({ visible: true }).click();
       await providerPage.getByRole('heading', { name: 'Business settings', exact: true }).filter({ visible: true }).waitFor();
       const switcher = providerPage.getByRole('button', { name: business, exact: true }).filter({ visible: true });
       if (await switcher.getAttribute('aria-selected') !== 'true') { await switcher.click(); await providerPage.getByRole('heading', { name: business, exact: true }).filter({ visible: true }).waitFor(); }
@@ -356,8 +356,7 @@ try {
     await form.getByRole('button', { name: 'Save changes', exact: true }).click();
     await original.getByText('Repriced catalog label', { exact: true }).waitFor();
     // In provider mode Home is the agenda.
-    await providerPage.getByRole('button', { name: 'Open menu', exact: true }).filter({ visible: true }).click();
-    await providerPage.getByRole('dialog').getByRole('button', { name: 'Home', exact: true }).click();
+    await providerPage.getByTestId('app-footer').getByRole('button', { name: 'Home', exact: true }).click();
     await providerPage.getByLabel('Agenda date').filter({ visible: true }).fill(date);
     await providerPage.getByText('QA consultation', { exact: true }).waitFor();
     assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: hold.holdId } })).servicePriceMinor, 6500);
@@ -420,7 +419,7 @@ try {
     await loser.getByRole('alert').waitFor();
     await loser.getByRole('button', { name: /11:00 · Alex North/ }).waitFor({ state: 'hidden' });
     await loser.screenshot({ path: path.join(diagnostics, 'slot-conflict-mobile.png'), fullPage: true });
-    await winner.getByRole('heading', { name: 'You’re all set' }).waitFor();
+    await winner.getByRole('button', { name: 'Add to calendar (.ics)' }).filter({ visible: true }).waitFor();
     assert.equal(await prisma.booking.count({ where: { businessId: businessIds[0]!, startsAt: new Date(`${date}T11:00:00Z`), status: 'CONFIRMED' } }), 1);
     console.log('PASS: two simultaneous browser contexts produce exactly one winner, one conflict, and a removed stale slot.');
 
@@ -448,7 +447,7 @@ try {
     await page.getByRole('alert').waitFor();
     assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: hold.holdId } })).startsAt.toISOString(), `${date}T14:00:00.000Z`);
     await page.getByRole('button', { name: 'Check or retry this booking', exact: true }).click();
-    await page.getByRole('heading', { name: 'Appointment rescheduled' }).waitFor();
+    await page.getByTestId('app-toast').getByText('The new time is confirmed and saved.', { exact: true }).waitFor();
     assert.equal(moveKeys.length, 2); assert.equal(moveKeys[0], moveKeys[1]);
     assert.equal(await prisma.bookingReschedule.count({ where: { bookingId: hold.holdId } }), movesBefore + 1);
     assert.equal(await prisma.bookingNotification.count({ where: { bookingId: hold.holdId, kind: 'BOOKING_RESCHEDULED' } }), 1);
@@ -504,7 +503,7 @@ try {
     const languageSaved = emailPage.waitForResponse(response => response.url().endsWith('/api/account/preferences') && response.status() === 200);
     await emailPage.getByTestId('language-he').click();
     await languageSaved;
-    await emailPage.getByRole('heading', { name: 'חשבון', exact: true }).waitFor();
+    await emailPage.getByTestId('language-en').waitFor();
     assert.equal((await prisma.identity.findUniqueOrThrow({ where: { id: identities[1]!.id } })).preferredLocale, 'he');
     // Same server session, fresh local storage: server preference must win over device defaults.
     const cookieState = await emailContext.cookies();
@@ -513,7 +512,7 @@ try {
     await freshDevice.addInitScript(() => localStorage.setItem('visit.locale.v1.guest', 'en'));
     const freshPage = await freshDevice.newPage();
     await freshPage.goto(`${webUrl}/account`);
-    await freshPage.getByRole('heading', { name: 'חשבון', exact: true }).waitFor();
+    await freshPage.getByTestId('language-en').waitFor();
     assert.equal(await freshPage.locator('html').getAttribute('dir'), 'rtl');
     console.log('PASS: authenticated language preference persists on the server and restores with fresh browser storage.');
 
@@ -556,14 +555,13 @@ try {
     const expectedInstant = zone === 'Asia/Jerusalem' ? `${previousDay.toISOString().slice(0, 10)}T23:30:00.000Z` : `${foldDate}T06:30:00.000Z`;
     await providerPage.getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).click();
     const foldHold = await (await foldHoldResponse).json();
-    await providerPage.getByRole('heading', { name: 'You’re all set' }).waitFor();
+    await providerPage.getByRole('button', { name: 'Add to calendar (.ics)' }).filter({ visible: true }).waitFor();
     assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: foldHold.id } })).startsAt.toISOString(), expectedInstant);
     await providerPage.locator('[data-testid="booking-confirmation"]:visible').getByText(/01:30.*second occurrence/).waitFor();
     assert.equal(await providerPage.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone), 'America/Los_Angeles');
     if (zone === 'Asia/Jerusalem') {
       const confirmation = providerPage.getByTestId('booking-confirmation');
       await confirmation.getByText('Synthetic DST studio · Fold specialist', { exact: true }).waitFor();
-      await confirmation.getByText(/Times are in local Israeli time/).waitFor();
     }
     console.log(`PASS: ${zone} fold labels and confirmation preserve the second exact instant on a traveling device.`);
     }

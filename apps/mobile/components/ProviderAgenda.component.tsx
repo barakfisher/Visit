@@ -3,9 +3,11 @@ import { ManualBooking } from './ManualBooking.component';
 import { AppointmentAudit } from './AppointmentAudit.component';
 import { AppText as Text } from './AppText';
 import { BusinessSwitcher } from './BusinessSwitcher.component';
-import { Link } from 'expo-router';
+import { useEffect, useRef, type ComponentRef } from 'react';
+import { Link, router } from 'expo-router';
 import { ScrollView, TextInput, View } from 'react-native';
 import { ActionButton } from './ActionButton';
+import { ShareIcon } from './NavigationIcons.component';
 import { AddButton } from './AddButton';
 import { TimeBlockRow } from './TimeBlocks';
 import { TimeBlockDialog } from './TimeBlockForm.component';
@@ -16,16 +18,19 @@ const field = 'rounded-control border border-line bg-surface px-4 py-3 text-ink'
 export function ProviderAgenda({ published, ...view }: ProviderAgendaView & { published: boolean }) {
   const { business, profile, t, day, draft, agenda, busy, feedback, update } = view;
   const { blockDialog, blockRemoval } = view, { removeFailure: _shownAsFeedback, ...removal } = blockRemoval;
-  return <ScrollView contentContainerClassName="mx-auto w-full max-w-3xl gap-5 px-5 py-6 pb-10" className="flex-1 bg-canvas">
-    <View className="gap-2"><Text className="text-xs font-semibold uppercase tracking-widest text-brand">{t('dashboard.workspace')}</Text><Text accessibilityRole="header" className="text-3xl font-bold text-ink">{business.name}</Text></View>
+  // The footer opens the form while the agenda may be scrolled far below it.
+  const scroll = useRef<ComponentRef<typeof ScrollView>>(null), formOpen = view.manual.draft.open;
+  useEffect(() => { if (formOpen) scroll.current?.scrollTo({ y: 0, animated: true }); }, [formOpen]);
+  return <ScrollView ref={scroll} contentContainerClassName="mx-auto w-full max-w-3xl gap-5 px-5 py-6 pb-10" className="flex-1 bg-canvas">
+    <Text accessibilityRole="header" className="text-3xl font-bold text-ink">{business.name}</Text>
     <BusinessSwitcher businesses={profile?.businesses ?? []} activeId={business.id} onSelect={view.selectBusiness} />
     {/* Publishing lives in business settings; the agenda only points there (decisions.md, 2026-11-02). */}
-    {published ? <Link testID="dashboard-share" href={{ pathname: '/provider/[businessId]/share', params: { businessId: business.id } }} className="min-h-touch py-3 font-semibold text-brand">{t('dashboard.share')}</Link>
+    {published ? <View className="self-start"><ActionButton secondary testID="dashboard-share" label={t('dashboard.share')} icon={color => <ShareIcon color={color} />} onPress={() => router.push({ pathname: '/provider/[businessId]/share', params: { businessId: business.id } })} /></View>
       : <View testID="dashboard-unpublished" className="flex-row flex-wrap items-center gap-x-3 gap-y-1 rounded-control border border-amber-300 bg-amber-50 px-4 py-3"><Text className="flex-1 text-sm text-warning">{t('dashboard.unpublished')}</Text><Link href={{ pathname: '/provider/[businessId]/[section]', params: { businessId: business.id, section: 'publish' } }} className="min-h-touch py-2 font-semibold text-warning underline">{t('dashboard.publishLink')}</Link></View>}
       <ManualBooking {...view.manual} />
       <View className="flex-row flex-wrap gap-2"><ActionButton secondary label={t('agendaEdit.day')} onPress={() => update({ mode: 'day' })} disabled={busy || draft.mode === 'day'} /><ActionButton secondary label={t('agendaEdit.week')} onPress={() => update({ mode: 'week' })} disabled={busy || draft.mode === 'week'} /><ActionButton secondary label={t('agendaEdit.previous')} onPress={view.previous} disabled={busy || !view.validDate} /><ActionButton secondary label={t('agendaEdit.next')} onPress={view.next} disabled={busy || !view.validDate} /></View>
       {draft.mode === 'week' && agenda.data ? <Text accessibilityRole="header">{view.range(agenda.data.fromDate, agenda.data.toDate)}</Text> : null}
-      <TextInput accessibilityLabel={t('dashboard.date')} placeholderTextColor={tokens.color.disabled} placeholder="YYYY-MM-DD" value={day} onChangeText={date => update({ date })} className={field}/><Text className="text-sm text-muted">{view.timeNote}</Text>
+      <TextInput accessibilityLabel={t('dashboard.date')} placeholderTextColor={tokens.color.disabled} placeholder="YYYY-MM-DD" value={day} onChangeText={date => update({ date })} className={field}/>
       <View className="flex-row flex-wrap gap-3"><View className="min-w-40 flex-1 gap-2 rounded-card bg-brand p-5"><Text className="text-sm text-teal-50">{t('dashboard.appointments')}</Text><Text className="text-3xl font-bold text-white">{agenda.data?.summary.appointments ?? '—'}</Text></View><View className="min-w-40 flex-1 gap-2 rounded-card border border-line bg-surface p-5"><Text className="text-sm text-muted">{t('dashboard.revenue')}</Text><Text className="text-xl font-bold text-ink">{agenda.data ? Object.entries(agenda.data.summary.revenue).map(([currency, amount]) => formatMoney(amount, currency)).join(' · ') || '—' : '—'}</Text></View></View>
       {agenda.data?.staff.map(staff => <Text key={staff.id} className="text-sm text-muted">{staff.displayName} · {t('agendaEdit.capacity', { count: staff.parallelCapacity })}</Text>)}
       {/* The same dialog as the hours screen, starting on the agenda's date (decisions.md, "Time blocks with a reason"). */}

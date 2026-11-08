@@ -34,7 +34,7 @@ function Examples({ onAction }: { onAction: () => void }) {
     <SectionNavigation label={t('account.workspace')} items={[{ id: 'agenda', label: t('agenda.title') }, { id: 'catalog', label: t('catalog.title') }, { id: 'future', label: t('nav.businessSettings'), disabled: true }]} selectedId={section} onSelect={setSection} />
     <TimeChips slots={[{ id: 'a', label: '09:00' }, { id: 'b', label: '09:30' }, { id: 'c', label: '10:00', locked: true }]} timezone="Asia/Jerusalem" selectedId={time} onSelect={setTime} />
     <AvailabilityState state="error" onRetry={onAction} />
-    <ActiveBookingCard service={name} provider={name} dateLabel={locale === 'he' ? 'יום שני, 2 בנובמבר' : 'Monday, November 2'} timeLabel="10:30" timezone="Asia/Jerusalem" label={t('ui.nextVisit')} onReschedule={onAction} onCancel={onAction} />
+    <ActiveBookingCard service={name} provider={name} dateLabel={locale === 'he' ? 'יום שני, 2 בנובמבר' : 'Monday, November 2'} timeLabel="10:30" label={t('ui.nextVisit')} onReschedule={onAction} onCancel={onAction} />
   </ScreenContent>;
 }
 function Foundation({ locale, width, onAction }: { locale: Locale; width: number; onAction: () => void }) {
@@ -54,6 +54,7 @@ const check: NonNullable<Story['play']> = async ({ canvas, args }) => {
   const input = canvas.getByRole('textbox', { name: t('methods.email') });
   await expect(window.getComputedStyle(input).direction).toBe('ltr');
   await expect(canvas.getByRole('textbox', { name: t('account.businessName') })).toHaveAttribute('aria-invalid', 'true');
+  await expect(input.getBoundingClientRect().height).toBeGreaterThanOrEqual(tokens.layout.minTouchTarget);
   for (const button of canvas.getAllByRole('button')) {
     const box = button.getBoundingClientRect();
     await expect(box.height).toBeGreaterThanOrEqual(tokens.layout.minTouchTarget);
@@ -63,8 +64,10 @@ const check: NonNullable<Story['play']> = async ({ canvas, args }) => {
   // Start with keyboard modality, then test both standard button activations.
   await userEvent.tab(); confirm.focus();
   await expect(confirm).toHaveFocus();
-  await expect(window.getComputedStyle(confirm).backgroundColor).toBe('rgb(15, 118, 110)');
-  await expect(window.getComputedStyle(confirm).borderRadius).not.toBe('0px');
+  // The colour and shape sit on the visible surface inside the larger touch target; focus stays on the target.
+  const surface = confirm.firstElementChild!;
+  await expect(window.getComputedStyle(surface).backgroundColor).toBe('rgb(15, 118, 110)');
+  await expect(window.getComputedStyle(surface).borderRadius).not.toBe('0px');
   await expect(window.getComputedStyle(confirm).outlineStyle).toBe('solid');
   await expect(window.getComputedStyle(confirm).outlineWidth).toBe('3px');
   await userEvent.keyboard('{Enter}');

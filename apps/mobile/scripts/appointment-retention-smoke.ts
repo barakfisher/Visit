@@ -6,7 +6,6 @@ import type { prisma as Prisma } from '../../api/src/db/client.js';
 import type { redis as Redis } from '../../api/src/infra/redis.js';
 import { translate, type Locale } from '../src/i18n/messages';
 import { webCancellationPrompt } from '../src/i18n/cancellationConfirm';
-import { translateCount } from '../src/i18n/plural';
 import { SETUP_SERVICE } from './business-setup-smoke';
 import { preferBookingTime } from './booking-controls.utils';
 import { CANCELLATION_CUTOFF, RESCHEDULE_CUTOFF } from '../src/lib/AppointmentLifecycle.utils';
@@ -60,10 +59,12 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     assert.equal(response.status(), 200, await response.text());
     return ((await response.json()) as { slots: Slot[] }).slots.filter(slot => slot.available && !slot.locked);
   }
-  // From Home's card to a reviewed new time; the date comes from the URL because the calendar labels are per locale.
+  // From Home's card through its details to a reviewed new time; the date comes from the URL because the calendar labels are per locale.
   async function reviewReschedule(owner: PilotCustomer, page: Page, bookingId: string, date: string, slot: Slot) {
     await page.goto(webUrl);
-    await homeCard(page, bookingId).getByRole('button', { name: owner.t('details.reschedule'), exact: true }).click();
+    await homeCard(page, bookingId).click();
+    await page.waitForURL(`${webUrl}/appointment/${bookingId}`);
+    await page.getByRole('button', { name: owner.t('details.reschedule'), exact: true }).filter({ visible: true }).click();
     await page.waitForURL(url => url.pathname === `/booking/${business.businessId}` && url.searchParams.get('fromBookingId') === bookingId);
     const url = new URL(page.url()); url.searchParams.set('date', date); await page.goto(url.href);
     await page.getByRole('heading', { name: owner.t('compact.title'), exact: true }).filter({ visible: true }).waitFor();
@@ -81,7 +82,7 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     const moved = rescheduleResponse(owner.page, bookingId);
     await rescheduleButton(owner, owner.page).click();
     assert.equal((await moved).status(), 200);
-    await owner.page.getByRole('heading', { name: owner.t('details.rescheduled'), exact: true }).filter({ visible: true }).waitFor();
+    await owner.page.getByTestId('app-toast').getByText(owner.t('details.rescheduledNote'), { exact: true }).waitFor();
     const row = await booking(bookingId);
     assert.equal(row.status, 'CONFIRMED'); assert.equal(row.startsAt.toISOString(), slot.startsAt);
     assert.equal(await prisma.booking.count({ where: { businessId: business.businessId, customerId: owner.id, status: 'CONFIRMED' } }), 1);
@@ -179,10 +180,10 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     const beforeCancel = await agenda(provider.page, cancelDate);
     await beforeCancel.has(h2).waitFor();
     await beforeCancel.tile('dashboard.revenue', await money(provider.page, PRICE_MINOR));
-    // Home shows the next appointment (h1) and counts the later h2 as one more.
-    const oneMore = translateCount('he', 'upcoming.more', 1);
+    // Home shows only the next appointment (h1); the later h2 waits on the Appointments page.
     await he.page.goto(webUrl);
-    await homeCard(he.page, h1).getByRole('button', { name: oneMore, exact: true }).waitFor();
+    await homeCard(he.page, h1).waitFor();
+    assert.equal(await homeCard(he.page, h2).count(), 0);
     // On a narrow phone the Appointments page stacks the upcoming cards whole, labels only the first as the next visit,
     // and does not list them again under history.
     for (const [owner, ids, locale] of [[he, [h1, h2], 'he'], [en, [e1], 'en']] as const) {
@@ -213,7 +214,6 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     await he.page.getByRole('button', { name: he.t('details.cancel'), exact: true }).filter({ visible: true }).waitFor({ state: 'hidden' });
     await he.page.goto(webUrl);
     await homeCard(he.page, h1).waitFor();
-    assert.equal(await homeCard(he.page, h1).getByRole('button', { name: oneMore, exact: true }).count(), 0);
     console.log('PASS: VIS-14 Hebrew customer cancelled from details; the agenda drops it and its revenue, and the audit names the customer.');
 
     // B2. Each customer sees only their own providers and appointments; removing the provider keeps the appointment.
@@ -223,14 +223,17 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     assert.equal(await homeCard(he.page, e1).count(), 0);
     assert.equal((await en.context.request.get(`${apiUrl}/v1/bookings/${h1}/details`)).status(), 404);
     assert.equal((await he.context.request.get(`${apiUrl}/v1/bookings/${e1}/details`)).status(), 404);
-    await savedCard(en.page).getByRole('button', { name: en.t('home.remove'), exact: true }).click();
+    await savedCard(en.page).getByRole('button', { name: translate('en', 'home.remove', { name: business.businessName }), exact: true }).click();
+    await en.page.getByTestId('remove-provider-dialog').getByRole('button', { name: en.t('home.removeConfirm'), exact: true }).click();
     await en.page.getByText(en.t('home.empty'), { exact: true }).filter({ visible: true }).waitFor();
     await savedCard(en.page).waitFor({ state: 'hidden' });
     const retained = homeCard(en.page, e1);
-    await retained.getByRole('button', { name: en.t('details.reschedule'), exact: true }).waitFor();
-    await retained.getByRole('button', { name: en.t('details.cancel'), exact: true }).waitFor();
-    assert.equal(await prisma.savedProvider.count({ where: { identityId: en.id, businessId: business.businessId } }), 0);
-    assert.equal(await prisma.savedProvider.count({ where: { identityId: he.id, businessId: business.businessId } }), 1);
+    await retained.click(); await en.page.waitForURL(`${webUrl}/appointment/${e1}`);
+    await en.page.getByRole('button', { name: en.t('details.reschedule'), exact: true }).filter({ visible: true }).waitFor();
+    await en.page.getByRole('button', { name: en.t('details.cancel'), exact: true }).filter({ visible: true }).waitFor();
+    await en.page.goto(webUrl); await retained.waitFor();
+    assert.equal(await prisma.savedProvider.count({ where: { identityId: en.id, businessId: business.businessId, archivedAt: null } }), 0);
+    assert.equal(await prisma.savedProvider.count({ where: { identityId: he.id, businessId: business.businessId, archivedAt: null } }), 1);
     await he.page.reload(); await savedCard(he.page).waitFor();
     await en.page.screenshot({ path: path.join(evidence, 'removed-provider-keeps-appointment-en-mobile.png'), fullPage: true });
     console.log('PASS: VIS-14 saved lists and appointments stay per customer; removing the provider keeps the appointment manageable and leaves the other customer\'s save.');
@@ -260,19 +263,18 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     // While unpublished, the saved entry shows only its saved name and cannot book; existing appointments stay.
     await he.page.goto(webUrl);
     const unavailable = savedCard(he.page);
-    await unavailable.getByText(he.t('home.providerUnavailable'), { exact: true }).waitFor();
+    await unavailable.getByText(he.t('home.notAccepting'), { exact: true }).waitFor();
     await unavailable.getByText(business.businessName, { exact: true }).waitFor();
-    assert.equal(await unavailable.getByRole('button', { name: he.t('home.notAccepting'), exact: true }).isDisabled(), true);
+    assert.equal(await unavailable.getByRole('button', { name: he.t('home.notAccepting') }).isDisabled(), true);
     const heCard = homeCard(he.page, h1);
-    await heCard.getByRole('button', { name: he.t('details.reschedule'), exact: true }).waitFor();
     await heCard.scrollIntoViewIfNeeded();
     await he.page.screenshot({ path: path.join(evidence, 'unpublished-saved-entry-he-mobile.png'), fullPage: true });
-    await heCard.getByRole('button', { name: he.t('details.open'), exact: true }).click();
+    await heCard.click();
     await he.page.waitForURL(`${webUrl}/appointment/${h1}`);
-    await he.page.getByRole('heading', { name: he.t('details.title'), exact: true }).filter({ visible: true }).waitFor();
+    await he.page.getByRole('button', { name: he.t('details.back'), exact: true }).filter({ visible: true }).waitFor();
     await he.page.getByText(SETUP_SERVICE.name, { exact: true }).filter({ visible: true }).first().waitFor();
-    await he.page.goto(webUrl);
-    const heCancelled = await cancelWith(he.page, homeCard(he.page, h1).getByRole('button', { name: he.t('details.cancel'), exact: true }), h1, 'he');
+    await he.page.getByRole('button', { name: he.t('details.reschedule'), exact: true }).filter({ visible: true }).waitFor();
+    const heCancelled = await cancelWith(he.page, he.page.getByRole('button', { name: he.t('details.cancel'), exact: true }).filter({ visible: true }), h1, 'he');
     assert.equal(heCancelled.status(), 200); assert.equal((await booking(h1)).status, 'CANCELLED');
     // Rescheduling an existing appointment needs business approval, not publication.
     const unpublishedDate = await freshDate(), unpublishedMove = (await rescheduleSlots(en, e1, unpublishedDate))[0]!;
@@ -290,7 +292,7 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     // B4. Republishing makes the saved entry bookable again; the customer refused during review books exactly once.
     await publication(provider.page, 'publish.action', 'publish.live');
     await he.page.goto(webUrl);
-    await savedCard(he.page).getByRole('button', { name: he.t('home.book'), exact: true }).click();
+    await savedCard(he.page).getByRole('button', { name: he.t('home.book') }).click();
     await he.page.waitForURL(url => url.pathname === `/booking/${business.businessId}`);
     await review(he.page, he.t, reviewDate, reviewSlot);
     await confirmButton(he.page, he.t).click();
@@ -304,13 +306,12 @@ export async function appointmentRetentionSmoke(deps: Deps) {
 
     // B5. Inside the cutoff window. Pages opened before the provider saves the cutoff still offer the actions, so the
     // server's refusal reaches the customer: it must say why, in their language. After a reload the actions are gone.
-    const raced: { owner: PilotCustomer; id: string; locale: 'en' | 'he'; home: Page; move: Page }[] = [];
+    const raced: { owner: PilotCustomer; id: string; locale: 'en' | 'he'; move: Page }[] = [];
     for (const [owner, id, locale] of [[en, e1, 'en'], [he, h4, 'he']] as const) {
-      const home = await newPage(owner.context), move = await newPage(owner.context);
-      await home.goto(webUrl); await homeCard(home, id).getByRole('button', { name: owner.t('details.cancel'), exact: true }).waitFor();
+      const move = await newPage(owner.context);
       const date = await freshDate(), slot = (await rescheduleSlots(owner, id, date))[0]!;
       await reviewReschedule(owner, move, id, date, slot);
-      raced.push({ owner, id, locale, home, move });
+      raced.push({ owner, id, locale, move });
     }
     const rows = new Map(await Promise.all(raced.map(async ({ id }) => [id, { row: await booking(id) }] as const)));
     for (const { row } of rows.values()) assert.ok(+row.startsAt < Date.now() + CUTOFF_MINUTES * 60000, 'an appointment is outside the cutoff window');
@@ -331,15 +332,12 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     const policySaved = provider.page.waitForResponse(response => response.url() === `${apiUrl}/v1/provider/businesses/${business.businessId}/booking-policy` && response.request().method() === 'PUT');
     await provider.page.getByRole('button', { name: translate('en', 'setup.savePolicy'), exact: true }).click();
     assert.equal((await policySaved).status(), 200);
-    for (const { owner, id, locale, home, move } of raced) {
-      const cancelRefused = await cancelWith(home, homeCard(home, id).getByRole('button', { name: owner.t('details.cancel'), exact: true }), id, locale);
-      assert.equal(cancelRefused.status(), 409); assert.equal(await errorCode(cancelRefused), CANCELLATION_CUTOFF);
-      await alert(home, owner.t('lifecycle.cancelCutoff')).waitFor();
-      await home.screenshot({ path: path.join(evidence, `cutoff-cancel-refused-${locale}-mobile.png`), fullPage: true });
+    for (const { owner, id, locale, move } of raced) {
       const detailsPage = details.get(id)!;
       const detailsRefused = await cancelWith(detailsPage, detailsPage.getByRole('button', { name: owner.t('details.cancel'), exact: true }).filter({ visible: true }), id, locale);
       assert.equal(detailsRefused.status(), 409); assert.equal(await errorCode(detailsRefused), CANCELLATION_CUTOFF);
       await alert(detailsPage, owner.t('lifecycle.cancelCutoff')).waitFor();
+      await detailsPage.screenshot({ path: path.join(evidence, `cutoff-cancel-refused-${locale}-mobile.png`), fullPage: true });
       const listPage = lists.get(id)!, listCard = homeCard(listPage, id);
       const listRefused = await cancelWith(listPage, listCard.getByRole('button', { name: owner.t('ui.cancel'), exact: true }), id, locale);
       assert.equal(listRefused.status(), 409); assert.equal(await errorCode(listRefused), CANCELLATION_CUTOFF);
@@ -357,15 +355,15 @@ export async function appointmentRetentionSmoke(deps: Deps) {
       // The refetched reschedule screen is refused for the same reason, and says so in the customer's language.
       await alertsAre(move, [owner.t('lifecycle.rescheduleCutoff'), owner.t('lifecycle.rescheduleCutoff')]);
       await move.screenshot({ path: path.join(evidence, `cutoff-reschedule-refused-${locale}-mobile.png`), fullPage: true });
-      // A fresh Home no longer offers either action inside the window.
-      await home.reload(); await homeCard(home, id).waitFor();
-      for (const label of [owner.t('details.cancel'), owner.t('details.reschedule')]) assert.equal(await homeCard(home, id).getByRole('button', { name: label, exact: true }).count(), 0);
+      // Fresh details no longer offer either action inside the window.
+      await detailsPage.reload(); await detailsPage.getByRole('button', { name: owner.t('details.back'), exact: true }).filter({ visible: true }).waitFor();
+      for (const label of [owner.t('details.cancel'), owner.t('details.reschedule')]) assert.equal(await detailsPage.getByRole('button', { name: label, exact: true }).filter({ visible: true }).count(), 0);
       const row = await booking(id), was = rows.get(id)!;
       assert.equal(row.status, 'CONFIRMED'); assert.equal(row.startsAt.toISOString(), was.row.startsAt.toISOString()); assert.equal(row.revision, was.row.revision);
       await assertNothingHeld(owner.id, 1);
     }
     assert.deepEqual(errors, []);
-    console.log('PASS: VIS-14 inside the cutoff, cancel (Home, details and Appointments) and reschedule are refused with their own localized reason in Hebrew and English, the appointment is unchanged, and a fresh Home no longer offers them.');
+    console.log('PASS: VIS-14 inside the cutoff, cancel (details and Appointments) and reschedule are refused with their own localized reason in Hebrew and English, the appointment is unchanged, and fresh details no longer offers them.');
   } catch (error) {
     let index = 0;
     for (const context of contexts) for (const page of context.pages()) await page.screenshot({ path: path.join(evidence, `retention-failure-${index++}.png`), fullPage: true }).catch(() => undefined);
