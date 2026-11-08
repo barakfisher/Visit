@@ -1,3 +1,4 @@
+import { LIVE_SILENCE_LIMIT_MS } from '@visit/contracts';
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Browser } from 'playwright';
@@ -37,6 +38,24 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     failAgenda = true; await page.getByRole('button', { name: 'Next period', exact: true }).click(); await page.getByRole('alert').filter({ hasText: 'The agenda could not load.' }).waitFor();
     failAgenda = false; await page.getByRole('button', { name: 'Try again', exact: true }).click(); await page.getByText('No appointments for this week.', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Previous period', exact: true }).click(); await firstCard.waitFor();
+    // The open agenda updates from a live signal alone: time passing fetches nothing, and a change elsewhere appears without a reload.
+    const liveBooking = await create(date, 15);
+    // The stream belongs to one tab per browser, so the first tab steps away for this one to hold it.
+    const agendaUrl = page.url(); await page.goto('about:blank');
+    const livePage = await context.newPage(); await livePage.clock.install();
+    const liveStream = livePage.waitForResponse(response => response.url().startsWith(`${apiUrl}/api/provider/agenda/live?`) && response.status() === 200);
+    await livePage.goto(`${webUrl}/provider/dashboard?businessId=${business.id}`);
+    await livePage.getByLabel('Agenda date', { exact: true }).fill(date);
+    const liveCard = livePage.getByTestId(`agenda-booking-${liveBooking.id}`); await liveCard.waitFor();
+    await liveStream; await new Promise(resolve => setTimeout(resolve, 500));
+    let agendaReads = 0; livePage.on('request', request => { if (request.url().startsWith(`${apiUrl}/api/provider/agenda?`)) agendaReads++; });
+    await livePage.clock.fastForward(LIVE_SILENCE_LIMIT_MS / 2); await new Promise(resolve => setTimeout(resolve, 500));
+    assert.equal(agendaReads, 0);
+    const cancelled = await context.request.post(`${apiUrl}/v1/provider/businesses/${business.id}/bookings/${liveBooking.id}/cancel`, { headers: { Origin: webUrl }, data: {} });
+    assert.equal(cancelled.status(), 200, await cancelled.text());
+    await liveCard.getByText('Cancelled', { exact: false }).waitFor({ timeout: 5000 });
+    assert.ok(agendaReads >= 1);
+    await livePage.close(); await page.goto(agendaUrl);
     // Hours live in business settings (decisions.md, 2026-11-02).
     await page.getByRole('button', { name: 'Open menu', exact: true }).filter({ visible: true }).click(); await page.getByRole('dialog').getByRole('button', { name: 'Business settings', exact: true }).click();
     await page.getByTestId('setup-guide-hours').filter({ visible: true }).click(); await page.getByRole('heading', { name: 'Business hours', exact: true }).filter({ visible: true }).waitFor();

@@ -13,6 +13,7 @@ import { apiRequest, ApiError } from '@/src/lib/api';
 import type { AuthProfile } from '@/src/types/flows';
 import { readSessionToken, saveSessionToken } from '@/src/lib/sessionToken';
 import { useSessionStore } from '@/src/state/session';
+import { useLiveAppointments } from '@/src/lib/LiveSignals.hook';
 import { AppNavigation } from '@/components/AppNavigation';
 import { AppLocaleProvider, useAppLocale } from '@/src/i18n/LocaleProvider';
 
@@ -53,6 +54,7 @@ export default function RootLayout() {
 }
 
 function RootLayoutNav() {
+  useLiveAppointments();
   const { direction, ready } = useAppLocale();
   const pathname = usePathname();
   const setAuth = useSessionStore((state) => state.setAuth);

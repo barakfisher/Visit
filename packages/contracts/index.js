@@ -67,3 +67,10 @@ export function providerSharePath(slug) {
   if (typeof slug !== 'string' || slug.length > 80 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return undefined;
   return `/p/${slug}`;
 }
+
+/** The server writes to an open live-signal stream at least this often, so proxies keep it open. */
+/** Sent once a stream is subscribed: the client re-reads to catch what it missed while connecting. */
+export const LIVE_READY_EVENT = 'ready';
+export const LIVE_HEARTBEAT_MS = 25000;
+/** A client that hears nothing for this long treats the stream as dead. Two heartbeats may be late. */
+export const LIVE_SILENCE_LIMIT_MS = 65000;

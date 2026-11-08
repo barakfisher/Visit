@@ -5,6 +5,7 @@ import Fastify from 'fastify';
 import { ZodError } from 'zod';
 import { prisma } from '../src/db/client.js';
 import { redis } from '../src/infra/redis.js';
+import { expectAgendaSignal } from './support/live-signal.js';
 import { AppError } from '../src/http/errors.js';
 import { tokenDigest } from '../src/security/sessions.js';
 import { registerProviderRoutes } from '../src/routes/providers.js';
@@ -50,7 +51,7 @@ test('manual bookings enforce contact exceptions and authoritative scheduling wi
   await t.test('new contact remains unlinked/unverified, audit is immutable and replay uses exact fingerprint', async () => {
    const customerEmail = `manual-guest-${key}@example.test`, input = { ...payload(), customerEmail };
    assert.equal(await prisma.identity.count({ where: { email: customerEmail } }), 0);
-   const response = await post(input); assert.equal(response.statusCode, 200, response.body);
+   const response = await expectAgendaSignal(business.id, () => post(input)); assert.equal(response.statusCode, 200, response.body);
    const result = response.json<{ id: string; contactVerification: string; notification: string; source: string }>();
    assert.equal(result.source, 'MANUAL'); assert.equal(result.contactVerification, 'UNVERIFIED'); assert.equal(result.notification, 'NOT_SENT');
    const booking = await prisma.booking.findUniqueOrThrow({ where: { id: result.id } });

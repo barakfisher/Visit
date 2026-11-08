@@ -7,3 +7,7 @@ export function safeAuthReturnTo(value: unknown): string | undefined;
 export declare const PILOT_TIMEZONE: 'Asia/Jerusalem';
 
 export declare function providerSharePath(slug: unknown): string | undefined;
+
+export declare const LIVE_READY_EVENT: string;
+export declare const LIVE_HEARTBEAT_MS: number;
+export declare const LIVE_SILENCE_LIMIT_MS: number;
