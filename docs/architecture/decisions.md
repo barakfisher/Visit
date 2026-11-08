@@ -271,7 +271,7 @@ Item 2 of the 2026-11-03 handoff's order. Every candidate in "Findings not yet a
 
 ## Customer Home made compact — 2026-11-08
 
-The user reviewed Home as a customer who also owns a business: one card pushed the appointment off the first screen, and five providers took several screens. The PR number is added here when it opens.
+The user reviewed Home as a customer who also owns a business: one card pushed the appointment off the first screen, and five providers took several screens. PR #45.
 
 - **Choice: the Home business card is gone; switching mode stays a menu item, and business mode shows a thin strip under the header** (`provider-mode-strip`, "Business management mode"). This revises the 2026-11-03 card decision; remembering provider mode on the device still holds, so an owner reopens in the mode they left and switches rarely. *Rejected:* a `Customer | Business` switch in the header, built first and removed after the user saw it: its width crowded the header and pushed the app name off centre. *Rejected:* an absolutely positioned strip, as first suggested, because it would cover the top of every provider screen; in the flow it covers nothing.
 - **Choice: an approved business that is not published still gets a short notice on Home** (`BusinessSetupNotice`). The removed card was also the reminder to finish setup; without it a new owner sees nothing telling them the business is closed. A published business shows nothing on Home.
@@ -291,7 +291,7 @@ The user reviewed Home as a customer who also owns a business: one card pushed t
 
 ## Appointment details page trimmed — 2026-11-08
 
-The user reviewed the page after the Home work. PR number to be added when opened.
+The user reviewed the page after the Home work. PR #45.
 
 - **Choice: the title and "confirmed and saved" line become a toast shown when the commit returns.** The toast comes from the commit result in `BookingContactFlow.hook.ts`, so a reload or a later visit never repeats it. The page itself still shows only a fresh read of the owned appointment (`persisted-booking-success.md`). *Rejected:* showing the toast from the route, which would announce a new booking on every reload of `/confirmation/[id]`. With no copy left to choose, `?outcome=rescheduled` and the "View appointment details" link on the confirmation went too: the two routes now render the same page.
 - **Choice: `react-native-toast-message`** (user's decision; 49KB, JS only, no peer dependencies). *Rejected:* `sonner-native`, 574KB and it requires `react-native-svg`, which Storybook here cannot bundle; a hand-written host, which would have left animation, swipe and queueing for us to maintain.
@@ -302,7 +302,7 @@ The user reviewed the page after the Home work. PR number to be added when opene
 
 ## Home lists today's appointments and buttons look smaller — 2026-11-08
 
-Continues the same review. PR number to be added when opened.
+Continues the same review. PR #45.
 
 - **Choice: Home shows one small card per appointment still ahead today, and the next appointment when today has none.** It replaces "You have X appointments today" and the "next appointment" heading. The API returns `today` next to `booking`, decided by each business's calendar. *Rejected:* counting on the client and fetching the list separately, which could disagree inside one screen. Appointments already started today are left out, as they always were. A business's booking page keeps its one card and its heading, since there the card needs saying whose appointment it is.
 - **Choice: the whole card opens the details, with a chevron as the cue**, as provider cards open their booking. *Rejected:* an icon button inside the card, a second target for the same action.
@@ -310,7 +310,7 @@ Continues the same review. PR number to be added when opened.
 
 ## The side menu is gone: footer, avatar and mode switch — 2026-11-08
 
-The user's review of the menu, in two rounds. PR number to be added when opened.
+The user's review of the menu, in two rounds. PR #45.
 
 - **Choice: a footer on every signed-in screen holds the current mode's main destinations**: Home and My appointments for a customer; for a business Home and Team access, with Add appointment as revised below. This is the user's decision and it reverses VIS-46's "no bottom tabs", at a standing cost of about 56px. *Rejected:* a row at the bottom of the drawer, which keeps the old rule but still takes a tap to open. The footer stays off `/auth`, `/booking`, `/register` and `/invite`, where a commit button sits at the bottom or the visitor is not in the shell.
 - **Choice: no side menu.** With the destinations in the footer it held only entries for businesses or the system administrator. The header has an avatar opening Account, where sign-out, the application entry and status already were, and the mode switch on the other side. *Rejected:* keeping a drawer for sign-out and the switch, a whole component for two controls.
@@ -325,7 +325,7 @@ The user's review of the menu, in two rounds. PR number to be added when opened.
 
 ## Notification centre instead of a notice bar — 2026-11-08
 
-Agreed design, not built; see notifications.md. The question came from the Home card shown after approval, which the user found too large.
+Agreed design, not built; see notifications.md. Recorded in PR #45. The question came from the Home card shown after approval, which the user found too large.
 
 - **Choice: a bell opening a notifications page, with an unread count.** It carries system messages and booking status changes. The user's decision. *Rejected:* a one-line notice bar under the header in the business-mode strip's place, which competes with the strip, needs a rule for a message belonging to the other mode, and shows one message at a time. *Rejected:* the toggle alone, which does not say the application was approved; and a toast, which leaves nothing behind when missed.
 - **Choice: one inbox per person, the same in both modes.** The user's decision. *Rejected:* one inbox per mode, where the count changes on switching and a message waiting in the other mode needs a marker of its own, the problem the centre exists to remove. *Accepted cost:* a busy business can bury personal notifications until a filter is added.
