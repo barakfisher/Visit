@@ -333,6 +333,8 @@ Agreed design, not built; see notifications.md. Recorded in PR #45. The question
 
 ## Native RTL — 2026-11-09
 
+PR #50.
+
 The user saw Hebrew aligned left, a broken Home icon and a downward arrow on the Home appointment card, on an Android phone only. All three are one cause: under RTL, React Native on native treats physical left and right as start and end. `RCTResolveTextAlignment` (iOS) and `TextLayoutManager.getTextAlignment` (Android) turn `right` into the left edge; `BorderInsets.resolve` (Android) draws a left border on the right. Web keeps them physical, so every browser check passed. The arrow's left and bottom borders became right and bottom, which turned "<" into "v" and made the card look collapsible.
 
 - **Choice: native text states no alignment and follows the layout's direction; web keeps the physical value** (`startAlignment`). *Rejected:* `I18nManager.swapLeftAndRightInRTL(false)`, a global persisted setting that takes effect only after a reload, which localization.md already rules out; the app also relies on `end` offsets. *Rejected:* removing `writingDirection`, which does not change the swap.
@@ -342,6 +344,8 @@ The user saw Hebrew aligned left, a broken Home icon and a downward arrow on the
 
 ## Customers see their own changes — 2026-11-09
 
+PR #50.
+
 The user expected a notification on booking and on any cancellation, and found the centre empty. Measured on the local data: 11 customer bookings since the centre shipped produced 11 business rows and no customer rows. This was the stated assumption "the person who made a change gets no notification", which the user has now overruled for customers.
 
 - **Choice: the customer gets a row for every change to their appointment, whoever made it, including a move** (migration `20261109150000_notify_customer_own_changes`). A move was not named by the user and follows the same reasoning. *Accepted:* the rows count as unread, so booking raises the bell's count; one rule for all rows, and it is the feedback the user asked for.
@@ -349,6 +353,8 @@ The user expected a notification on booking and on any cancellation, and found t
 - **Past bookings are still not backfilled.**
 
 ## Home appointments heading and adding a provider — 2026-11-09
+
+PR #50.
 
 - **Choice: one Home heading, "התור הקרוב שלכם", for every state of the list (user's decision).** *Rejected:* separate headings for today's appointments and for a later one, more copy and a branch to keep correct. *Accepted:* with several appointments today, a singular title sits above several cards.
 - **Deferred until after the pilot (user's decision): adding a provider without a link or QR.** `pilot-product-journey.md` stays as it is. Considered when this returns: lookup by the business's exact phone, which needs a rate limit against scanning numbers; name search, which brings back the cancelled directory.
