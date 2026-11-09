@@ -6,6 +6,7 @@ import { ZodError } from 'zod';
 import { parseServicePrice, validateService } from '@visit/contracts';
 import { prisma } from '../src/db/client.js';
 import { redis } from '../src/infra/redis.js';
+import { expectAgendaSignal, expectCustomerSignal } from './support/live-signal.js';
 import { AppError } from '../src/http/errors.js';
 import { registerProviderRoutes } from '../src/routes/providers.js';
 import { registerScreenFlows } from '../src/routes/screen-flows.js';
@@ -61,7 +62,7 @@ test('service CRUD and booking snapshots stay scoped and preserve history on bot
     assert.equal(held.statusCode, 201, held.body);
     const bookingId = held.json().id;
     await t.test('confirmed snapshots survive later catalog name, duration, price and currency edits', async () => {
-      const initialConfirmation = await app.inject({ method: 'POST', url: `/v1/bookings/${bookingId}/confirm`, headers, payload: {} });
+      const initialConfirmation = await expectCustomerSignal(owner.id, () => expectAgendaSignal(business.id, () => app.inject({ method: 'POST', url: `/v1/bookings/${bookingId}/confirm`, headers, payload: {} })));
       assert.equal(initialConfirmation.statusCode, 200, initialConfirmation.body);
       const update = await app.inject({ method: 'PATCH', url: `${base}/${service.id}`, headers, payload: { name: 'Renamed service', durationMinutes: 60, priceMinor: 5000, currency: 'USD' } });
       assert.equal(update.statusCode, 200, update.body);

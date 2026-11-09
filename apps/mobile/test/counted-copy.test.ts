@@ -16,6 +16,24 @@ test('plural categories: Hebrew keeps its dual, English folds two into other', (
   assert.equal(pluralCategory('en', 0), 'other');
 });
 
+test('plural categories work where the engine has no Intl.PluralRules, as Hermes on a device', t => {
+  const real = Intl.PluralRules, engine = Intl as unknown as { PluralRules?: typeof Intl.PluralRules };
+  t.after(() => { engine.PluralRules = real; });
+  delete engine.PluralRules;
+  assert.equal(pluralCategory('he', 2), 'two');
+  assert.equal(pluralCategory('en', 1), 'one');
+});
+
+test('the plural rules agree with the standard rules for whole numbers', () => {
+  for (const [locale, tag] of [['he', 'he-IL'], ['en', 'en-GB']] as const) {
+    const standard = new Intl.PluralRules(tag);
+    for (let count = 0; count <= 1000; count += 1) {
+      const category = standard.select(count);
+      assert.equal(pluralCategory(locale, count), category === 'one' || category === 'two' ? category : 'other', `${locale} ${count}`);
+    }
+  }
+});
+
 test('every counted message family has all three forms in both languages', () => {
   for (const base of ['upcoming.more', 'bookingCommit.cancelHours', 'bookingCommit.cancelMinutes'] as const) {
     for (const locale of locales) for (const form of ['one', 'two', 'other'] as const) {

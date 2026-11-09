@@ -1,5 +1,6 @@
 import type { Prisma } from '../generated/prisma/client.js';
 import { prisma } from '../db/client.js';
+import { signalAppointmentChanged } from '../infra/live-signals.js';
 import { cancellationCutoff, conflict, notFound, unauthenticated } from '../http/errors.js';
 import { validateAuthenticatedSession, type AuthenticatedSession } from '../security/sessions.js';
 import { requireBusinessMembership } from '../security/tenant-context.js';
@@ -15,6 +16,7 @@ export async function changeBookingOutcome(session: AuthenticatedSession, bookin
   await validateAuthenticatedSession(session);
   if (businessId) await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']);
   else if (outcome !== 'CANCELLED') throw notFound();
+  let changed = false;
   const booking = await withBookingTransaction(async tx => {
     // Fence concurrent logout/revocation and role changes before authorizing the write.
     await tx.$queryRaw`SELECT id FROM "Session" WHERE id = ${session.sessionId} FOR SHARE`;
@@ -36,8 +38,11 @@ export async function changeBookingOutcome(session: AuthenticatedSession, bookin
     if (!businessId && current.status === 'CONFIRMED' && !current.business.bookingPolicy) throw conflict('This business has not configured its cancellation policy.');
     if (!businessId && current.status === 'CONFIRMED' && current.startsAt.getTime() < now.getTime() + (current.business.bookingPolicy?.cancellationCutoffMinutes ?? 0) * 60000) throw cancellationCutoff();
     await setBookingAudit(tx, session.identity.id, businessId ? 'PROVIDER' : 'CUSTOMER', outcome === 'COMPLETED' ? 'APPOINTMENT_FINISHED' : outcome === 'NO_SHOW' ? 'CUSTOMER_ABSENT' : businessId ? 'PROVIDER_REQUEST' : 'CUSTOMER_REQUEST');
+    changed = true;
     return tx.booking.update({ where: { id: current.id }, data: { status: outcome, holdExpiresAt: null } });
   });
+  // Repeating a finished change is allowed but changes nothing, so it must not wake anyone's screen.
+  if (changed) signalAppointmentChanged(booking);
   if (outcome === 'CANCELLED' && booking.customerId) await releaseHold(booking.id, booking.customerId).catch(() => {});
   return { id: booking.id, status: booking.status, revision: booking.revision };
 }

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Temporal } from '@js-temporal/polyfill';
 import { z } from 'zod';
 import { prisma } from '../db/client.js';
+import { signalAppointmentChanged } from '../infra/live-signals.js';
 import { AppError, conflict, notFound, rescheduleCutoff, unauthenticated } from '../http/errors.js';
 import { validateAuthenticatedSession, type AuthenticatedSession } from '../security/sessions.js';
 import { assertCustomerContact } from '../security/customer-contact.utils.js';
@@ -44,7 +45,7 @@ export async function rescheduleBooking(session: AuthenticatedSession, bookingId
   // Each worker owns a distinct bounded Redis lease; retries cannot release each other's lease.
   const reservationId = `reschedule:${randomUUID()}`;
   try {
-    return await withBookingTransaction(async tx => {
+    const moved = await withBookingTransaction(async tx => {
       await tx.$queryRaw`SELECT id FROM "Session" WHERE id = ${session.sessionId} FOR SHARE`;
       if (!await tx.session.findFirst({ where: { id: session.sessionId, identityId: session.identity.id, revokedAt: null, expiresAt: { gt: new Date() } } })) throw unauthenticated();
       await tx.$queryRaw`SELECT id FROM "Business" WHERE id = ${original.businessId} FOR SHARE`;
@@ -89,5 +90,7 @@ export async function rescheduleBooking(session: AuthenticatedSession, bookingId
       await tx.bookingReschedule.create({ data: { bookingId, idempotencyKey: input.idempotencyKey, fingerprint } });
       return response(updated);
     });
+    signalAppointmentChanged(original);
+    return moved;
   } finally { await releaseHold(reservationId, session.identity.id).catch(() => {}); }
 }

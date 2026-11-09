@@ -62,10 +62,12 @@ export async function authenticate(request: FastifyRequest) {
   return context;
 }
 
+/** Returns when the session's access window ends. */
 export async function validateAuthenticatedSession(context: AuthenticatedSession) {
   if (!context || !issuedSessions.has(context)) throw unauthenticated();
-  const session = await prisma.session.findFirst({ where: { id: context.sessionId, identityId: context.identity.id, revokedAt: null, expiresAt: { gt: new Date() } }, select: { id: true } });
+  const session = await prisma.session.findFirst({ where: { id: context.sessionId, identityId: context.identity.id, revokedAt: null, expiresAt: { gt: new Date() } }, select: { expiresAt: true } });
   if (!session) throw unauthenticated();
+  return session.expiresAt;
 }
 
 export function issueSessionToken(reply: FastifyReply, request: FastifyRequest, rawToken: string, refreshExpiresAt = new Date(Date.now() + REFRESH_TTL_MS)) {

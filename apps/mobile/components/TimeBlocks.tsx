@@ -41,7 +41,7 @@ export function TimeBlocks(state: TimeBlocksState) {
       : !blocks.length ? <AppText testID="time-blocks-empty">{t('blocks.empty')}</AppText>
       : <View className="gap-3">{blocks.map(block => <TimeBlockRow key={block.id} block={block} t={t} locale={locale} removing={removing} pending={pending} askRemove={askRemove} confirmRemove={confirmRemove} />)}</View>}
     {removeFailure ? <AppText accessibilityRole="alert" className="text-danger">{t(removeFailure)}</AppText> : null}
-    {message ? <AppText accessibilityRole="status">{t(message)}</AppText> : null}
+    {message ? <AppText role="status">{t(message)}</AppText> : null}
     <TimeBlockDialog staff={staff} {...dialog} />
   </View>;
 }

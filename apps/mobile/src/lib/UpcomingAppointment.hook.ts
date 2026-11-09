@@ -1,4 +1,4 @@
-import { upcomingStartDelay } from './UpcomingAppointment.utils';
+import { upcomingCardState, upcomingStartDelay } from './UpcomingAppointment.utils';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIsFocused, useRouter } from 'expo-router';
@@ -25,7 +25,7 @@ export function useUpcomingAppointment(businessId?: string, enabled = true): Upc
   const [now, setNow] = useState(Date.now);
   useEffect(() => { focusedRef.current = focused; }, [focused]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
-  const query = useQuery({ queryKey: ['me', 'upcoming', identity, version, businessId ?? 'all'], queryFn: ({ signal }) => readUpcomingAppointment(businessId, signal), enabled: Boolean(identity && enabled && focused), staleTime: 0, refetchOnMount: 'always', refetchInterval: 60000 });
+  const query = useQuery({ queryKey: ['me', 'upcoming', identity, version, businessId ?? 'all'], queryFn: ({ signal }) => readUpcomingAppointment(businessId, signal), enabled: Boolean(identity && enabled && focused), staleTime: 0, refetchOnMount: 'always' });
   const { refetch } = query;
   const candidate = query.data?.booking;
   useEffect(() => {
@@ -36,7 +36,8 @@ export function useUpcomingAppointment(businessId?: string, enabled = true): Upc
     return () => clearTimeout(timer);
   }, [candidate, focused, enabled, refetch]);
   const booking = candidate && candidate.status === 'CONFIRMED' && Date.parse(candidate.startsAt) >= now ? candidate : null;
-  const ready = Boolean(identity && focused && enabled && query.isSuccess && !query.isFetching && booking);
+  // A background re-read keeps the card on screen; only a first read has nothing to show yet.
+  const ready = Boolean(identity && focused && enabled && query.isSuccess && booking);
   function capture() {
     const scope = { identityId: identity, contextVersion: version, activeBusinessId: useSessionStore.getState().activeBusinessId };
     return () => scopeRef.current === scopeKey && focusedRef.current && canContinueAppointmentAction(scope, useSessionStore.getState(), mounted.current);
@@ -52,7 +53,7 @@ export function useUpcomingAppointment(businessId?: string, enabled = true): Upc
       if (isCurrent()) { setFailure({ scope: scopeKey, id: booking.id, message: t(appointmentRefusalKey(reason instanceof ApiError ? reason.code : undefined) ?? 'upcoming.failure') }); await query.refetch(); }
     } finally { operation.current = false; if (mounted.current) setBusy(false); }
   }
-  return { state: !identity || !enabled || !focused ? 'hidden' : query.isPending || query.isFetching ? 'loading' : query.isError ? 'error' : booking ? 'ready' : 'hidden',
+  return { state: upcomingCardState({ visible: Boolean(identity && enabled && focused), isPending: query.isPending, isError: query.isError, isFetching: query.isFetching, hasBooking: Boolean(booking) }),
     heading: t(businessId ? 'upcoming.context' : 'upcoming.heading'), loadingLabel: t('home.loadingBooking'), error: query.isError ? t('home.bookingFailure') : failure?.scope === scopeKey && failure.id === booking?.id ? failure.message : '', retryLabel: t('home.retryBooking'),
     appointment: ready && booking ? { id: booking.id, service: booking.service.name, business: booking.business.name, staff: booking.staff.displayName, when: `${appointmentDate(booking.startsAt, booking.business.timezone, locale)} · ${appointmentTime(booking.startsAt, booking.business.timezone, locale)}`, timeNote: timePolicyNote(booking.business.timezone, locale), canCancel: booking.actions.canCancel, canReschedule: booking.actions.canReschedule } : null,
     additionalLabel: query.data?.additionalCount ? translateCount(locale, 'upcoming.more', query.data.additionalCount) : '', detailsLabel: t('details.open'), cancelLabel: t('details.cancel'), rescheduleLabel: t('details.reschedule'), busy,

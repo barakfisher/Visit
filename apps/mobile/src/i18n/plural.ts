@@ -5,9 +5,10 @@ export type PluralCategory = 'one' | 'two' | 'other';
 /** A message family written as `<base>.one`, `<base>.two` and `<base>.other`. */
 export type PluralBase = { [K in MessageKey]: K extends `${infer Base}.other` ? Base : never }[MessageKey];
 
+/** Written out because Hermes has no Intl.PluralRules on a device. A new locale adds its rule here. Counts are whole numbers. */
 export function pluralCategory(locale: Locale, count: number): PluralCategory {
-  const category = new Intl.PluralRules(locale === 'he' ? 'he-IL' : 'en-GB').select(count);
-  return category === 'one' || category === 'two' ? category : 'other';
+  if (count === 1) return 'one';
+  return locale === 'he' && count === 2 ? 'two' : 'other';
 }
 
 /** Translates the form of `base` that matches `count`; `{count}` is available to every form. */

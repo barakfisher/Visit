@@ -34,7 +34,7 @@ export function StaffForm({ t, staff, draft, errors, formError, saved, busy, ass
       <AppText className="text-sm text-body">{t('roster.availableHint', { name: staff.data?.staff.find(row => row.id === expanded)?.displayName ?? draft.name.trim() })}</AppText>
     </View> : null}
     {formError ? <AppText accessibilityRole="alert" className="text-danger">{t(formError)}</AppText> : null}
-    {saved ? <AppText accessibilityRole="status" className="text-success">{t('roster.saved')}</AppText> : null}
+    {saved ? <AppText role="status" className="text-success">{t('roster.saved')}</AppText> : null}
     <View className="flex-row gap-3">
       <View className="flex-1"><ActionButton label={t(editing ? 'roster.save' : 'roster.addSubmit')} busy={busy} onPress={save} /></View>
       <View className="flex-1"><ActionButton secondary disabled={busy} label={t('roster.cancel')} onPress={editing ? cancelEdit : cancelAdd} /></View>

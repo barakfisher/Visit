@@ -56,7 +56,7 @@ export default function GoogleCallbackScreen() {
     {preview || issued ? <>
       {preview ? <><Text className="text-body">{t(preview.intent === 'link' ? 'google.linkHelp' : 'google.confirmHelp')}</Text><Text style={{ writingDirection: 'ltr' }} className="font-semibold text-ink">{preview.email}</Text></> : null}
       <ActionButton label={issued ? t('google.resume') : preview?.intent === 'link' ? t('google.link') : t('google.confirm')} busy={busy} onPress={() => void confirm()} />
-    </> : loading || !receipt ? <Text accessibilityRole="status" className="text-body">{t('common.loading')}</Text> : <>
+    </> : loading || !receipt ? <Text role="status" className="text-body">{t('common.loading')}</Text> : <>
       <Text className="text-body">{t(status === 'cancelled' ? 'google.cancelled' : 'google.failure')}</Text>
       {!status ? <ActionButton secondary label={t('common.retry')} onPress={() => setAttempt(value => value + 1)} /> : null}
     </>}

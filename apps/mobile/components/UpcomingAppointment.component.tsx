@@ -4,7 +4,7 @@ import { ActionButton } from './ActionButton';
 import type { UpcomingAppointmentView } from '../src/types/UpcomingAppointment.types';
 export function UpcomingAppointment(view: UpcomingAppointmentView) {
   if (view.state === 'hidden') return null;
-  if (view.state === 'loading') return <AppText accessibilityRole="status">{view.loadingLabel}</AppText>;
+  if (view.state === 'loading') return <AppText role="status">{view.loadingLabel}</AppText>;
   if (view.state === 'error') return <View className="gap-3"><AppText accessibilityRole="alert">{view.error}</AppText><ActionButton secondary label={view.retryLabel} onPress={view.onRetry} /></View>;
   const appointment = view.appointment;
   if (!appointment) return null;

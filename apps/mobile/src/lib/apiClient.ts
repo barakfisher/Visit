@@ -13,6 +13,8 @@ type Dependencies = {
   clearSession: () => void;
   contextVersion: () => number;
   fetch?: typeof fetch;
+  /** A fetch that delivers a body while it is still arriving. */
+  streamingFetch?: typeof fetch;
   timeoutMs?: number;
   onProviderForbidden?: () => void;
 };
@@ -75,7 +77,37 @@ export function createApiClient(dependencies: Dependencies) {
     try { return await promise; }
     finally { if (refreshing?.promise === promise) refreshing = null; }
   }
-  return async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // A stream has no timeout on purpose: it stays open, and its reader decides when it has gone quiet.
+  async function connectStream(path: string, signal: AbortSignal, version: number) {
+    const url = new URL(path, origin);
+    if (!path.startsWith('/') || path.startsWith('//') || url.origin !== origin.origin) throw new ApiError('Invalid API request path.', 'INVALID_PATH', 0);
+    const token = await readToken(); assertContext(version);
+    const headers = new Headers({ Accept: 'text/event-stream' });
+    if (native) headers.set('X-Visit-Client', 'native');
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    try {
+      const response = await (dependencies.streamingFetch ?? transport)(url.toString(), { headers, credentials: 'include', signal });
+      assertContext(version);
+      return response;
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      throw new ApiError('The service could not be reached. Check your connection and retry.', 'NETWORK_ERROR', 0);
+    }
+  }
+  async function openStream(path: string, signal: AbortSignal) {
+    const version = contextVersion();
+    let response = await connectStream(path, signal, version);
+    if (response.status === 401 && await refresh(version)) response = await connectStream(path, signal, version);
+    if (!response.ok) {
+      if (response.status === 403 && path.startsWith('/api/provider/')) dependencies.onProviderForbidden?.();
+      throw responseError(response, await response.json().catch(() => null));
+    }
+    // A captive portal answers 200 with a page. Treated as a failure, it backs off instead of counting as a clean end.
+    if (!response.headers.get('content-type')?.includes('text/event-stream')) throw new ApiError('The service returned an invalid response.', 'INVALID_RESPONSE', 502);
+    return response;
+  }
+  return Object.assign(request, { openStream });
+  async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const version = contextVersion();
     let { response, body } = await send(path, init, version);
     const authenticating = (path.startsWith('/v1/auth/') || path.startsWith('/api/auth/')) && path !== '/api/auth/me';
@@ -88,5 +120,5 @@ export function createApiClient(dependencies: Dependencies) {
     }
     if (body === null) throw new ApiError('The service returned an invalid response.', 'INVALID_RESPONSE', 502);
     return body as T;
-  };
+  }
 }

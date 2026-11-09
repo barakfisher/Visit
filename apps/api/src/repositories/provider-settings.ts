@@ -1,8 +1,9 @@
 import { assertSafeSchedule, fenceScheduleSession } from './ScheduleImpact.service.js';
 import type { AuthenticatedSession } from '../security/sessions.js';
 import { withBusinessConfiguration } from './publication.js';
-import { MAX_REPORTED_CONFLICTS } from './TimeBlocks.service.js';
+import { changingAgenda, MAX_REPORTED_CONFLICTS } from './TimeBlocks.service.js';
 import { prisma } from '../db/client.js';
+import { signalAgendaChanged } from '../infra/live-signals.js';
 import { DEFAULT_BOOKING_POLICY, parseAvailabilityRules, parseBookingPolicy } from '../scheduling/rules.js';
 import { AppError, notFound } from '../http/errors.js';
 import { conflict } from '../http/errors.js';
@@ -95,7 +96,7 @@ export async function createBusinessStaff(context: AuthorizedBusinessContext, in
   if (!ids.length || ids.length !== input.serviceIds.length) {
     throw new AppError(400, 'VALIDATION_ERROR', 'Every selected service must be active in this business.');
   }
-  return withBusinessConfiguration(context, async tx => {
+  return changingAgenda(context, async tx => {
     const creationFingerprint = input.creationKey ? createHash('sha256').update(JSON.stringify([input.displayName, input.parallelCapacity ?? 1, [...ids].sort()])).digest('hex') : null;
     if (input.creationKey) {
       const prior = await tx.staff.findUnique({ where: { businessId_creationKey: { businessId, creationKey: input.creationKey } } });
@@ -135,7 +136,7 @@ export async function updateBusinessStaff(context: AuthorizedBusinessContext, st
   input = z.strictObject({ displayName: z.string().trim().min(2).max(120).optional(), active: z.boolean().optional(), parallelCapacity: z.number().int().min(1).max(100).optional(), serviceIds: z.array(z.string().min(1)).max(100).optional() }).refine(v => Object.keys(v).length > 0).parse(input);
   const businessId = context.businessId;
   try {
-    const result = await withBusinessConfiguration(context, async tx => {
+    const result = await changingAgenda(context, async tx => {
       await tx.$queryRaw`SELECT id FROM "Staff" WHERE id = ${staffId} AND "businessId" = ${businessId} FOR UPDATE`;
       const existing = await tx.staff.findFirst({ where: { id: staffId, businessId, archivedAt: null } }); if (!existing) throw notFound();
       const serviceIds = input.serviceIds;
@@ -186,6 +187,7 @@ export async function removeBusinessStaff(context: AuthorizedBusinessContext, st
     await tx.staff.update({ where: { id: staffId, businessId }, data: { active: false, archivedAt: now } });
     return { deleted: false, archived: true, expired };
   });
+  signalAgendaChanged(businessId);
   await Promise.allSettled(result.expired.flatMap(h => h.customerId ? [releaseHold(h.id, h.customerId)] : []));
   return { deleted: result.deleted, archived: result.archived };
 }

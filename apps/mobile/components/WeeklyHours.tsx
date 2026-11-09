@@ -31,7 +31,7 @@ export function WeeklyHours(state: WeeklyHoursState) {
     {/* Results of "Follow business hours", which has no dialog of its own. */}
     {!formOpen && preview ? <ScheduleImpact {...state} /> : null}
     {!formOpen && failure ? <AppText accessibilityRole="alert" className="text-danger">{t(failure)}</AppText> : null}
-    {saved ? <AppText accessibilityRole="status">{t('hours.saved')}</AppText> : null}
+    {saved ? <AppText role="status">{t('hours.saved')}</AppText> : null}
     <FormDialog title={t('hours.editTitle')} open={formOpen} onClose={cancelForm} testID="hours-dialog"><WeeklyHoursForm {...state} /></FormDialog>
   </View>;
 }

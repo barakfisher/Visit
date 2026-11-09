@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { createApp } from '../src/app.js';
 import { prisma } from '../src/db/client.js';
 import { redis } from '../src/infra/redis.js';
+import { expectAgendaSignal, expectCustomerSignal } from './support/live-signal.js';
 import { tokenDigest } from '../src/security/sessions.js';
 import { CANCELLATION_CUTOFF, RESCHEDULE_CUTOFF } from '../src/http/errors.js';
 
@@ -64,7 +65,7 @@ test('reschedule and cancellation preserve atomic capacity, ownership and lifecy
       assert.equal((await app.inject({ method: 'POST', url: `/v1/provider/businesses/${foreignBusiness.id}/bookings/${booking.id}/reschedule`, headers: headers(owner.id), payload: body })).statusCode, 403);
       await prisma.membership.create({ data: { businessId: foreignBusiness.id, identityId: owner.id, role: 'OWNER', status: 'ACTIVE' } });
       assert.equal((await app.inject({ method: 'POST', url: `/v1/provider/businesses/${foreignBusiness.id}/bookings/${booking.id}/reschedule`, headers: headers(owner.id), payload: body })).statusCode, 404);
-      assert.equal((await app.inject({ method: 'POST', url: `${base}/reschedule`, headers: headers(owner.id), payload: body })).statusCode, 200);
+      assert.equal((await expectCustomerSignal(customer.id, () => expectAgendaSignal(business.id, () => app.inject({ method: 'POST', url: `${base}/reschedule`, headers: headers(owner.id), payload: body })))).statusCode, 200);
       assert.equal((await app.inject({ method: 'POST', url: `${base}/cancel`, headers: headers(owner.id), payload: { expectedRevision: 1 } })).statusCode, 200);
       const events = await prisma.bookingEvent.findMany({ where: { bookingId: booking.id, revision: { gt: 0 } } });
       assert.equal(events.length, 2);

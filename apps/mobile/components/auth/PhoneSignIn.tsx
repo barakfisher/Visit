@@ -17,7 +17,7 @@ export function PhoneSignIn({ enabled, blocked, phone, code, sent, busy, error, 
     </> : sent ? <>
       <AppText className="text-body">{t('auth.codeSent', { phone: isolateLtr(phone) })}</AppText>
       <OTPInput value={code} onChange={setCode} disabled={disabled || !remaining} />
-      <AppText accessibilityRole={remaining ? 'timer' : 'status'} className="text-sm text-body">{remaining ? t('auth.expiresIn', { seconds: remaining }) : t('auth.expired')}</AppText>
+      <AppText role={remaining ? 'timer' : 'status'} className="text-sm text-body">{remaining ? t('auth.expiresIn', { seconds: remaining }) : t('auth.expired')}</AppText>
       <ActionButton label={t('auth.verify')} onPress={verify} busy={busy} disabled={blocked || !remaining || code.length !== 6} />
       <ActionButton secondary label={cooldown ? t('auth.resendIn', { seconds: cooldown }) : t('auth.resend')} onPress={send} disabled={disabled || cooldown > 0} />
       <ActionButton secondary label={t('auth.changePhone')} onPress={reset} disabled={disabled} />

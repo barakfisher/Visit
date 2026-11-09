@@ -2,11 +2,13 @@ import { Platform } from 'react-native';
 import { readSessionToken, saveSessionToken } from './sessionToken';
 import { useSessionStore } from '../state/session';
 import { createApiClient } from './apiClient';
+import { streamingFetch } from './streamingFetch';
 
 export { ApiError } from './apiClient';
 export const apiRequest = createApiClient({
   baseUrl: process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000',
   native: Platform.OS !== 'web',
+  streamingFetch,
   readToken: readSessionToken,
   saveToken: saveSessionToken,
   clearSession: () => useSessionStore.getState().clear(),
