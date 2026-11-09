@@ -405,6 +405,8 @@ The booking screen read slots every 2 seconds and contact readiness every 10. Me
 
 ## A smooth booking screen — 2026-11-09
 
+PR #51.
+
 An Android run showed the refusal message and a time leaving the list making the booking screen jump. The message sat in the bottom bar and shrank the scroll area. The same state change also removed a time, pulled one in from the next page and removed the review card, which threw a scrolled customer upward.
 
 - **Choice: a toast only for "the time is gone" (the user's call).** `compact.changed` and `bookingCommit.conflict` say something the screen already shows: the selection is cleared and the list offers other times. *Rejected:* every refusal except the uncertain result, because a cutoff explains a state that will not change and would fade before a customer has read two lines. *Rejected:* every message, because `bookingCommit.uncertain` means the booking may exist. A customer who missed it could choose another time and book twice.
