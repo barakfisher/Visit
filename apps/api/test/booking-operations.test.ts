@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { createApp } from '../src/app.js';
 import { prisma } from '../src/db/client.js';
 import { redis } from '../src/infra/redis.js';
-import { expectAgendaSignal, expectCustomerSignal } from './support/live-signal.js';
+import { expectAgendaSignal, expectCustomerSignal, expectNoAgendaSignal } from './support/live-signal.js';
 import { tokenDigest } from '../src/security/sessions.js';
 import { CANCELLATION_CUTOFF, RESCHEDULE_CUTOFF } from '../src/http/errors.js';
 
@@ -58,6 +58,15 @@ test('reschedule and cancellation preserve atomic capacity, ownership and lifecy
         assert.equal((await app.inject({ method: 'POST', url, headers: { ...headers(), 'content-type': 'application/json' }, payload: JSON.stringify(invalid) })).statusCode, 400);
       }
       await unchanged(booking);
+    });
+    await t.test('a reschedule to the same place changes nothing, so it wakes nobody', async () => {
+      const booking = await create();
+      let status = 0;
+      await expectNoAgendaSignal(business.id, async () => {
+        status = (await app.inject({ method: 'POST', url: `/v1/bookings/${booking.id}/reschedule`, headers: headers(), payload: payload(booking.startsAt) })).statusCode;
+      });
+      assert.equal(status, 200);
+      assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).revision, 0);
     });
     await t.test('provider owner is tenant scoped and can reschedule and cancel with attributed audit', async () => {
       const booking = await create(); const body = payload(new Date(+booking.startsAt + 3600000));

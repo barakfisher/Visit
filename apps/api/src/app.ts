@@ -2,6 +2,7 @@ import { registerSavedProviders } from './routes/saved-providers.js';
 import { registerBusinessAccess } from './routes/business-access.js';
 import { registerLiveStreaming, registerLiveUpdates } from './routes/live-updates.js';
 import { registerAccountMethods } from './routes/account-methods.js';
+import { registerNotifications } from './routes/notifications.js';
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { Pool } from "pg";
@@ -46,6 +47,7 @@ export async function createApp({ google, account, providerReviewScope = 'live' 
   await registerSavedProviders(app);
   await registerBusinessAccess(app);
   registerLiveUpdates(app);
+  registerNotifications(app);
 
   app.get("/health/live", async () => ({ status: "ok" }));
 

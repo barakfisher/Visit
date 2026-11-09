@@ -1,11 +1,11 @@
-import { agendaTopic, customerTopic, followLiveSignal } from '../../src/infra/live-signals.js';
+import { agendaTopic, personTopic, followLiveSignal } from '../../src/infra/live-signals.js';
 
 const SIGNAL_WAIT_MS = 3000, QUIET_WAIT_MS = 500;
 
 /** Runs the action and fails unless it signals this business's agenda. */
 export const expectAgendaSignal = <T>(businessId: string, action: () => Promise<T>) => expectSignal(agendaTopic(businessId), action);
 /** Runs the action and fails unless it signals this customer's appointments. */
-export const expectCustomerSignal = <T>(identityId: string, action: () => Promise<T>) => expectSignal(customerTopic(identityId), action);
+export const expectCustomerSignal = <T>(identityId: string, action: () => Promise<T>) => expectSignal(personTopic(identityId), action);
 
 /** Runs the action, which may fail, and fails unless this business's agenda stays quiet. */
 export async function expectNoAgendaSignal(businessId: string, action: () => Promise<unknown>) {

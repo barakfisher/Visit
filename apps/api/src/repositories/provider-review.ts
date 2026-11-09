@@ -1,11 +1,13 @@
 import { prisma } from '../db/client.js';
+import { signalPersonChanged } from '../infra/live-signals.js';
 import { conflict, forbidden, notFound } from '../http/errors.js';
 import type { AuthenticatedSession } from '../security/sessions.js';
 import { lockRecentAccountSession, requireRecentAccountAuth, lockIdentitySecurity } from '../security/account-security.js';
 export async function reviewProviderApplication(actor: AuthenticatedSession, applicationId: string, decision: 'APPROVED' | 'REJECTED', reason: string, scope = 'live') {
   await requireRecentAccountAuth(actor);
   const adminId = actor.identity.id;
-  return prisma.$transaction(async tx => {
+  let decidedFor: string | null = null;
+  const result = await prisma.$transaction(async tx => {
     await lockRecentAccountSession(tx, actor);
     await lockIdentitySecurity(tx, adminId);
     if ((await tx.identity.findUnique({ where: { id: adminId } }))?.platformRole !== 'ADMIN') throw forbidden();
@@ -28,6 +30,11 @@ export async function reviewProviderApplication(actor: AuthenticatedSession, app
     await tx.business.update({ where: { id: application.businessId }, data: { approvalStatus: decision, reviewedAt: now, reviewedById: adminId } });
     const destination = application.identity.emailVerifiedAt ? application.identity.email : null;
     await tx.providerReviewNotification.create({ data: { applicationId, scope, destination, locale: application.identity.preferredLocale, status: destination ? 'QUEUED' : 'IN_APP' } });
+    // A rejection revokes the membership, so it reaches the applicant as a person and not as the business's manager.
+    await tx.notification.create({ data: { identityId: application.identityId, businessId: application.businessId, kind: decision === 'APPROVED' ? 'BUSINESS_APPROVED' : 'BUSINESS_REJECTED', audience: decision === 'APPROVED' ? 'BUSINESS' : 'CUSTOMER' } });
+    decidedFor = application.identityId;
     return { id: application.id, status: decision };
   });
+  if (decidedFor) signalPersonChanged(decidedFor);
+  return result;
 }
