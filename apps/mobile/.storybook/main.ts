@@ -18,7 +18,8 @@ const config: StorybookConfig = {
       oxc: { jsx: { importSource: 'nativewind' } },
       optimizeDeps: { exclude: ['react-native-safe-area-context'], include: ['nativewind/jsx-runtime', 'nativewind/jsx-dev-runtime', 'react-native-css-interop/dist/runtime/web/api'] },
       // Isolated stories never inherit production credentials or the development API.
-      define: { 'process.env.EXPO_PUBLIC_API_URL': JSON.stringify('https://storybook.invalid') },
+      // Reanimated reads __DEV__ and global, which Metro defines and Vite does not.
+      define: { 'process.env.EXPO_PUBLIC_API_URL': JSON.stringify('https://storybook.invalid'), __DEV__: 'true', global: 'globalThis' },
       resolve: { extensions: ['.web.tsx', '.web.ts', '.web.js', '.tsx', '.ts', '.jsx', '.js', '.json'], alias: [{ find: /^react-native$/, replacement: 'react-native-web' }, { find: '@', replacement: fileURLToPath(new URL('..', import.meta.url)) }] },
     });
   },
