@@ -3,9 +3,9 @@ import { LIVE_HEARTBEAT_MS, LIVE_READY_EVENT } from '@visit/contracts';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { AppError } from '../http/errors.js';
-import { agendaTopic, closeLiveSignals, customerTopic, followLiveSignal } from '../infra/live-signals.js';
+import { agendaTopic, closeLiveSignals, personTopic, followLiveSignal } from '../infra/live-signals.js';
 import { authenticate, validateAuthenticatedSession, type AuthenticatedSession } from '../security/sessions.js';
-import { requireBusinessMembership } from '../security/tenant-context.js';
+import { MANAGING_ROLES, requireBusinessMembership } from '../security/tenant-context.js';
 
 export const AGENDA_CHANGED_EVENT = 'agenda-changed';
 export const APPOINTMENTS_CHANGED_EVENT = 'appointments-changed';
@@ -16,7 +16,6 @@ export const LIVE_SIGNAL_COALESCE_MS = 250;
 /** Also bounds the timer: Node fires a longer-than-32-bit timeout at once. */
 export const MAX_LIVE_STREAM_MS = 15 * 60 * 1000;
 
-const AGENDA_ROLES = ['OWNER', 'MANAGER'] as const;
 const openStreams = new Map<string, number>();
 
 type LiveStream = { session: AuthenticatedSession; topic: string; event: string; stillAllowed: () => Promise<unknown> };
@@ -73,14 +72,14 @@ export function registerLiveUpdates(app: FastifyInstance) {
   app.get('/api/provider/agenda/live', { sse: 'only' }, async (request, reply) => {
     const { businessId } = z.strictObject({ businessId: z.string().min(1).max(256) }).parse(request.query);
     const session = await authenticate(request);
-    const stillAllowed = () => requireBusinessMembership(session.identity.id, businessId, AGENDA_ROLES);
+    const stillAllowed = () => requireBusinessMembership(session.identity.id, businessId, MANAGING_ROLES);
     await stillAllowed();
     await streamLiveSignals(reply, { session, topic: agendaTopic(businessId), event: AGENDA_CHANGED_EVENT, stillAllowed });
   });
-  // The topic comes from the session alone, so a customer can only ever follow their own appointments.
+  // The topic comes from the session alone, so a person can only ever follow their own. The client re-reads their appointments and notifications on it.
   app.get('/api/me/appointments/live', { sse: 'only' }, async (request, reply) => {
     z.strictObject({}).parse(request.query);
     const session = await authenticate(request);
-    await streamLiveSignals(reply, { session, topic: customerTopic(session.identity.id), event: APPOINTMENTS_CHANGED_EVENT, stillAllowed: async () => {} });
+    await streamLiveSignals(reply, { session, topic: personTopic(session.identity.id), event: APPOINTMENTS_CHANGED_EVENT, stillAllowed: async () => {} });
   });
 }

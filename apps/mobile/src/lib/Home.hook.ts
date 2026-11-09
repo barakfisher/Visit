@@ -26,7 +26,7 @@ export function useHome(): HomeView {
   const account = useQuery({ queryKey: ['me', identity], queryFn: () => apiRequest<AccountNavigation>('/v1/me'), enabled: !!identity });
   const { managed } = menuCapabilities(account.data);
   const [remembered, setRemembered] = useState<RememberedProviderMode | null | undefined>(undefined);
-  const [restoring, setRestoring] = useState(true), [opening, setOpening] = useState<string | null>(null), [businessError, setBusinessError] = useState<HomeView['businessError']>(null);
+  const [restoring, setRestoring] = useState(true);
   const checked = useRef(false), mounted = useRef(true);
   useEffect(() => () => { mounted.current = false; }, []);
   useEffect(() => { if (identity) void readProviderMode().then(value => { if (mounted.current) setRemembered(value); }); }, [identity]);
@@ -41,17 +41,11 @@ export function useHome(): HomeView {
     void (async () => {
       const next = !onHome ? 'none' : account.isError || account.isPending ? providerModeOnHome(remembered, identity, null) : providerModeOnHome(remembered, identity, managed);
       if (next === 'forget') await forgetProviderMode();
-      if (next === 'restore' && remembered) { try { if (await openProviderWorkspace(remembered.businessId)) return; await forgetProviderMode(); } catch { /* stay on Home; the card and menu still work */ } }
+      if (next === 'restore' && remembered) { try { if (await openProviderWorkspace(remembered.businessId)) return; await forgetProviderMode(); } catch { /* stay on Home; the header's switch still works */ } }
       if (mounted.current) setRestoring(false);
     })();
   }, [identity, remembered, pathname, account.isPending, account.isError, managed]);
-  async function manage(businessId: string) {
-    if (opening) return;
-    setOpening(businessId); setBusinessError(null);
-    try { if (!await openProviderWorkspace(businessId)) { setBusinessError('nav.changed'); void account.refetch(); } } catch { if (mounted.current) setBusinessError('home.business.failure'); } finally { if (mounted.current) setOpening(null); }
-  }
   return { t, identity, bootstrapping: !identity && bootstrap !== 'ready' || !!identity && restoring, upcoming,
-    businesses: managed.map(m => ({ id: m.business.id, name: m.business.name, published: !!m.business.publishedAt })), openingBusiness: opening, businessError, onManage: businessId => { void manage(businessId); },
     providersState: saved.isPending ? 'loading' : saved.isError ? 'error' : 'ready', providers: saved.data?.pages.flatMap(page => page.providers) ?? [], hasMore: Boolean(saved.hasNextPage), loadingMore: saved.isFetchingNextPage, removingId: remove.isPending ? remove.variables?.businessId ?? null : null, removeError: remove.isError,
     onRetryProviders: () => { void saved.refetch(); }, onMore: () => { void saved.fetchNextPage(); },
     onBook: businessId => router.push({ pathname: '/booking/[providerId]', params: { providerId: businessId } }), hasArchive: archive.data === true, onArchive: () => router.push('/archived-providers'),

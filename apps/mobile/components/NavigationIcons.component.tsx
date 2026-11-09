@@ -17,6 +17,14 @@ export function AvatarIcon({ color }: IconProps) {
   </View>;
 }
 
+export function BellIcon({ color }: IconProps) {
+  return <View {...hidden} style={{ width: 24, height: 24, alignItems: 'center' }}>
+    <View style={{ width: 16, height: 15, marginTop: 2, borderLeftWidth: 2, borderRightWidth: 2, borderTopWidth: 2, borderColor: color, borderTopLeftRadius: 8, borderTopRightRadius: 8 }} />
+    <View style={{ width: 20, height: 2, borderRadius: 1, backgroundColor: color }} />
+    <View style={{ width: 6, height: 3, marginTop: 1, borderBottomLeftRadius: 3, borderBottomRightRadius: 3, backgroundColor: color }} />
+  </View>;
+}
+
 export function HomeIcon({ color }: IconProps) {
   return <View {...hidden} style={{ width: 22, height: 22, alignItems: 'center' }}>
     <View style={{ width: 15, height: 15, marginTop: 2, borderLeftWidth: 2, borderTopWidth: 2, borderColor: color, transform: [{ rotate: '45deg' }] }} />

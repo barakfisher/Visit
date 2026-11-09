@@ -4,6 +4,9 @@ import { MembershipRole, MembershipStatus } from '../generated/prisma/client.js'
 import { prisma } from '../db/client.js';
 import { conflict, forbidden, notFound, rescheduleCutoff } from '../http/errors.js';
 
+/** Who runs a business: they see its agenda and are told about its bookings. Staff are not linked to an account's inbox. */
+export const MANAGING_ROLES = ['OWNER', 'MANAGER'] as const;
+
 const contextBrand: unique symbol = Symbol('AuthorizedBusinessContext');
 const publicContextBrand: unique symbol = Symbol('PublicBusinessContext');
 const issuedMembershipContexts = new WeakSet<object>();

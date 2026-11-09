@@ -7,8 +7,8 @@ export type AccountNavigation = {
   providerApplications: { id: string; status: string; business: { name: string } }[];
 };
 export const isProviderPath = (pathname: string) => pathname.startsWith('/provider/');
-/** Account belongs to the person, not to a mode: it keeps the business it was opened from, carried in its URL so a reload keeps it too. Only a business in the person's own profile counts. */
-export const accountBusiness = (pathname: string, businessId: string | string[] | undefined, businesses: readonly { id: string }[] | undefined) => pathname === '/account' && businesses?.some(business => business.id === businessId) ? businessId as string : null;
+/** Account and the notifications belong to the person, not to a mode: each keeps the business it was opened from, carried in its URL so a reload keeps it too. Only a business in the person's own profile counts. */
+export const accountBusiness = (pathname: string, businessId: string | string[] | undefined, businesses: readonly { id: string }[] | undefined) => (pathname === '/account' || pathname === '/notifications') && businesses?.some(business => business.id === businessId) ? businessId as string : null;
 /** A flow with its own commit button at the bottom, or a screen outside the signed-in shell, keeps the whole screen. */
 export const footerHidden = (pathname: string) => ['/auth', '/booking', '/register', '/invite'].some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`));
 export function menuCapabilities(account?: AccountNavigation) {

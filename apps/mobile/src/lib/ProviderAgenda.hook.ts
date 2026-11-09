@@ -2,7 +2,7 @@ import { useManualBooking } from './ManualBooking.hook';
 import { useLiveAgenda } from './LiveSignals.hook';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useIsFocused, useRouter } from 'expo-router';
+import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
 import { useProviderWorkspace } from '../../components/ProviderAccess';
 import { useAppLocale } from '../i18n/LocaleContext';
 import { useSessionStore } from '../state/session';
@@ -16,6 +16,7 @@ import { appointmentSpan, dateRange } from './appointmentTime';
 import type { AgendaDraft, ProviderAgendaView } from '../types/ProviderAgenda.types';
 export function useProviderAgenda(): ProviderAgendaView {
   const business = useProviderWorkspace(), { t, locale } = useAppLocale(), router = useRouter();
+  const { date: requestedDate } = useLocalSearchParams<{ date?: string }>();
   const profile = useSessionStore(state => state.profile), identity = useSessionStore(state => state.identityId), version = useSessionStore(state => state.contextVersion);
   const scope = JSON.stringify([identity, version, business.id]);
   const stored = useAgendaDraft(state => state.scope === scope ? state.draft : emptyAgendaDraft);
@@ -23,7 +24,7 @@ export function useProviderAgenda(): ProviderAgendaView {
   const mounted = useRef(true), focused = useIsFocused(), focusRef = useRef(focused);
   useEffect(() => { focusRef.current = focused; }, [focused]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; useAgendaDraft.getState().clear(); }; }, []);
-  const day = stored.date || todayInTimezone(business.timezone), validDate = validBookingDate(day);
+  const day = stored.date || requestedDate || todayInTimezone(business.timezone), validDate = validBookingDate(day);
   const manual = useManualBooking(business, day);
   const blockDialog = useTimeBlockDialog(business.id, business.timezone), blockRemoval = useBlockRemoval(business.id);
   // A pending block save or removal holds the date and business, so its result lands on the day it was made for.

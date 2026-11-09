@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useSessionStore } from '../state/session';
 import { apiRequest } from './api';
 import { isCustomerAppointmentQuery } from './BookingQueries.utils';
+import { isNotificationQuery } from './Notifications.utils';
 import { followLiveSignals, shareLiveSignals, watchForegroundReturn } from './LiveSignals.service';
 import { queryClient } from './queryClient';
 
@@ -39,9 +40,9 @@ export function useLiveAgenda(businessId: string, enabled: boolean) {
   });
 }
 
-/** One stream for the whole signed-in app: only the customer appointment queries on screen re-read. */
-export function useLiveAppointments() {
+/** One stream for the whole signed-in app: only the person's appointment and notification queries on screen re-read. */
+export function useLivePersonalUpdates() {
   useLiveSignals('/api/me/appointments/live', true, () => {
-    void queryClient.invalidateQueries({ predicate: query => isCustomerAppointmentQuery(query.queryKey) });
+    void queryClient.invalidateQueries({ predicate: ({ queryKey }) => isCustomerAppointmentQuery(queryKey) || isNotificationQuery(queryKey) });
   });
 }

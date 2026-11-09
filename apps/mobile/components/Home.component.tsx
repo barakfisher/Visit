@@ -5,7 +5,6 @@ import { ActionButton } from './ActionButton';
 import { Control } from './Control';
 import { SessionLoading } from './SessionLoading';
 import { UpcomingAppointment } from './UpcomingAppointment.component';
-import { BusinessSetupNotice } from './BusinessSetupNotice.component';
 import { RemoveProviderDialog } from './RemoveProviderDialog.component';
 import type { HomeView } from '../src/types/Home.types';
 const pairs = <T,>(items: T[]) => items.flatMap((item, index) => index % 2 ? [] : [[item, items[index + 1]] as [T, T | undefined]]);
@@ -16,8 +15,6 @@ export function Home(view: HomeView) {
   return <ScrollView testID="home-screen" className="flex-1 bg-canvas" contentContainerClassName="mx-auto w-full max-w-2xl gap-5 px-5 py-6 md:px-8">
     {/* Someone with providers came for them; the welcome is for someone with an empty list. */}
     {empty ? <View className="gap-2"><AppText accessibilityRole="header" className="text-3xl font-bold tracking-tight text-ink">{t('home.title')}</AppText><AppText className="text-base leading-6 text-body">{t('home.intro')}</AppText></View> : null}
-    {view.businesses.filter(item => !item.published).map(item => <BusinessSetupNotice key={item.id} t={t} item={item} opening={view.openingBusiness === item.id} disabled={!!view.openingBusiness} onManage={() => view.onManage(item.id)} />)}
-    {view.businessError ? <AppText accessibilityRole="alert" className="text-danger">{t(view.businessError)}</AppText> : null}
     <UpcomingAppointment {...view.upcoming} />
     <AppText accessibilityRole="header" className="text-xl font-bold text-ink">{t('home.providers')}</AppText>
     {view.providersState === 'loading' ? <AppText>{t('home.loadingProviders')}</AppText> : view.providersState === 'error' ? <View className="gap-3 rounded-card border border-line bg-surface p-5"><AppText accessibilityRole="alert">{t('home.providersFailure')}</AppText><ActionButton secondary label={t('home.retryProviders')} onPress={view.onRetryProviders} /></View> : <>

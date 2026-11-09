@@ -10,8 +10,8 @@ export async function readProviderMode(): Promise<RememberedProviderMode | null>
 }
 export async function forgetProviderMode() { try { await AsyncStorage.removeItem(PROVIDER_MODE_KEY); } catch { /* nothing to undo */ } }
 async function rememberProviderMode(value: RememberedProviderMode) { try { await AsyncStorage.setItem(PROVIDER_MODE_KEY, JSON.stringify(value)); } catch { /* not remembered */ } }
-/** Re-reads the profile, then opens the business's workspace. Returns false when the account or its access changed meanwhile. */
-export async function openProviderWorkspace(businessId: string): Promise<boolean> {
+/** Re-reads the profile, then opens the business's workspace, on a given agenda day if there is one. Returns false when the account or its access changed meanwhile. */
+export async function openProviderWorkspace(businessId: string, date?: string): Promise<boolean> {
   const expected = useSessionStore.getState().identityId;
   const { profile } = await apiRequest<{ profile: AuthProfile }>('/api/auth/me');
   const state = useSessionStore.getState();
@@ -19,6 +19,6 @@ export async function openProviderWorkspace(businessId: string): Promise<boolean
   state.setAuth(state.token, profile);
   state.selectBusiness(businessId);
   await rememberProviderMode({ identityId: expected, businessId });
-  router.replace({ pathname: '/provider/dashboard', params: { businessId } });
+  router.replace({ pathname: '/provider/dashboard', params: { businessId, ...(date ? { date } : {}) } });
   return true;
 }
