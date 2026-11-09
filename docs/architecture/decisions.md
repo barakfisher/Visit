@@ -333,7 +333,7 @@ Agreed design, not built; see notifications.md. Recorded in PR #45. The question
 
 ## Notification centre built — 2026-11-09
 
-PR: not opened yet. The user put it before booking slot availability: both had been agreed in separate sessions and never ordered. The scope below was approved before building.
+PR #47. The user put it before booking slot availability: both had been agreed in separate sessions and never ordered. The scope below was approved before building.
 
 - **Choice: one row per recipient, written by a trigger on `BookingEvent`.** It commits with the booking, so no write path can forget, and manual and future paths are covered by construction. notifications.md already asks for a row per recipient once channels arrive. *Rejected:* deriving the inbox from `BookingEvent` at read time with a per-person watermark, which needs no table but has no row for a channel to attach delivery to, and would have to re-derive past recipients from today's memberships. *Rejected:* inserting at each call site, the failure the trigger exists to prevent.
 - **Choice: access is checked when reading, not when writing.** A removed manager keeps rows nobody can read, and regaining access shows them again. *Rejected:* deleting rows on revocation, which every path that changes a membership, a business's approval or its deletion would have to remember; a missed one would show private data.
