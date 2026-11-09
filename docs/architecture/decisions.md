@@ -342,15 +342,16 @@ The user saw Hebrew aligned left, a broken Home icon and a downward arrow on the
 - **Choice: a test scans the source for `textAlign: 'right'` and one-sided borders without the guard.** No browser run can catch this class of bug, and no device runs in CI.
 - **Debt: an identifier field (phone, email) keeps `textAlign: 'left'`, which native places on the right under RTL.** The text itself stays left to right. It reads acceptably and was not reported, so it is unchanged until seen on a device.
 
-## Customers see their own changes — 2026-11-09
+## The centre reports what others did — 2026-11-09
 
 PR #50.
 
-The user expected a notification on booking and on any cancellation, and found the centre empty. Measured on the local data: 11 customer bookings since the centre shipped produced 11 business rows and no customer rows. This was the stated assumption "the person who made a change gets no notification", which the user has now overruled for customers.
+The user found the centre empty after booking and first asked for a notification on their own bookings and cancellations. Measured on the local data: 11 customer bookings since the centre shipped produced 11 business rows and no customer rows, which was the stated assumption working as designed. The change was built, and the user reversed it before merge.
 
-- **Choice: the customer gets a row for every change to their appointment, whoever made it, including a move** (migration `20261109150000_notify_customer_own_changes`). A move was not named by the user and follows the same reasoning. *Accepted:* the rows count as unread, so booking raises the bell's count; one rule for all rows, and it is the feedback the user asked for.
-- **Choice: a manager still gets nothing for their own action.** They did it to someone else's booking, and a busy business would fill its own inbox. A manager who is the booking's customer is told, as its customer.
-- **Past bookings are still not backfilled.**
+- **Choice: nobody is notified of their own action (user's decision).** A customer hears from their providers and from the app. A provider also hears from their customers. No code changes: `actorIdentityId` in the trigger already does this. *Rejected:* a customer row for their own changes, which raises the bell's count for something the person just did, while the toast and the appointment on Home already confirm it. A count that rises without news teaches people to ignore it.
+- **Confirmed: another manager of the same business is still told,** because to them someone else changed the agenda. A change with no actor tells everyone.
+- **Choice: the empty state says "updates from your providers and from Visit".** *Accepted:* a new customer sees an empty centre after booking, and the old text, "changes to appointments", promised otherwise. A provider's empty inbox reads the same, although customers' changes also arrive there.
+- **Later:** when email or WhatsApp arrive, a booking confirmation may belong there, since a record outside the app has value of its own. That does not change this rule.
 
 ## Home appointments heading and adding a provider — 2026-11-09
 
