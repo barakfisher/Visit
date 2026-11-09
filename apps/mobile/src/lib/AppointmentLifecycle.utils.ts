@@ -18,6 +18,14 @@ export const CANCELLATION_CUTOFF = 'CANCELLATION_CUTOFF';
 export function appointmentRefusalKey(code: string | undefined) {
   return code === CANCELLATION_CUTOFF ? 'lifecycle.cancelCutoff' as const : code === RESCHEDULE_CUTOFF ? 'lifecycle.rescheduleCutoff' as const : null;
 }
+// A refused booking or move says the time is gone only when the server said so. Any other refusal (an appointment or
+// service that changed, a business no longer public, an expired attempt) keeps the general message.
+export function bookingRefusalKey(code: string | undefined) {
+  const specific = appointmentRefusalKey(code);
+  if (specific) return specific;
+  if (code === 'CUSTOMER_CONTACT_REQUIRED') return 'bookingContact.help' as const;
+  return code === 'SLOT_TAKEN' || code === 'SLOT_LOCKED' ? 'compact.changed' as const : 'bookingCommit.conflict' as const;
+}
 // A booking screen that cannot load says why in the app's language: a cutoff, a business that is not bookable
 // (not found or unpublished answer alike), or a plain load failure. The server's diagnostic is never shown.
 export function bookingLoadRefusalKey(code: string | undefined, status: number | undefined) {

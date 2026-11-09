@@ -15,7 +15,8 @@ import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest, ApiError } from '@/src/lib/api';
-import { appointmentRefusalKey, bookingLoadRefusalKey, bookingWindowWarningKey } from './AppointmentLifecycle.utils';
+import { bookingLoadRefusalKey, bookingRefusalKey, bookingWindowWarningKey } from './AppointmentLifecycle.utils';
+import { useScreenReturn } from './ScreenReturn.hook';
 import { appointmentDate, appointmentTime, localDate } from './appointmentTime';
 import { useCompactBooking } from './CompactBooking.hook';
 import { bookingSlotId, validBookingDate } from './CompactBooking.utils';
@@ -57,7 +58,9 @@ export function useBookingContactFlow() {
   const attempt = fromBookingId ? ownReschedule : bookingAttempt;
   const pendingElsewhere = Boolean(attempt && attempt.identityId === identityId && attempt.providerId !== providerId);
   const pendingAttempt = attempt?.identityId === identityId && attempt.providerId === providerId ? attempt : null;
-  const contacts = useQuery({ queryKey: ['booking-contact', providerId, identityId, contextVersion], queryFn: () => apiRequest<BookingContactReadiness>(`/api/providers/${providerId}/contact-readiness`), enabled: Boolean(identityId && !fromBookingId), refetchInterval: 10000 });
+  const contacts = useQuery({ queryKey: ['booking-contact', providerId, identityId, contextVersion], queryFn: () => apiRequest<BookingContactReadiness>(`/api/providers/${providerId}/contact-readiness`), enabled: Boolean(identityId && !fromBookingId), staleTime: 0 });
+  // Nothing re-reads on a timer: the server decides at commit, so these reads only keep what the customer sees honest.
+  useScreenReturn(() => { void client.invalidateQueries({ queryKey: ['availability'] }); void client.invalidateQueries({ queryKey: ['booking-contact'] }); });
   useEffect(() => {
     sequence.current += 1;
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -84,7 +87,7 @@ export function useBookingContactFlow() {
   const selected = selection?.providerId === providerId && selection.serviceId === chosenService && selection.date === chosenDate ? selection.slot : null;
   function changeService(id: string) { if (operation.current || pendingAttempt) return; sequence.current += 1; setSelection(null); setConflictSlot(null); setError(''); setServiceId(id); }
   function changeDate(value: string) { if (operation.current || pendingAttempt || !validBookingDate(value)) return; sequence.current += 1; setSelection(null); setConflictSlot(null); setError(''); setDate(value); }
-  const slots = useQuery({ queryKey: ['availability', identityId, contextVersion, providerId, fromBookingId ?? 'public', chosenService, chosenDate], queryFn: () => apiRequest<{ slots: Slot[] }>(`/api/${fromBookingId ? `bookings/${fromBookingId}` : `providers/${providerId}`}/availability?${new URLSearchParams({ serviceId: chosenService, date: chosenDate })}`), enabled: Boolean(chosenService && /^\d{4}-\d{2}-\d{2}$/.test(chosenDate)), refetchInterval: 2000 });
+  const slots = useQuery({ queryKey: ['availability', identityId, contextVersion, providerId, fromBookingId ?? 'public', chosenService, chosenDate], queryFn: () => apiRequest<{ slots: Slot[] }>(`/api/${fromBookingId ? `bookings/${fromBookingId}` : `providers/${providerId}`}/availability?${new URLSearchParams({ serviceId: chosenService, date: chosenDate })}`), enabled: Boolean(chosenService && /^\d{4}-\d{2}-\d{2}$/.test(chosenDate)), staleTime: 0 });
   useEffect(() => {
     // A fresh availability response may make a previously contested slot bookable again.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -98,6 +101,8 @@ export function useBookingContactFlow() {
     if (operation.current || pendingAttempt) return;
     if (!slot.available || slot.locked || slotId(slot) === conflictSlot) return;
     sequence.current += 1; setSelection({ providerId, serviceId: chosenService, date: chosenDate, slot }); setChosenAt(Date.now()); setError(''); setNotice('');
+    // A slot taken since the list loaded clears this selection before the customer reaches the final step.
+    void slots.refetch();
   }
   async function confirm() {
     if (operation.current) return;
@@ -139,8 +144,7 @@ export function useBookingContactFlow() {
           if (selected) setConflictSlot(slotId(selected));
           // Refusals are shown in the app's language, never as the server's diagnostic. A reschedule cutoff says why,
           // so a customer past it is not told to choose another time.
-          const code = reason instanceof ApiError ? reason.code : undefined;
-          setError(t(appointmentRefusalKey(code) ?? (code === 'CUSTOMER_CONTACT_REQUIRED' ? 'bookingContact.help' : 'bookingCommit.conflict'))); await contacts.refetch(); await details.refetch(); await slots.refetch();
+          setError(t(bookingRefusalKey(reason instanceof ApiError ? reason.code : undefined))); await contacts.refetch(); await details.refetch(); await slots.refetch();
         } else setError(t('bookingCommit.uncertain'));
       }
     } finally {

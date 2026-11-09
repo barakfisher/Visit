@@ -66,12 +66,17 @@ export function pilotCustomers({ browser, webUrl, apiUrl, prisma, redis, identit
   const slotButton = (page: Page, slot: Slot) => page.getByRole('button', { name: new RegExp(`^${slot.localTime} · ${SETUP_STAFF_NAME}`) }).filter({ visible: true });
   const reviewCard = (page: Page) => page.getByText(`${business.businessName} · ${SETUP_SERVICE.name}`, { exact: true }).filter({ visible: true });
   const confirmButton = (page: Page, t: (key: 'compact.confirm') => string) => page.getByRole('button', { name: t('compact.confirm'), exact: true }).filter({ visible: true });
-  // Opens the booking screen on a date and reviews one slot. Review is advisory: nothing is written yet.
-  async function review(page: Page, t: (key: Parameters<typeof translate>[1]) => string, date: string, slot: Slot) {
+  // Opens the booking screen on a date with one slot in view, not yet chosen.
+  async function showSlot(page: Page, t: (key: Parameters<typeof translate>[1]) => string, date: string, slot: Slot) {
     await page.goto(bookingUrl(date));
     await page.getByRole('heading', { name: t('compact.title'), exact: true }).filter({ visible: true }).waitFor();
     await page.getByText(t('bookingContact.ready'), { exact: true }).filter({ visible: true }).waitFor();
     await preferBookingTime(page, slot.localTime);
+    await slotButton(page, slot).first().waitFor();
+  }
+  // Opens the booking screen on a date and reviews one slot. Review is advisory: nothing is written yet.
+  async function review(page: Page, t: (key: Parameters<typeof translate>[1]) => string, date: string, slot: Slot) {
+    await showSlot(page, t, date, slot);
     await slotButton(page, slot).first().click();
     await reviewCard(page).waitFor();
   }
@@ -106,5 +111,5 @@ export function pilotCustomers({ browser, webUrl, apiUrl, prisma, redis, identit
       assert.equal(await redis.exists(`visit:hold:${id}`), 0, `hold record remains for ${id}`);
     }
   }
-  return { contexts, errors, bookingUrl, newContext, newPage, customer, resume, freeSlots, slotButton, reviewCard, confirmButton, review, bookThroughApi, fillSlot, assertNothingHeld };
+  return { contexts, errors, bookingUrl, newContext, newPage, customer, resume, freeSlots, slotButton, reviewCard, confirmButton, showSlot, review, bookThroughApi, fillSlot, assertNothingHeld };
 }

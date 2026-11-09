@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { appointmentOutcomeDelay, appointmentRefusalKey, bookingLoadRefusalKey, canContinueAppointmentAction, canRecordAppointmentOutcome, CANCELLATION_CUTOFF, RESCHEDULE_CUTOFF } from '../src/lib/AppointmentLifecycle.utils';
+import { appointmentOutcomeDelay, appointmentRefusalKey, bookingLoadRefusalKey, bookingRefusalKey, canContinueAppointmentAction, canRecordAppointmentOutcome, CANCELLATION_CUTOFF, RESCHEDULE_CUTOFF } from '../src/lib/AppointmentLifecycle.utils';
 import { translate } from '../src/i18n/messages';
 import type { AppointmentActionScope, LifecycleAppointment } from '../src/types/AppointmentLifecycle.types';
 const booking: LifecycleAppointment = { id: 'booking', status: 'CONFIRMED', revision: 0, startsAt: '2026-10-26T07:00:00Z', endsAt: '2026-10-26T07:30:00Z' };
@@ -74,6 +74,13 @@ test('deferred confirmation checks the latest identity, context, business, and m
   assert.equal(canContinueAppointmentAction(anonymous, anonymous, true), false);
   const customerScope = { ...initial, activeBusinessId: null };
   assert.equal(canContinueAppointmentAction(customerScope, customerScope, true), true);
+});
+test('a refused booking says the time is gone only when that is what the server said', () => {
+  for (const code of ['SLOT_TAKEN', 'SLOT_LOCKED']) assert.equal(bookingRefusalKey(code), 'compact.changed');
+  for (const code of ['CONFLICT', 'HOLD_EXPIRED', 'NOT_FOUND', undefined]) assert.equal(bookingRefusalKey(code), 'bookingCommit.conflict');
+  assert.equal(bookingRefusalKey('CUSTOMER_CONTACT_REQUIRED'), 'bookingContact.help');
+  assert.equal(bookingRefusalKey(RESCHEDULE_CUTOFF), 'lifecycle.rescheduleCutoff');
+  assert.equal(bookingRefusalKey(CANCELLATION_CUTOFF), 'lifecycle.cancelCutoff');
 });
 test('cutoff refusals map to their own localized copy; other refusals keep the caller fallback', () => {
   assert.equal(appointmentRefusalKey(CANCELLATION_CUTOFF), 'lifecycle.cancelCutoff');

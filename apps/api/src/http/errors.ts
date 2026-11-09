@@ -16,6 +16,9 @@ export const unauthenticated = () => new AppError(401, 'UNAUTHENTICATED', 'Sign 
 export const forbidden = () => new AppError(403, 'FORBIDDEN', 'You do not have permission to perform this action.');
 export const notFound = () => new AppError(404, 'NOT_FOUND', 'The requested resource was not found.');
 export const conflict = (message = 'The request conflicts with the current state.') => new AppError(409, 'CONFLICT', message);
+// The time itself is gone: taken, being taken or blocked. Other conflicts say nothing about the time, so clients must not claim it.
+export const SLOT_TAKEN = 'SLOT_TAKEN';
+export const slotTaken = (message: string) => new AppError(409, SLOT_TAKEN, message);
 // A customer's own appointment is inside the business's change window; distinct codes let clients explain why.
 export const RESCHEDULE_CUTOFF = 'RESCHEDULE_CUTOFF';
 export const CANCELLATION_CUTOFF = 'CANCELLATION_CUTOFF';

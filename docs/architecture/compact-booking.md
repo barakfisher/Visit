@@ -10,6 +10,8 @@ Business-local dates and time formatting preserve the VIS-47 policy: Israeli pil
 
 Selections are scoped to provider, service and date. Switching those values clears incompatible selection. Calendar requests have independent query keys; explicit date searches use abort and sequence guards. A fresh slot response clears and announces a selection that became unavailable. Conflict recovery removes the stale time and refreshes availability without selecting a substitute.
 
+The screen has no timer. Slots and contact readiness are read on entering it, on returning to it or to the app, on changing the date or service, and after a refusal; choosing a slot also re-reads the slots. An untouched list can therefore be out of date, and the server's decision at commit is what protects a booking (decisions.md, "Booking screen reads on events — 2026-11-09").
+
 Selection and review remain advisory. VIS-36 contact readiness and VIS-26 final-consent/idempotent commit are reused. Review retains the exact business/service/staff, local date/time, duration/price and cancellation policy. Only explicit final consent can reserve and persist. No new delivery integration or deployment is included.
 
 ## Verification
