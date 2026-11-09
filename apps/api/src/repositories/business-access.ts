@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { prisma } from '../db/client.js';
+import { signalAgendaChanged } from '../infra/live-signals.js';
 import { env } from '../env.js';
 import { AppError, conflict, forbidden, notFound } from '../http/errors.js';
 import type { Prisma, MembershipRole, BusinessInvitation } from '../generated/prisma/client.js';
@@ -108,7 +109,7 @@ export async function inspectInvitation(actor: AuthenticatedSession, token: stri
   });
 }
 export async function revokeMember(actor: AuthenticatedSession, businessId: string, id: string) {
-  return mutation(actor, businessId, async (tx, current) => {
+  const result = await mutation(actor, businessId, async (tx, current) => {
     const member = await tx.membership.findFirst({ where: { id, businessId } });
     if (!member) throw notFound();
     // Revoke all subordinate roles of this identity so a hidden lower role cannot retain access.
@@ -121,6 +122,9 @@ export async function revokeMember(actor: AuthenticatedSession, businessId: stri
     }
     return { revoked: true };
   });
+  // Nothing else wakes a quiet stream, and the recheck before delivery is what ends this member's.
+  signalAgendaChanged(businessId);
+  return result;
 }
 async function admin(tx: Prisma.TransactionClient, actor: AuthenticatedSession) {
   if ((await tx.identity.findUnique({ where: { id: actor.identity.id } }))?.platformRole !== 'ADMIN') throw forbidden();

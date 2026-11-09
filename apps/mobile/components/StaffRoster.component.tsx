@@ -33,7 +33,7 @@ export function StaffRosterView(state: RosterProps) {
           {canAddSelf ? <View testID="staff-add-self" className="gap-3 rounded-control border border-line bg-canvas p-3"><AppText className="text-body">{t('roster.addSelfHint')}</AppText><ActionButton label={t('roster.addSelf')} disabled={busy} onPress={openAddSelf} /></View> : null}
         </> : staff.data.staff.map(row => <StaffCard key={row.id} row={row} {...state} />)}
       </>}
-    {message ? <AppText accessibilityRole={message === 'roster.removeFailed' ? 'alert' : 'status'} className={message === 'roster.removeFailed' ? 'text-danger' : 'text-ink'}>{t(message)}</AppText> : null}
+    {message ? <AppText role={message === 'roster.removeFailed' ? 'alert' : 'status'} className={message === 'roster.removeFailed' ? 'text-danger' : 'text-ink'}>{t(message)}</AppText> : null}
     {/* The add dialog and an open card share one draft, so the dialog never opens over an open card. */}
     <FormDialog title={t('roster.add')} open={addOpen && expanded === null} onClose={cancelAdd} testID="staff-dialog"><StaffForm testID="staff-add-form" {...state} /></FormDialog>
   </View>;

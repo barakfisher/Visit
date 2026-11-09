@@ -47,16 +47,6 @@ export async function upcomingAppointmentsSmoke({ browser, webUrl, apiUrl, prism
     await page.getByTestId(`active-booking-${third.id}`).filter({ visible: true }).getByRole('link', { name: 'View appointment details', exact: true }).waitFor();
     assert.equal(await page.getByTestId(`history-booking-${third.id}`).count(), 0);
     await page.goto(webUrl); await firstCard.waitFor();
-    // The minute's background refresh keeps the card on screen; it must not flash back to the loading text.
-    const refreshing = await context.newPage(); await refreshing.clock.install(); await refreshing.goto(webUrl);
-    const refreshCard = refreshing.getByTestId(`active-booking-${first.id}`); await refreshCard.waitFor();
-    let releaseRefresh: (() => void) | undefined; const refreshGate = new Promise<void>(resolve => { releaseRefresh = resolve; });
-    const refreshSeen = refreshing.waitForRequest(upcomingUrl);
-    await refreshing.route(upcomingUrl, async route => { await refreshGate; await route.continue(); });
-    await refreshing.clock.fastForward(61000); await refreshSeen;
-    assert.equal(await refreshCard.isVisible(), true);
-    assert.equal(await refreshing.getByRole('status').filter({ hasText: 'Loading your next appointment…' }).count(), 0);
-    releaseRefresh?.(); await refreshing.close();
     failRead = true; await page.reload();
     await page.getByRole('alert').filter({ hasText: 'Your upcoming appointment could not load.' }).waitFor();
     assert.equal(await page.locator('[data-testid^="active-booking-"]').count(), 0);
@@ -89,6 +79,34 @@ export async function upcomingAppointmentsSmoke({ browser, webUrl, apiUrl, prism
     assert.equal(await cancelButton.isDisabled(), true);
     releaseCancel?.(); await cancelled; await page.unroute(cancelUrl);
     await page.goto(webUrl); const thirdCard = page.getByTestId(`active-booking-${third.id}`); await thirdCard.waitFor();
+    // A second tab shares the first tab's stream, and its card updates from a signal relayed between them: time passing fetches nothing and never flashes the loading text, and a change elsewhere appears without a reload.
+    const earlier = (date: Date) => new Date(+date - 3600000);
+    const nextUp = await prisma.booking.create({ data: { businessId: business.id, customerId: customer.id, serviceId: service.id, staffId: staff.id, startsAt: earlier(third.startsAt), endsAt: earlier(third.endsAt), occupiedFrom: earlier(third.occupiedFrom), occupiedUntil: earlier(third.occupiedUntil), status: 'CONFIRMED', idempotencyKey: randomUUID() } });
+    const livePage = await context.newPage(); await livePage.clock.install();
+    const isStream = (url: string) => url === `${apiUrl}/api/me/appointments/live`;
+    let tabStreams = 0; livePage.on('request', request => { if (isStream(request.url())) tabStreams++; });
+    await livePage.goto(webUrl);
+    const nextCard = livePage.getByTestId(`active-booking-${nextUp.id}`); await nextCard.waitFor(); await new Promise(resolve => setTimeout(resolve, 500));
+    let upcomingReads = 0; livePage.on('request', request => { if (request.url() === upcomingUrl) upcomingReads++; });
+    await livePage.clock.fastForward(61000); await new Promise(resolve => setTimeout(resolve, 500));
+    assert.equal(upcomingReads, 0); assert.equal(await nextCard.isVisible(), true);
+    assert.equal(await livePage.getByRole('status').filter({ hasText: 'Loading your next appointment…' }).count(), 0);
+    // Held open so the card can be checked while the re-read is in flight.
+    let releaseReread: (() => void) | undefined; const rereadGate = new Promise<void>(resolve => { releaseReread = resolve; });
+    await livePage.route(upcomingUrl, async route => { await rereadGate; await route.continue(); });
+    const reread = livePage.waitForRequest(upcomingUrl);
+    const cancelledElsewhere = await context.request.post(`${apiUrl}/v1/bookings/${nextUp.id}/cancel`, { headers: { Origin: webUrl }, data: {} });
+    assert.equal(cancelledElsewhere.status(), 200, await cancelledElsewhere.text());
+    await reread;
+    assert.equal(await nextCard.isVisible(), true);
+    assert.equal(await livePage.getByRole('status').filter({ hasText: 'Loading your next appointment…' }).count(), 0);
+    releaseReread?.();
+    await livePage.getByTestId(`active-booking-${third.id}`).waitFor({ timeout: 5000 });
+    assert.equal(tabStreams, 0);
+    // The tab holding the stream leaves, and the waiting tab takes it over.
+    const takenOver = livePage.waitForResponse(response => isStream(response.url()) && response.status() === 200);
+    await page.goto('about:blank'); await takenOver;
+    await livePage.close(); await page.goto(webUrl);
     assert.equal((await context.request.delete(`${apiUrl}/api/me/providers/${business.id}`, { headers: { Origin: webUrl, 'X-Visit-Expected-Identity': customer.id } })).status(), 200);
     await prisma.business.update({ where: { id: business.id }, data: { publishedAt: null } });
     await page.reload(); await thirdCard.waitFor();

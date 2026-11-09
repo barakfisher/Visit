@@ -42,6 +42,6 @@ export function ProviderSharing({ businessId }: { businessId: string }) {
     {/* Browsers without the Web Share API get no system share button; copying the link covers them. */}
     {shareSupported ? <ActionButton secondary label={t('setup.share')} disabled={!query.data?.available || !qr || busy} onPress={() => void act('share')} /> : null}
     <ActionButton secondary label={t('setup.downloadQr')} disabled={!query.data?.available || !qr || busy} onPress={() => void act('qr')} />
-    {feedback ? <AppText accessibilityRole={feedback === 'error' ? 'alert' : 'status'}>{t(feedback === 'copied' ? 'setup.copied' : 'setup.shareFailure')}</AppText> : null}
+    {feedback ? <AppText role={feedback === 'error' ? 'alert' : 'status'}>{t(feedback === 'copied' ? 'setup.copied' : 'setup.shareFailure')}</AppText> : null}
   </View>;
 }

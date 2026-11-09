@@ -1,5 +1,10 @@
 # Provider agenda and protected schedule edits — VIS-18
 
+
+## Live updates
+
+The open agenda holds one SSE stream per browser, shared between its tabs (`shareLiveSignals`), `GET /api/provider/agenda/live?businessId=`, for OWNER and MANAGER only. A stream carries no appointment data: `ready` when it is subscribed and `agenda-changed` when something committed, and each makes the client re-read the agenda. It does not poll. A stream closes when the screen loses focus or the app leaves the foreground, and reopens with a re-read when it comes back. Every code path that commits a change to a confirmed appointment or a block must call `signalAgendaChanged` after the commit: nothing else will tell an open screen. Reasons and rejected options are in `decisions.md` (2026-11-08).
+
 ## Daily and weekly agenda
 
 `GET /api/provider/agenda?businessId=…&date=YYYY-MM-DD&days=1|7` requires an approved OWNER/MANAGER membership. The selected date and range use the business IANA timezone; weekly ranges start on Sunday. Each local-midnight boundary is converted independently, so DST days/weeks retain their true absolute durations. Bookings and breaks overlapping the range are included, including a booking that started before midnight. Bookings sort by start instant then ID. Temporary/expired reservations remain absent from the booked agenda; completed/no-show/cancelled persisted lifecycle entries retain their original service and contact snapshots.

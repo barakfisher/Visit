@@ -73,7 +73,7 @@ export default function AuthScreen() {
         <ActionButton secondary label={t('email.recover')} disabled={busy} onPress={recover} />
       </> : <>
         <TextField label={t('email.address')} identifier autoCapitalize="none" autoCorrect={false} autoComplete="email" keyboardType="email-address" placeholder="you@example.com" value={email} editable={!buildRequired && !busy} onChangeText={setEmail} />
-        {sent ? <Text accessibilityRole="status" className="leading-6 text-body">{t('email.sent')}</Text> : null}
+        {sent ? <Text role="status" className="leading-6 text-body">{t('email.sent')}</Text> : null}
         <ActionButton label={buildRequired ? t('email.nativeBuild') : cooldown ? t('email.resendIn', { seconds: cooldown }) : sent ? t('email.resend') : t('email.send')} busy={busy} disabled={buildRequired || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || cooldown > 0} onPress={() => void requestLink()} />
         {__DEV__ && sent ? <ActionButton secondary label={t('email.localLink')} busy={busy} onPress={() => void loadLocalLink()} /> : null}
       </>}

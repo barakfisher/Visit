@@ -21,11 +21,11 @@ export function CompactBookingControls({ controls: c, t, disabled, date, selecte
       <AppText className="text-sm text-muted">{t('compact.preferenceHelp')}</AppText>
       {!c.validPreferred ? <AppText accessibilityRole="alert" className="text-danger">{t('compact.validTime')}</AppText> : slotError ? <View className="gap-2"><AppText accessibilityRole="alert" className="text-danger">{t('compact.slotsFailed')}</AppText><ActionButton secondary label={t('common.retry')} onPress={onRetrySlots} /></View> : <>
         <TimeChips timezone="" slots={c.page} selectedId={selectedId} loading={slotLoading} busy={disabled} onSelect={onSelectSlot} />
-        {!slotLoading && !c.page.length ? <AppText accessibilityRole="status" className="text-body">{t('compact.noTimes')}</AppText> : null}
+        {!slotLoading && !c.page.length ? <AppText role="status" className="text-body">{t('compact.noTimes')}</AppText> : null}
         {!slotLoading && c.page.length ? <><AppText accessibilityLiveRegion="polite" className="text-sm text-muted">{c.pageSummary}</AppText><View className="flex-row gap-3"><View className="flex-1"><ActionButton secondary label={t('compact.earlier')} disabled={disabled || !c.hasEarlier} onPress={c.earlier} /></View><View className="flex-1"><ActionButton secondary label={t('compact.later')} disabled={disabled || !c.hasLater} onPress={c.later} /></View></View></> : null}
         {!slotLoading && !c.page.length ? <ActionButton secondary label={t('compact.nextDate')} disabled={disabled || !c.canSearch} busy={c.searching} onPress={() => void c.nextDate()} /> : null}
       </>}
-      {c.searchNotice ? <AppText accessibilityRole="status">{c.searchNotice}</AppText> : null}
+      {c.searchNotice ? <AppText role="status">{c.searchNotice}</AppText> : null}
     </View> : null}
     <Modal transparent visible={c.sheet !== null} animationType="none" accessibilityLabel={t(c.sheet === 'service' ? 'compact.chooseService' : 'compact.chooseDate')} onRequestClose={c.close}>
       <View style={[styles.overlay, { direction: c.direction }]}>

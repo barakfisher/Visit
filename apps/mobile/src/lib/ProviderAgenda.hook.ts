@@ -1,4 +1,5 @@
 import { useManualBooking } from './ManualBooking.hook';
+import { useLiveAgenda } from './LiveSignals.hook';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useIsFocused, useRouter } from 'expo-router';
@@ -27,7 +28,8 @@ export function useProviderAgenda(): ProviderAgendaView {
   const blockDialog = useTimeBlockDialog(business.id, business.timezone), blockRemoval = useBlockRemoval(business.id);
   // A pending block save or removal holds the date and business, so its result lands on the day it was made for.
   const busy = blockDialog.busy || Boolean(blockRemoval.pending);
-  const agenda = useQuery({ queryKey: ['provider', business.id, 'agenda', identity, version, day, stored.mode], queryFn: ({ signal }) => readProviderAgenda(business.id, day, stored.mode, signal), enabled: validDate && focused, refetchInterval: 10000, staleTime: 0 });
+  const agenda = useQuery({ queryKey: ['provider', business.id, 'agenda', identity, version, day, stored.mode], queryFn: ({ signal }) => readProviderAgenda(business.id, day, stored.mode, signal), enabled: validDate && focused, staleTime: 0 });
+  useLiveAgenda(business.id, validDate && focused);
   function update(patch: Partial<AgendaDraft>) { if (!busy) { setFeedback(''); useAgendaDraft.getState().update(scope, patch); } }
   function capture() {
     const initial = { identityId: identity, contextVersion: version, activeBusinessId: business.id };

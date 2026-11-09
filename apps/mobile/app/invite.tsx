@@ -40,7 +40,7 @@ export default function InvitationScreen() {
   if (!identity && bootstrap !== 'ready') return <SessionLoading />;
   return <ScrollView className="flex-1 bg-canvas" contentContainerClassName="mx-auto w-full max-w-2xl gap-5 p-6">
     <AppText accessibilityRole="header" className="text-3xl font-bold text-ink">{m.inviteTitle}</AppText><AppText>{m.inviteHint}</AppText>
-    {!identity ? <><AppText>{m.reopen}</AppText><Link href="/auth/login">{t('common.signIn')}</Link></> : done && !token ? <><AppText accessibilityRole="status">{m.success}</AppText>{preview?.role === 'STAFF' ? <AppText>{m.staffHint}</AppText> : null}</> : !token ? <AppText>{m.missing}</AppText> : <>
+    {!identity ? <><AppText>{m.reopen}</AppText><Link href="/auth/login">{t('common.signIn')}</Link></> : done && !token ? <><AppText role="status">{m.success}</AppText>{preview?.role === 'STAFF' ? <AppText>{m.staffHint}</AppText> : null}</> : !token ? <AppText>{m.missing}</AppText> : <>
       {preview?.token === token ? <><AppText className="text-xl font-semibold">{preview.business.name}</AppText><AppText>{preview.role === 'MANAGER' ? m.manager : m.staff}</AppText><ActionButton label={m.accept} disabled={busy} onPress={() => void act(true)} /></> : <ActionButton label={m.preview} disabled={busy} onPress={() => void act(false)} />}
     </>}
     {feedback ? <AppText accessibilityRole="alert">{feedback}</AppText> : null}<Link href="/">{m.home}</Link>

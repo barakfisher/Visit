@@ -1,6 +1,7 @@
 import { Temporal } from '@js-temporal/polyfill';
 import { z } from 'zod';
 import { prisma } from '../db/client.js';
+import { signalAgendaChanged } from '../infra/live-signals.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { AppError, notFound } from '../http/errors.js';
 import { validateBusinessContext, type AuthorizedBusinessContext } from '../security/tenant-context.js';
@@ -63,8 +64,15 @@ async function blockConflicts(tx: Prisma.TransactionClient, businessId: string, 
   return { total, conflicts: rows.map(row => row.status === 'HELD' ? { kind: 'RESERVATION' as const, startsAt: row.startsAt, endsAt: row.endsAt, staffName: row.staff.displayName } : { kind: 'APPOINTMENT' as const, id: row.id, startsAt: row.startsAt, endsAt: row.endsAt, staffName: row.staff.displayName, customerName: row.customerName, serviceName: row.serviceName }) };
 }
 
+/** Signals open agendas once a business configuration change has committed. */
+export async function changingAgenda<T>(context: AuthorizedBusinessContext, work: Parameters<typeof withBusinessConfiguration<T>>[1]) {
+  const result = await withBusinessConfiguration(context, work);
+  signalAgendaChanged(context.businessId);
+  return result;
+}
+
 export async function createTimeBlock(context: AuthorizedBusinessContext, input: TimeBlockInput, session: AuthenticatedSession, now = new Date()) {
-  return withBusinessConfiguration(context, async tx => {
+  return changingAgenda(context, async tx => {
     await fenceScheduleSession(tx, session);
     if (input.staffId && !await tx.staff.findFirst({ where: { businessId: context.businessId, id: input.staffId, active: true }, select: { id: true } })) throw notFound();
     const business = await tx.business.findUniqueOrThrow({ where: { id: context.businessId }, select: { timezone: true } });
@@ -79,7 +87,7 @@ export async function createTimeBlock(context: AuthorizedBusinessContext, input:
 }
 
 export async function deleteTimeBlock(context: AuthorizedBusinessContext, id: string, session: AuthenticatedSession) {
-  return withBusinessConfiguration(context, async tx => {
+  return changingAgenda(context, async tx => {
     await fenceScheduleSession(tx, session);
     if (!(await tx.timeBlock.deleteMany({ where: { id, businessId: context.businessId } })).count) throw notFound();
     return { deleted: true };

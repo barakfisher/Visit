@@ -27,7 +27,7 @@ export default function SharedProvider() {
     {failed ? <AppText accessibilityRole="alert">{t(!path || resolved.error instanceof ApiError && resolved.error.status === 404 ? 'providers.unavailable' : 'providers.loadFailure')}</AppText> : resolved.isLoading ? <AppText>{t('common.loading')}</AppText> : <>
       {resolved.data && businessListingLine(resolved.data.provider.location, resolved.data.provider.category) ? <AppText>{businessListingLine(resolved.data.provider.location, resolved.data.provider.category)}</AppText> : null}
       <AppText>{t('providers.saveHelp')}</AppText>
-      {!identity ? <Link href={{ pathname: '/auth/login', params: { returnTo: path! } }} className="min-h-action rounded-control bg-brand px-5 py-4 text-center font-semibold text-white">{t('providers.signIn')}</Link> : <AppText accessibilityRole="status">{t(activation.status === 'changed' ? 'providers.changed' : activation.status === 'error' ? 'providers.failure' : 'providers.saving')}</AppText>}
+      {!identity ? <Link href={{ pathname: '/auth/login', params: { returnTo: path! } }} className="min-h-action rounded-control bg-brand px-5 py-4 text-center font-semibold text-white">{t('providers.signIn')}</Link> : <AppText role="status">{t(activation.status === 'changed' ? 'providers.changed' : activation.status === 'error' ? 'providers.failure' : 'providers.saving')}</AppText>}
     </>}
     {activation.status === 'error' ? <ActionButton secondary label={t('common.retry')} onPress={activation.retry} /> : null}
     {resolved.isError ? <ActionButton secondary label={t('common.retry')} onPress={() => void resolved.refetch()} /> : null}

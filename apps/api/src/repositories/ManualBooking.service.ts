@@ -3,6 +3,7 @@ import { Temporal } from '@js-temporal/polyfill';
 import { z } from 'zod';
 import type { Booking } from '../generated/prisma/client.js';
 import { prisma } from '../db/client.js';
+import { signalAgendaChanged } from '../infra/live-signals.js';
 import { AppError, conflict, notFound } from '../http/errors.js';
 import { validateAuthenticatedSession, type AuthenticatedSession } from '../security/sessions.js';
 import { requireBusinessMembership } from '../security/tenant-context.js';
@@ -43,7 +44,7 @@ export async function createManualBooking(session: AuthenticatedSession, busines
   let slotLock: Awaited<ReturnType<typeof acquireIntervalLocks>> | undefined;
   const reservationId = `manual:${randomUUID()}`;
   try {
-    return await withBookingTransaction(async tx => {
+    const created = await withBookingTransaction(async tx => {
       await fenceScheduleSession(tx, session);
       await tx.$queryRaw`SELECT id FROM "Business" WHERE id = ${businessId} FOR SHARE`;
       await tx.$queryRaw`SELECT id FROM "Membership" WHERE "businessId" = ${businessId} AND "identityId" = ${session.identity.id} FOR SHARE`;
@@ -89,6 +90,8 @@ export async function createManualBooking(session: AuthenticatedSession, busines
       await tx.manualBookingAttempt.update({ where: { id: registered.id }, data: { status: 'CONFIRMED' } });
       return result(saved);
     });
+    signalAgendaChanged(businessId);
+    return created;
   } catch (error) {
     const unique = error && typeof error === 'object' && 'code' in error && error.code === 'P2002';
     const definite = error instanceof AppError && error.statusCode >= 400 && error.statusCode < 500 && ![408, 429].includes(error.statusCode);
@@ -106,6 +109,7 @@ export async function createManualBooking(session: AuthenticatedSession, busines
       if (committed) {
         await validateAuthenticatedSession(session);
         await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']);
+        signalAgendaChanged(businessId);
         return recover(committed);
       }
     }
