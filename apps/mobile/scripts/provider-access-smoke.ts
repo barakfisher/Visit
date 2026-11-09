@@ -37,6 +37,8 @@ export async function providerAccessSmoke({ browser, webUrl, apiUrl }: { browser
     await page.getByRole('button', { name: 'Protected studio 1', exact: true }).click(); await page.getByRole('heading', { name: 'Protected studio 1', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Block time / add a break', exact: true }).click(); assert.equal(await blockReason().inputValue(), '');
     await page.getByTestId('block-form').getByRole('button', { name: 'Cancel', exact: true }).click();
+    // A foreign business in Account's URL changes nothing: customer mode, no settings entry.
+    await page.goto(`${webUrl}/account?businessId=foreign-business`); await page.getByTestId('app-footer').getByRole('button', { name: 'My appointments', exact: true }).waitFor(); assert.equal(await page.getByTestId('provider-mode-strip').count() + await page.getByRole('button', { name: 'Business settings', exact: true }).count(), 0);
     await page.goto(`${webUrl}/provider/dashboard?businessId=foreign-business`); await page.getByRole('alert').filter({ hasText: 'An approved provider account is required' }).waitFor(); assert.equal(await page.getByTestId(/^(setup-guide|dashboard)-/).count(), 0);
     await page.goto(`${webUrl}/provider/team/${businesses[0]}`); await page.getByLabel('Verified recipient contact').waitFor();
     await page.getByRole('button', { name: 'Manager', exact: true }).waitFor();
@@ -62,18 +64,36 @@ export async function providerAccessSmoke({ browser, webUrl, apiUrl }: { browser
     await page.waitForURL(url => url.pathname === `/provider/${businesses[1]}/services`); await page.getByRole('heading', { name: 'Services', exact: true }).filter({ visible: true }).waitFor();
     assert.equal((await context.request.get(`${apiUrl}/api/auth/me`)).status(), 200);
     assert.equal((await prisma.savedProvider.findUniqueOrThrow({ where: { id: saved.id } })).identityId, id.id);
-    await page.getByRole('button', { name: 'Open menu', exact: true }).click(); await page.getByRole('dialog').getByRole('button', { name: 'Sign out', exact: true }).click(); await page.waitForURL(url => url.pathname === '/auth/login');
+    await page.getByRole('button', { name: 'Account', exact: true }).click(); await page.getByRole('button', { name: 'Sign out', exact: true }).filter({ visible: true }).click(); await page.waitForURL(url => url.pathname === '/auth/login');
     await page.goto(`${webUrl}/provider/${businesses[1]}`); await page.getByRole('link', { name: 'Sign in', exact: true }).waitFor();
     const guest = await browser.newContext(); contexts.push(guest); await guest.addInitScript(() => localStorage.setItem('visit.locale.v1.guest', 'en')); const guestPage = await guest.newPage(); await guestPage.goto(`${webUrl}/provider/team/${businesses[0]}`); await guestPage.getByRole('link', { name: 'Sign in', exact: true }).waitFor(); assert.equal(await guestPage.getByLabel('Verified recipient contact').count(), 0);
     const newcomer = await prisma.identity.create({ data: { email: `new-provider-${randomUUID()}@example.test`, emailVerifiedAt: new Date(), preferredLocale: 'en' } }); ids.push(newcomer.id);
     const newToken = randomBytes(32).toString('base64url'); await prisma.session.create({ data: { identityId: newcomer.id, tokenHash: createHash('sha256').update(newToken).digest('hex'), expiresAt: new Date(Date.now() + 600000) } });
     const newlyApproved = await browser.newContext(); contexts.push(newlyApproved); await newlyApproved.addCookies([{ name: 'visit_session', value: newToken, url: webUrl, httpOnly: true, sameSite: 'Lax' }]); await newlyApproved.addInitScript(() => localStorage.setItem('visit.locale.v1.guest', 'en'));
-    const newPage = await newlyApproved.newPage(); await newPage.goto(webUrl); await newPage.getByRole('heading', { name: 'Your time, well spent.', exact: true }).waitFor();
+    const newPage = await newlyApproved.newPage(); await newPage.goto(webUrl); await newPage.getByTestId('home-screen').waitFor();
     // Simulate the committed result of the separately tested administrator review while Home remains open.
     await prisma.membership.create({ data: { identityId: newcomer.id, businessId: businesses[1]!, role: 'OWNER', status: 'ACTIVE' } });
-    await newPage.getByRole('button', { name: 'Open menu', exact: true }).click(); await newPage.getByRole('dialog').getByRole('button', { name: 'Switch to provider mode', exact: true }).click();
+    // Changing screens rereads the account, which brings the switch.
+    await newPage.getByTestId('app-footer').getByRole('button', { name: 'My appointments', exact: true }).click(); await newPage.getByRole('switch', { name: 'Business management mode', exact: true }).click();
     await newPage.getByRole('heading', { name: 'Protected studio 1', exact: true }).waitFor();
-    await newPage.getByRole('button', { name: 'Open menu', exact: true }).click(); await newPage.getByRole('dialog').getByRole('button', { name: 'Switch to customer mode', exact: true }).click(); await newPage.getByRole('heading', { name: 'Your time, well spent.', exact: true }).waitFor();
+    await newPage.getByTestId('provider-mode-strip').waitFor();
+    // Account opened from a business stays in business mode, through a reload as well; Back returns to the business.
+    const expectBusinessModeOnAccount = async () => { await newPage.getByTestId('provider-mode-strip').waitFor(); assert.equal(await newPage.getByRole('switch', { name: 'Business management mode', exact: true }).isChecked(), true); await newPage.getByTestId('app-footer').getByRole('button', { name: 'Team access', exact: true }).waitFor(); };
+    await newPage.getByRole('button', { name: 'Account', exact: true }).click(); await newPage.waitForURL(url => url.pathname === '/account'); await expectBusinessModeOnAccount();
+    await newPage.goBack(); await newPage.getByRole('heading', { name: 'Protected studio 1', exact: true }).waitFor();
+    await newPage.getByRole('button', { name: 'Account', exact: true }).click(); await newPage.waitForURL(url => url.pathname === '/account'); await newPage.reload(); await expectBusinessModeOnAccount();
+    // The switch's thumb stays on its track in Hebrew, where the whole document is right to left.
+    await newPage.getByTestId('language-he').click(); await newPage.getByTestId('language-en').waitFor();
+    const track = (await newPage.getByTestId('mode-switch-track').boundingBox())!, thumb = (await newPage.getByTestId('mode-switch-thumb').boundingBox())!;
+    assert.ok(thumb.x >= track.x && thumb.x + thumb.width <= track.x + track.width, 'the thumb left the track');
+    await newPage.getByTestId('language-en').click(); await newPage.getByTestId('language-he').waitFor();
+    // After that reload no agenda is in the stack, and the footer still reaches it; this business is unfinished, so it lands on settings.
+    await newPage.getByTestId('app-footer').getByRole('button', { name: 'Home', exact: true }).click(); await newPage.getByRole('heading', { name: 'Protected studio 1', exact: true }).filter({ visible: true }).waitFor();
+    await newPage.getByRole('button', { name: 'Account', exact: true }).click(); await newPage.waitForURL(url => url.pathname === '/account');
+    // Leaving business mode from Account lands on the customer Home, and Account then opens in customer mode.
+    await newPage.getByRole('switch', { name: 'Business management mode', exact: true }).click(); await newPage.getByTestId('home-screen').waitFor();
+    assert.equal(await newPage.getByTestId('provider-mode-strip').count(), 0);
+    await newPage.getByRole('button', { name: 'Account', exact: true }).click(); await newPage.waitForURL(`${webUrl}/account`); assert.equal(await newPage.getByRole('switch', { name: 'Business management mode', exact: true }).isChecked(), false); await newPage.getByTestId('app-footer').getByRole('button', { name: 'My appointments', exact: true }).waitFor();
     assert.deepEqual(errors, []);
     console.log('PASS: protected hydration, explicit workspace choice, URL authority, discarded drafts, live membership revocation, retained customer identity, session expiry and safe sign-in recovery.');
   } catch (error) { for (const context of contexts) for (const page of context.pages()) console.error((await page.locator('body').innerText()).slice(0, 2000)); throw error;

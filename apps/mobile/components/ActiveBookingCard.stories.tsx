@@ -4,7 +4,7 @@ import { ActiveBookings } from './ActiveBookings';
 import { ActiveBookingCard } from './ActiveBookingCard';
 import { translate } from '../src/i18n/messages';
 
-const meta = { title: 'Booking/ActiveBookingCard', component: ActiveBookingCard, args: { service: 'Initial consultation', provider: 'Maya Cohen', dateLabel: 'Tuesday, October 27', timeLabel: '10:30', timezone: 'Asia/Jerusalem', label: translate('en', 'ui.nextVisit') } } satisfies Meta<typeof ActiveBookingCard>;
+const meta = { title: 'Booking/ActiveBookingCard', component: ActiveBookingCard, args: { service: 'Initial consultation', provider: 'Maya Cohen', dateLabel: 'Tuesday, October 27', timeLabel: '10:30', label: translate('en', 'ui.nextVisit') } } satisfies Meta<typeof ActiveBookingCard>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 

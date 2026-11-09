@@ -12,7 +12,7 @@ import { useBlockRemoval, useTimeBlockDialog } from './TimeBlocks.hook';
 import { canContinueAppointmentAction } from './AppointmentLifecycle.utils';
 import { todayInTimezone } from './calendar';
 import { addBookingDays, validBookingDate } from './CompactBooking.utils';
-import { appointmentSpan, dateRange, timePolicyNote } from './appointmentTime';
+import { appointmentSpan, dateRange } from './appointmentTime';
 import type { AgendaDraft, ProviderAgendaView } from '../types/ProviderAgenda.types';
 export function useProviderAgenda(): ProviderAgendaView {
   const business = useProviderWorkspace(), { t, locale } = useAppLocale(), router = useRouter();
@@ -44,7 +44,6 @@ export function useProviderAgenda(): ProviderAgendaView {
     selectBusiness: (id: string) => { if (id !== business.id && !busy) { useSessionStore.getState().selectBusiness(id); router.replace({ pathname: '/provider/dashboard', params: { businessId: id } }); } },
     previous: () => { if (validDate) update({ date: addBookingDays(day, stored.mode === 'week' ? -7 : -1) }); }, next: () => { if (validDate) update({ date: addBookingDays(day, stored.mode === 'week' ? 7 : 1) }); },
     span: (startsAt: string, endsAt: string) => appointmentSpan(startsAt, endsAt, business.timezone, locale, stored.mode === 'week'),
-    range: (fromDate: string, toDate: string) => dateRange(fromDate, toDate, locale),
-    timeNote: timePolicyNote(business.timezone, locale), blockDialog, blockRemoval, contact: (phone: string | null, mode: 'call' | 'whatsapp') => void contact(phone, mode),
+    range: (fromDate: string, toDate: string) => dateRange(fromDate, toDate, locale), blockDialog, blockRemoval, contact: (phone: string | null, mode: 'call' | 'whatsapp') => void contact(phone, mode),
   };
 }

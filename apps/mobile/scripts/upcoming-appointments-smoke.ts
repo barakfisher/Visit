@@ -41,8 +41,8 @@ export async function upcomingAppointmentsSmoke({ browser, webUrl, apiUrl, prism
     gated = false; releaseLoading?.();
     const firstCard = page.getByTestId(`active-booking-${first.id}`); await firstCard.waitFor();
     const top = await firstCard.boundingBox(), providers = await page.getByRole('heading', { name: 'My Providers', exact: true }).boundingBox(); assert.ok(top && providers && top.y < providers.y);
-    assert.equal(await firstCard.getByText('Times are in local Israeli time, even when your device is abroad.', { exact: true }).count(), 1);
-    await firstCard.getByRole('button', { name: '2 more upcoming · View all appointments', exact: true }).click();
+    // The other appointments are one menu item away.
+    await page.getByTestId('app-footer').getByRole('button', { name: 'My appointments', exact: true }).click(); await page.waitForURL(`${webUrl}/appointments`);
     // An upcoming appointment is listed once, with the upcoming cards, and not again under history.
     await page.getByTestId(`active-booking-${third.id}`).filter({ visible: true }).getByRole('link', { name: 'View appointment details', exact: true }).waitFor();
     assert.equal(await page.getByTestId(`history-booking-${third.id}`).count(), 0);
@@ -51,31 +51,34 @@ export async function upcomingAppointmentsSmoke({ browser, webUrl, apiUrl, prism
     await page.getByRole('alert').filter({ hasText: 'Your upcoming appointment could not load.' }).waitFor();
     assert.equal(await page.locator('[data-testid^="active-booking-"]').count(), 0);
     failRead = false; await page.getByRole('button', { name: 'Reload appointments', exact: true }).click(); await firstCard.waitFor();
-    await firstCard.getByRole('button', { name: 'View appointment details', exact: true }).click(); await page.waitForURL(`${webUrl}/appointment/${first.id}`);
-    await page.goBack(); await firstCard.waitFor();
-    await firstCard.getByRole('button', { name: 'Reschedule appointment', exact: true }).click();
+    await firstCard.click(); await page.waitForURL(`${webUrl}/appointment/${first.id}`);
+    await page.getByRole('button', { name: 'Reschedule appointment', exact: true }).filter({ visible: true }).click();
     await page.waitForURL(url => url.pathname === `/booking/${business.id}` && url.searchParams.get('fromBookingId') === first.id);
     await selectBookingDate(page, date); await preferBookingTime(page, '12:00');
     await page.getByRole('button', { name: /12:00 · Upcoming expert/ }).click();
-    await page.getByRole('button', { name: 'Confirm reschedule', exact: true }).click(); await page.getByRole('heading', { name: 'Appointment rescheduled', exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Back to Visit', exact: true }).click();
+    await page.getByRole('button', { name: 'Confirm reschedule', exact: true }).click(); await page.getByTestId('app-toast').getByText('The new time is confirmed and saved.', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Back', exact: true }).filter({ visible: true }).click(); await page.waitForURL(`${webUrl}/`);
     const secondCard = page.getByTestId(`active-booking-${second.id}`); await secondCard.waitFor();
     await page.goto(`${webUrl}/booking/${business.id}`);
-    const contextual = page.getByTestId(`active-booking-${second.id}`); await contextual.getByRole('heading', { name: 'Your appointment with this business', exact: true }).waitFor();
+    const contextual = page.getByTestId(`active-booking-${second.id}`); await page.getByRole('heading', { name: 'Your appointment with this business', exact: true }).waitFor();
     await page.goto(webUrl); await secondCard.waitFor();
-    page.once('dialog', dialog => dialog.dismiss()); await secondCard.getByRole('button', { name: 'Cancel appointment', exact: true }).click();
+    // Cancelling starts from the card's details screen: declined, failed, then pending and successful.
+    await secondCard.click(); await page.waitForURL(`${webUrl}/appointment/${second.id}`);
+    const cancelButton = page.getByRole('button', { name: 'Cancel appointment', exact: true }).filter({ visible: true });
+    page.once('dialog', dialog => dialog.dismiss()); await cancelButton.click();
     assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: second.id } })).status, 'CONFIRMED');
     const cancelUrl = `${apiUrl}/v1/bookings/${second.id}/cancel`;
     await page.route(cancelUrl, route => route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":{"code":"UNAVAILABLE"}}' }));
-    page.once('dialog', dialog => dialog.accept()); await secondCard.getByRole('button', { name: 'Cancel appointment', exact: true }).click();
-    await secondCard.getByRole('alert').waitFor(); assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: second.id } })).status, 'CONFIRMED');
+    page.once('dialog', dialog => dialog.accept()); await cancelButton.click();
+    await page.getByRole('alert').filter({ visible: true }).first().waitFor(); assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: second.id } })).status, 'CONFIRMED');
     await page.unroute(cancelUrl);
     const cancelGate = new Promise<void>(resolve => { releaseCancel = resolve; });
     await page.route(cancelUrl, async route => { const response = await route.fetch(); await cancelGate; await route.fulfill({ response }); });
-    page.once('dialog', dialog => dialog.accept()); await secondCard.getByRole('button', { name: 'Cancel appointment', exact: true }).click();
-    assert.equal(await secondCard.getByRole('button', { name: 'Cancel appointment', exact: true }).isDisabled(), true);
-    assert.equal(await secondCard.getByRole('button', { name: 'Reschedule appointment', exact: true }).isDisabled(), true);
-    releaseCancel?.(); const thirdCard = page.getByTestId(`active-booking-${third.id}`); await thirdCard.waitFor();
+    const cancelled = page.waitForResponse(cancelUrl);
+    page.once('dialog', dialog => dialog.accept()); await cancelButton.click();
+    assert.equal(await cancelButton.isDisabled(), true);
+    releaseCancel?.(); await cancelled; await page.unroute(cancelUrl);
+    await page.goto(webUrl); const thirdCard = page.getByTestId(`active-booking-${third.id}`); await thirdCard.waitFor();
     // A second tab shares the first tab's stream, and its card updates from a signal relayed between them: time passing fetches nothing and never flashes the loading text, and a change elsewhere appears without a reload.
     const earlier = (date: Date) => new Date(+date - 3600000);
     const nextUp = await prisma.booking.create({ data: { businessId: business.id, customerId: customer.id, serviceId: service.id, staffId: staff.id, startsAt: earlier(third.startsAt), endsAt: earlier(third.endsAt), occupiedFrom: earlier(third.occupiedFrom), occupiedUntil: earlier(third.occupiedUntil), status: 'CONFIRMED', idempotencyKey: randomUUID() } });
@@ -107,11 +110,11 @@ export async function upcomingAppointmentsSmoke({ browser, webUrl, apiUrl, prism
     assert.equal((await context.request.delete(`${apiUrl}/api/me/providers/${business.id}`, { headers: { Origin: webUrl, 'X-Visit-Expected-Identity': customer.id } })).status(), 200);
     await prisma.business.update({ where: { id: business.id }, data: { publishedAt: null } });
     await page.reload(); await thirdCard.waitFor();
-    await thirdCard.getByRole('button', { name: 'View appointment details', exact: true }).click(); await page.waitForURL(`${webUrl}/appointment/${third.id}`);
+    await thirdCard.click(); await page.waitForURL(`${webUrl}/appointment/${third.id}`);
     await page.goto(`${webUrl}/account`);
     const localeSaved = page.waitForResponse(response => response.url() === `${apiUrl}/api/account/preferences` && response.request().method() === 'PUT');
     await page.getByTestId('language-he').click(); assert.equal((await localeSaved).status(), 200); await page.goto(webUrl);
-    await thirdCard.getByRole('heading', { name: 'התור הקרוב שלכם', exact: true }).waitFor();
+    await thirdCard.waitFor();
     assert.equal(await page.locator('html').getAttribute('dir'), 'rtl');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
     await page.screenshot({ path: 'test-results/upcoming-home-he-long.png', fullPage: true });

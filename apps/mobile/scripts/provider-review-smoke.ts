@@ -26,7 +26,12 @@ export async function providerReviewSmoke({ browser, webUrl, apiUrl, prisma, run
     const business = await prisma.business.findUniqueOrThrow({ where: { slug } }); businessIds.push(business.id);
     await applicant.page.getByText('Pending review', { exact: true }).waitFor();
     assert.equal((await applicant.context.request.get(`${apiUrl}/v1/admin/provider-applications`)).status(), 403);
-    await admin.page.goto(`${webUrl}/admin/applications`);
+    // The administrator reaches the queue from the highlighted block in Account; an ordinary account has no such block.
+    await applicant.page.goto(`${webUrl}/account`); await applicant.page.getByRole('button', { name: 'Sign out', exact: true }).filter({ visible: true }).waitFor();
+    assert.equal(await applicant.page.getByTestId('system-admin').count(), 0);
+    await applicant.page.goBack();
+    await admin.page.goto(`${webUrl}/account`);
+    await admin.page.getByTestId('system-admin').getByRole('button', { name: 'Review business applications', exact: true }).click(); await admin.page.waitForURL(`${webUrl}/admin/applications`);
     const card = admin.page.getByText('Pilot review studio', { exact: true }).locator('..');
     await card.getByRole('textbox', { name: 'Review reason', exact: true }).fill('Verified new business application and ownership evidence.');
     await card.getByRole('button', { name: 'Approve application', exact: true }).click();

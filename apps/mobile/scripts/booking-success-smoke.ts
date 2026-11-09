@@ -36,7 +36,6 @@ export async function bookingSuccessSmoke({ browser, webUrl, apiUrl, prisma, run
     const requested = page.waitForRequest(detailsUrl);
     await page.route(detailsUrl, async route => { await detailsGate; await route.continue(); });
     const assertNoSuccess = async () => {
-      assert.equal(await detailsView.getByRole('heading', { name: 'You’re all set', exact: true }).count(), 0);
       assert.equal(await detailsView.getByRole('button', { name: 'Add to calendar (.ics)', exact: true }).count(), 0);
     };
     try {
@@ -45,12 +44,13 @@ export async function bookingSuccessSmoke({ browser, webUrl, apiUrl, prisma, run
       await detailsView.getByText('Loading appointment details…', { exact: true }).waitFor();
       await assertNoSuccess();
     } finally { releaseDetails?.(); }
-    await detailsView.getByRole('heading', { name: 'You’re all set', exact: true }).waitFor();
+    await detailsView.getByRole('button', { name: 'Add to calendar (.ics)', exact: true }).waitFor();
     await detailsView.getByText(service.name, { exact: true }).waitFor();
     await detailsView.getByText('Confirmation recorded in Visit. No SMS or WhatsApp message was sent.', { exact: true }).waitFor();
     await page.unroute(detailsUrl);
     await page.reload();
-    await detailsView.getByRole('heading', { name: 'You’re all set', exact: true }).waitFor();
+    await detailsView.getByRole('button', { name: 'Add to calendar (.ics)', exact: true }).waitFor();
+    assert.equal(await page.getByTestId('app-toast').getByText('Your appointment is confirmed and saved.', { exact: true }).count(), 0);
     const downloadEvent = page.waitForEvent('download');
     await detailsView.getByRole('button', { name: 'Add to calendar (.ics)', exact: true }).click();
     const download = await downloadEvent, downloadPath = await download.path();
@@ -73,8 +73,8 @@ export async function bookingSuccessSmoke({ browser, webUrl, apiUrl, prisma, run
       assert.equal(await detailsView.getByText(service.name, { exact: true }).count(), 0);
     }
     await page.goto(`${webUrl}/confirmation/${focusBooking.id}`);
-    await detailsView.getByRole('heading', { name: 'You’re all set', exact: true }).waitFor();
-    await detailsView.getByRole('button', { name: 'Your appointments', exact: true }).click();
+    await detailsView.getByRole('button', { name: 'Add to calendar (.ics)', exact: true }).waitFor();
+    await page.getByTestId('app-footer').getByRole('button', { name: 'My appointments', exact: true }).click();
     await page.getByRole('heading', { name: 'Appointment history', exact: true }).waitFor();
     const cancelledWhileAway = await context.request.post(`${apiUrl}/v1/bookings/${focusBooking.id}/cancel`, { headers: { origin: webUrl }, data: { expectedRevision: focusBooking.revision } });
     assert.equal(cancelledWhileAway.status(), 200, await cancelledWhileAway.text());
@@ -96,7 +96,10 @@ export async function bookingSuccessSmoke({ browser, webUrl, apiUrl, prisma, run
     await assertNoSuccess();
     await page.unroute(focusDetailsUrl);
     await page.goto(`${webUrl}/appointment/${owned.id}`);
-    await detailsView.getByRole('heading', { name: 'Appointment details', exact: true }).waitFor();
+    // A full load leaves no in-app history, so Back falls back to Home rather than doing nothing.
+    await detailsView.getByRole('button', { name: 'Back', exact: true }).click(); await page.waitForURL(`${webUrl}/`);
+    await page.goto(`${webUrl}/appointment/${owned.id}`);
+    await detailsView.getByRole('button', { name: 'Cancel appointment', exact: true }).waitFor();
     page.once('dialog', dialog => dialog.accept());
     await detailsView.getByRole('button', { name: 'Cancel appointment', exact: true }).click();
     await detailsView.getByText('Cancelled', { exact: true }).waitFor();
@@ -109,7 +112,7 @@ export async function bookingSuccessSmoke({ browser, webUrl, apiUrl, prisma, run
     const localeSaved = page.waitForResponse(response => response.url() === `${apiUrl}/api/account/preferences` && response.request().method() === 'PUT');
     await page.getByTestId('language-he').click(); assert.equal((await localeSaved).status(), 200);
     await page.goto(`${webUrl}/appointment/${owned.id}`);
-    await detailsView.getByRole('heading', { name: 'פרטי התור', exact: true }).waitFor();
+    await detailsView.getByRole('button', { name: 'חזרה', exact: true }).waitFor();
     await detailsView.getByText('בוטל', { exact: true }).waitFor();
     // A cancelled appointment no longer claims a recorded confirmation or offers SMS/WhatsApp or calendar export.
     assert.equal(await detailsView.getByText(translate('he', 'details.recorded'), { exact: true }).count(), 0);

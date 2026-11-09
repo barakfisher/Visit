@@ -1,67 +1,29 @@
-import { useRef, useState, type ComponentRef } from 'react';
-import { View } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent } from 'storybook/test';
 import { NavigationView } from './NavigationView.component';
 import { translate } from '../src/i18n/messages';
-import { useAppLocale } from '../src/i18n/LocaleContext';
-import type { NavigationViewProps } from '../src/types/NavigationView.types';
-type FixtureProps = Pick<NavigationViewProps, 'managed' | 'applicationStatus' | 'becomeProvider' | 'providerMode' | 'loading' | 'failed' | 'busy' | 'error' | 'onLogout' | 'onSettings' | 'onTeam' | 'onReview'>;
-function Fixture(props: FixtureProps) {
-  const { t, direction } = useAppLocale();
-  const trigger = useRef<ComponentRef<typeof View>>(null);
-  const [open, setOpen] = useState(false), [choosingBusiness, setChoosingBusiness] = useState(false);
-  return <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, bottom: 0, left: 0, right: 0 } }}><NavigationView {...props} t={t} direction={direction} trigger={trigger} open={open} choosingBusiness={choosingBusiness} close={() => { setOpen(false); setChoosingBusiness(false); }} onOpen={() => setOpen(true)} onRetry={fn()} onHome={() => setOpen(false)} onAccount={() => setOpen(false)} onApplication={() => setOpen(false)} onSwitchMode={() => setChoosingBusiness(true)} onBusiness={() => setOpen(false)} /></SafeAreaProvider>;
-}
-const meta = { globals: { locale: 'he' }, title: 'Home/Navigation', component: Fixture,
-  play: async ({ canvas, canvasElement, args, globals }) => {
-    const locale = globals.locale === 'en' ? 'en' : 'he';
-    const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
-    await userEvent.click(canvas.getByRole('button', { name: t('nav.open') }));
-    const body = within(canvasElement.ownerDocument.body);
-    await expect(body.getByRole('button', { name: t('account.signOut') })).toBeVisible();
-    if (!args.failed) {
-      if (args.becomeProvider) await expect(body.getByRole('button', { name: t('account.becomeProvider') })).toBeVisible(); else await expect(body.queryByRole('button', { name: t('account.becomeProvider') })).toBeNull();
-      if (args.applicationStatus) await expect(body.getByRole('button', { name: t('account.applicationStatus') })).toBeVisible();
-      if (!args.onReview) await expect(body.queryByRole('button', { name: t('review.admin') })).toBeNull();
-      if (args.managed.length) {
-        await userEvent.click(body.getByRole('button', { name: t(args.providerMode ? 'nav.customerMode' : 'account.switchProvider') }));
-        for (const membership of args.managed) await expect(body.getByRole('button', { name: membership.business.name })).toBeVisible();
-      }
-    } else await expect(body.getByRole('alert')).toBeVisible();
-    await userEvent.keyboard('{Escape}');
-  }, args: { managed: [], applicationStatus: false, becomeProvider: true, providerMode: false, loading: false, failed: false, busy: false, error: '', onLogout: fn() } } satisfies Meta<typeof Fixture>;
+const he = (key: Parameters<typeof translate>[1]) => translate('he', key);
+const meta = { globals: { locale: 'he' }, title: 'Home/Navigation', component: NavigationView, args: { t: he, direction: 'rtl', providerMode: false, canSwitchMode: false, busy: false, error: '', onAccount: fn(), onSwitchMode: fn() } } satisfies Meta<typeof NavigationView>;
 export default meta;
 type Story = StoryObj<typeof meta>;
-export const Customer: Story = { play: async ({ canvas, canvasElement }) => {
-  const trigger = canvas.getByRole('button'); trigger.focus(); await userEvent.keyboard('{Enter}');
-  const body = within(canvasElement.ownerDocument.body);
-  await expect(body.getByTestId('menu-panel')).toBeVisible();
-  await expect(body.getByRole('button', { name: /יציאה/ })).toBeVisible();
-  await userEvent.keyboard('{Escape}'); await expect(trigger).toHaveFocus();
-  await userEvent.click(trigger);
-  const backdrop = body.getByTestId('menu-backdrop');
-  await expect(backdrop).not.toHaveAttribute('tabindex');
-  await userEvent.click(backdrop);
-  await expect(body.queryByTestId('menu-panel')).toBeNull();
-  await expect(trigger).toHaveFocus();
+async function expectThumbInsideTrack(track: HTMLElement, thumb: HTMLElement) {
+  const outer = track.getBoundingClientRect(), inner = thumb.getBoundingClientRect();
+  await expect(inner.left).toBeGreaterThanOrEqual(outer.left);
+  await expect(inner.right).toBeLessThanOrEqual(outer.right);
+}
+export const Customer: Story = { play: async ({ canvas, args }) => {
+  await expect(canvas.queryByRole('switch')).toBeNull();
+  await userEvent.click(canvas.getByRole('button', { name: he('nav.account') })); await expect(args.onAccount).toHaveBeenCalledOnce();
 } };
-export const Pending: Story = { args: { applicationStatus: true, becomeProvider: false } };
-export const Approved: Story = { args: { becomeProvider: false, applicationStatus: true, managed: [0, 1].map(i => ({ role: 'OWNER', status: 'ACTIVE', business: { id: `synthetic-${i}`, name: `המרכז המקצועי לייעוץ ושירותים ${i}`, approvalStatus: 'APPROVED' } })) } };
-export const ProviderMode: Story = { args: { ...Approved.args, providerMode: true, onSettings: fn(), onTeam: fn() }, play: async ({ canvas, canvasElement, args }) => {
-  await userEvent.click(canvas.getByRole('button', { name: 'פתיחת תפריט' }));
-  await userEvent.click(within(canvasElement.ownerDocument.body).getByRole('button', { name: 'הגדרות העסק' }));
-  await expect(args.onSettings).toHaveBeenCalledOnce();
-  await userEvent.click(within(canvasElement.ownerDocument.body).getByRole('button', { name: 'הרשאות צוות' }));
-  await expect(args.onTeam).toHaveBeenCalledOnce();
+export const Manager: Story = { args: { canSwitchMode: true }, play: async ({ canvas, args }) => {
+  const toggle = canvas.getByRole('switch', { name: he('nav.providerMode') });
+  await expect(toggle).not.toBeChecked();
+  await userEvent.click(toggle); await expect(args.onSwitchMode).toHaveBeenCalledOnce();
 } };
-export const Failed: Story = { args: { failed: true, becomeProvider: false } };
-export const Loading: Story = { args: { loading: true, becomeProvider: false } };
-export const English: Story = { globals: { locale: 'en' } };
-export const Administrator: Story = { args: { onReview: fn() }, play: async ({ canvas, canvasElement, args, globals }) => {
-  const t = (key: Parameters<typeof translate>[1]) => translate(globals.locale === 'en' ? 'en' : 'he', key);
-  await userEvent.click(canvas.getByRole('button', { name: t('nav.open') }));
-  await userEvent.click(within(canvasElement.ownerDocument.body).getByRole('button', { name: t('review.admin') }));
-  await expect(args.onReview).toHaveBeenCalledOnce();
+export const ProviderMode: Story = { args: { canSwitchMode: true, providerMode: true }, play: async ({ canvas }) => {
+  await expect(canvas.getByRole('switch', { name: he('nav.providerMode') })).toBeChecked();
+  await expect(canvas.getByTestId('provider-mode-strip')).toBeVisible();
+  await expectThumbInsideTrack(canvas.getByTestId('mode-switch-track'), canvas.getByTestId('mode-switch-thumb'));
 } };
+export const Changed: Story = { args: { canSwitchMode: true, error: he('nav.changed') }, play: async ({ canvas }) => { await expect(canvas.getByRole('alert')).toBeVisible(); } };
+export const English: Story = { globals: { locale: 'en' }, args: { t: key => translate('en', key), direction: 'ltr', canSwitchMode: true } };

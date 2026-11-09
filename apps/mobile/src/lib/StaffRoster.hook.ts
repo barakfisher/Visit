@@ -19,7 +19,7 @@ export function useStaffRoster(businessId: string, newKey: () => string) {
   const staff = useQuery({ queryKey: ['provider', businessId, 'staff'], queryFn: () => apiRequest<{ staff: RosterStaff[] }>(`${base}/staff`) });
   const services = useQuery({ queryKey: ['provider', businessId, 'services'], queryFn: () => apiRequest<{ services: RosterService[] }>(`${base}/services`) });
   const assignable = services.data?.services.filter(service => service.active) ?? [];
-  // Same query key as the menu; only the account's own name is used, to prefill "Add myself".
+  // Same query key as the header; only the account's own name is used, to prefill "Add myself".
   const identity = useSessionStore(state => state.identityId);
   const account = useQuery({ queryKey: ['me', identity], queryFn: () => apiRequest<AccountNavigation>('/v1/me'), enabled: !!identity });
   const canAddSelf = staff.isSuccess && services.isSuccess && !staff.data.staff.length && assignable.length > 0;

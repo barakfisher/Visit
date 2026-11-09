@@ -65,7 +65,7 @@ export async function sharedProvidersSmoke({ browser, webUrl, apiUrl, prisma, ru
     const freshDevice = await context(); await freshDevice.addCookies(await retryContext.cookies());
     const list = await (await freshDevice.request.get(`${apiUrl}/api/me/providers`)).json(); assert.equal(list.providers[0].businessId, businessId);
     assert.equal((await freshDevice.request.delete(`${apiUrl}/api/me/providers/${businessId}`, { headers: { Origin: webUrl } })).status(), 200);
-    assert.equal(await prisma.savedProvider.count({ where: { identityId: b.person.id } }), 0);
+    assert.equal(await prisma.savedProvider.count({ where: { identityId: b.person.id, archivedAt: null } }), 0);
 
     // Hold an activation under A, then make its server request authenticate as B.
     // Compare-only expected-identity protection must reject, without switching lists.

@@ -9,6 +9,7 @@ import { registerBookingRoutes } from '../src/routes/bookings.js';
 import { tokenDigest } from '../src/security/sessions.js';
 import { AppError } from '../src/http/errors.js';
 import type { readUpcomingAppointment } from '../src/repositories/UpcomingAppointments.service.js';
+import { onLocalToday } from '../src/repositories/UpcomingAppointments.service.js';
 import type { BookingStatus } from '../src/generated/prisma/client.js';
 
 type UpcomingResult = Awaited<ReturnType<typeof readUpcomingAppointment>>;
@@ -46,7 +47,7 @@ test('Home upcoming appointments use owned future snapshots and consistent scope
       assert.equal((await app.inject({ url })).statusCode, 401);
       const response = await app.inject({ url, headers });
       assert.equal(response.statusCode, 200, response.body);
-      assert.deepEqual(response.json(), { booking: null, additionalCount: 0 });
+      assert.deepEqual(response.json(), { booking: null, additionalCount: 0, today: [] });
     });
     await create('z', 'CONFIRMED'); await create('a', 'CONFIRMED');
     await create('later', 'CONFIRMED', 86400000, owner.id, true);
@@ -62,7 +63,7 @@ test('Home upcoming appointments use owned future snapshots and consistent scope
       assert.ok(result.booking);
       assert.equal(result.booking.id, `${run}-a`); assert.equal(result.additionalCount, 2);
       assert.deepEqual(Object.keys(result.booking).sort(), ['actions', 'business', 'endsAt', 'id', 'revision', 'service', 'staff', 'startsAt', 'status'].sort());
-      assert.deepEqual(result.booking.business, { id: business.id, name: business.name, timezone: 'Asia/Jerusalem' });
+      assert.deepEqual(result.booking.business, { id: business.id, name: business.name, timezone: 'Asia/Jerusalem', location: business.location });
       assert.equal(result.booking.service.name, 'Original private appointment snapshot');
       assert.equal(result.booking.service.durationMinutes, 30);
       assert.deepEqual(result.booking.staff, { displayName: staff.displayName });
@@ -76,7 +77,7 @@ test('Home upcoming appointments use owned future snapshots and consistent scope
       assert.equal(scoped.json<UpcomingResult>().booking?.id, `${run}-a`); assert.equal(scoped.json<UpcomingResult>().additionalCount, 1);
       const otherContext = await app.inject({ url: `${url}?businessId=${second.id}`, headers });
       assert.equal(otherContext.json<UpcomingResult>().booking?.id, `${run}-later`); assert.equal(otherContext.json<UpcomingResult>().additionalCount, 0);
-      assert.deepEqual((await app.inject({ url: `${url}?businessId=unknown`, headers })).json(), { booking: null, additionalCount: 0 });
+      assert.deepEqual((await app.inject({ url: `${url}?businessId=unknown`, headers })).json(), { booking: null, additionalCount: 0, today: [] });
       for (const query of ['businessId=', 'identityId=forged', 'businessId=x&businessId=y']) assert.equal((await app.inject({ url: `${url}?${query}`, headers })).statusCode, 400);
     });
     await t.test('policy flags fail closed while removed providers retain owned read access', async () => {
@@ -96,7 +97,10 @@ test('Home upcoming appointments use owned future snapshots and consistent scope
       const result = (await app.inject({ url, headers })).json<UpcomingResult>();
       assert.equal(result.booking?.id, `${run}-z`); assert.equal(result.additionalCount, 1);
       await prisma.booking.update({ where: { id: `${run}-z` }, data: { status: 'CANCELLED' } });
-      assert.deepEqual((await app.inject({ url: `${url}?businessId=${business.id}`, headers })).json(), { booking: null, additionalCount: 0 });
+      assert.deepEqual((await app.inject({ url: `${url}?businessId=${business.id}`, headers })).json(), { booking: null, additionalCount: 0, today: [] });
+      const soon = await create('soon', 'CONFIRMED', 60000 - 3 * 86400000, owner.id, true);
+      const expected = onLocalToday([{ startsAt: soon.startsAt, business: { timezone: 'Asia/Jerusalem' } }], new Date()).length ? [soon.id] : [];
+      assert.deepEqual((await app.inject({ url: `${url}?businessId=${second.id}`, headers })).json<UpcomingResult>().today.map(item => item.id), expected);
     });
     await t.test('revoked sessions cannot refresh private Home data', async () => {
       await prisma.session.updateMany({ where: { identityId: owner.id }, data: { revokedAt: new Date() } });
@@ -108,4 +112,13 @@ test('Home upcoming appointments use owned future snapshots and consistent scope
     await prisma.business.deleteMany({ where: { id: { in: [business.id, second.id] } } });
     await prisma.identity.deleteMany({ where: { id: { in: [owner.id, other.id] } } });
   }
+});
+
+test('today is decided by each appointment\'s own business calendar', () => {
+  const now = new Date('2026-11-08T21:30:00Z'); // 23:30 on 8 November in Israel, 16:30 in New York.
+  const at = (instant: string, timezone: string) => ({ startsAt: new Date(instant), business: { timezone } });
+  const beforeMidnight = at('2026-11-08T21:45:00Z', 'Asia/Jerusalem'), afterMidnight = at('2026-11-08T22:15:00Z', 'Asia/Jerusalem'), newYork = at('2026-11-08T22:15:00Z', 'America/New_York');
+  assert.deepEqual(onLocalToday([beforeMidnight, afterMidnight], now), [beforeMidnight]); // 00:15 is tomorrow.
+  assert.deepEqual(onLocalToday([newYork, beforeMidnight], now), [newYork, beforeMidnight]);
+  assert.deepEqual(onLocalToday([], now), []);
 });

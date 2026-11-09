@@ -1,3 +1,4 @@
+import { openProviderWorkspace } from '@/src/lib/ProviderMode.service';
 import { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { Link, router, useGlobalSearchParams, useIsFocused, usePathname } from 'expo-router';
 import { View } from 'react-native';
@@ -12,6 +13,11 @@ import { useAppLocale } from '@/src/i18n/LocaleContext';
 import { resolveProviderWorkspace, type ManagedBusiness } from '@/src/lib/providerWorkspace';
 const Workspace = createContext<ManagedBusiness | null>(null);
 export function useProviderWorkspace() { const value = useContext(Workspace); if (!value) throw new Error('Provider workspace requires current authorization.'); return value; }
+/** Remembers the choice like any other way in; if that fails, the route's own checks still decide. */
+async function chooseBusiness(businessId: string) {
+  const opened = await openProviderWorkspace(businessId).catch(() => false);
+  if (!opened) router.replace({ pathname: '/provider/dashboard', params: { businessId } });
+}
 export function ProviderAccess({ children }: { children: ReactNode }) {
   const focused = useIsFocused();
   return focused ? <FocusedProviderAccess>{children}</FocusedProviderAccess> : null;
@@ -38,7 +44,7 @@ function FocusedProviderAccess({ children }: { children: ReactNode }) {
   if (!identity) return <View className="flex-1 gap-4 bg-canvas p-6"><AppText>{t('dashboard.denied')}</AppText><Link href={{ pathname: '/auth/login', params: { returnTo: loginReturn } }}>{t('common.signIn')}</Link><Link href="/">{t('nav.home')}</Link></View>;
   if (profile.isError) return <View className="flex-1 gap-4 bg-canvas p-6"><AppText accessibilityRole="alert">{t('account.failure')}</AppText><ActionButton label={t('common.retry')} onPress={() => void profile.refetch()} /><Link href="/account">{t('nav.account')}</Link></View>;
   if (!authorized) return <SessionLoading />;
-  if (selection.state === 'choose') return <View className="flex-1 gap-4 bg-canvas p-6"><AppText accessibilityRole="header" className="text-2xl font-bold">{t('nav.chooseBusiness')}</AppText>{authorized.businesses.map(b => <ActionButton key={b.id} label={b.name} onPress={() => router.replace({ pathname: '/provider/dashboard', params: { businessId: b.id } })} />)}<Link href="/">{t('nav.home')}</Link></View>;
+  if (selection.state === 'choose') return <View className="flex-1 gap-4 bg-canvas p-6"><AppText accessibilityRole="header" className="text-2xl font-bold">{t('nav.chooseBusiness')}</AppText>{authorized.businesses.map(b => <ActionButton key={b.id} label={b.name} onPress={() => void chooseBusiness(b.id)} />)}<Link href="/">{t('nav.home')}</Link></View>;
   if (selection.state === 'denied') return <View className="flex-1 gap-4 bg-canvas p-6"><AppText accessibilityRole="alert">{t('dashboard.denied')}</AppText><Link href="/account">{t('dashboard.account')}</Link><Link href="/">{t('nav.home')}</Link></View>;
   const localBusiness = currentProfile?.businesses.find(b => b.id === selection.business.id);
   if (active !== selection.business.id || !localBusiness || localBusiness.role !== authorized.businesses.find(b => b.id === selection.business.id)?.role) return <SessionLoading />;

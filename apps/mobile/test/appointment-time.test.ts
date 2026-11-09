@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PILOT_TIMEZONE } from '@visit/contracts';
-import { appointmentSpan, appointmentTime, businessTimezoneLabel, dateRange, localDate, timePolicyNote } from '../src/lib/appointmentTime';
+import { appointmentDay, appointmentSpan, appointmentTime, businessTimezoneLabel, dateRange, localDate } from '../src/lib/appointmentTime';
 import { isolateLtr, translate } from '../src/i18n/messages';
 test('Israeli dates, spring gap and fold display use the stored zone independently of device TZ', () => {
   const prior = process.env.TZ;
@@ -16,8 +16,6 @@ test('Israeli dates, spring gap and fold display use the stored zone independent
       assert.equal(appointmentTime('2026-11-02T08:30:00Z', PILOT_TIMEZONE, 'en'), '10:30');
     }
   } finally { if (prior === undefined) delete process.env.TZ; else process.env.TZ = prior; }
-  assert.match(timePolicyNote(PILOT_TIMEZONE, 'en'), /Israeli time/);
-  assert.match(timePolicyNote('America/New_York', 'en'), /existing timezone: America\/New_York/);
 });
 
 test('an agenda appointment names its date once and keeps its times in one left-to-right run', () => {
@@ -48,4 +46,14 @@ test('the pilot time zone is named in the viewer language; an older zone stays a
   assert.equal(businessTimezoneLabel(PILOT_TIMEZONE, 'he'), translate('he', 'time.israel'));
   assert.equal(businessTimezoneLabel(PILOT_TIMEZONE, 'en'), translate('en', 'time.israel'));
   assert.equal(businessTimezoneLabel('America/New_York', 'he'), 'America/New_York');
+});
+
+test('the appointment day reads as today or tomorrow in the business zone, and names a year only when it is not this one', () => {
+  const now = new Date('2026-11-08T21:30:00Z'), zone = PILOT_TIMEZONE; // 23:30 in Israel; still 8 November there.
+  assert.equal(appointmentDay('2026-11-08T21:45:00Z', zone, 'he', now), translate('he', 'time.today'));
+  assert.equal(appointmentDay('2026-11-08T22:15:00Z', zone, 'he', now), translate('he', 'time.tomorrow')); // 00:15 local, 9 November.
+  assert.equal(appointmentDay('2026-11-09T12:00:00Z', zone, 'en', now), translate('en', 'time.tomorrow'));
+  assert.equal(appointmentDay('2026-11-20T12:00:00Z', zone, 'en', now), '20 Nov');
+  assert.match(appointmentDay('2027-01-02T12:00:00Z', zone, 'en', now), /2027/);
+  assert.equal(appointmentDay('2027-01-01T12:00:00Z', zone, 'en', new Date('2026-12-31T12:00:00Z')), translate('en', 'time.tomorrow'));
 });

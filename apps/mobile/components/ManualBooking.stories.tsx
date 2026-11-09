@@ -7,7 +7,7 @@ import type { ManualBookingView } from '../src/types/ManualBooking.types';
 const t: ManualBookingView['t'] = (key, values) => translate('en', key, values);
 const draft = { ...emptyManualDraft, open: true, serviceId: 'service', staffId: 'staff', localDate: '2027-03-15', localTime: '12:00', customerName: 'New customer', customerPhone: '+972501234567', exceptionReason: 'Requested by phone' };
 const options = { timezone: 'Asia/Jerusalem', bookable: true, requiresException: true, services: [{ id: 'service', name: 'Consultation', durationMinutes: 30, priceMinor: 10000, currency: 'ILS', staff: [{ id: 'staff', displayName: 'Specialist', parallelCapacity: 1 }] }] };
-const meta = { title: 'Provider/Manual booking', component: ManualBooking, args: { t, draft, options, loading: false, loadError: false, busy: false, locked: false, feedback: '', success: false, timeNote: 'Israel time', serviceSummary: 'Consultation · 30 minutes · ₪100', update: fn(), retry: fn(), review: fn(), confirm: fn(), close: fn() } } satisfies Meta<typeof ManualBooking>;
+const meta = { title: 'Provider/Manual booking', component: ManualBooking, args: { t, draft, options, loading: false, loadError: false, busy: false, locked: false, feedback: '', success: false, serviceSummary: 'Consultation · 30 minutes · ₪100', update: fn(), retry: fn(), review: fn(), confirm: fn(), close: fn() } } satisfies Meta<typeof ManualBooking>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Form: Story = { play: async ({ canvas, args }) => { await expect(canvas.getByDisplayValue('New customer')).toBeVisible(); await userEvent.click(canvas.getByRole('button', { name: t('manual.review') })); await expect(args.review).toHaveBeenCalled(); } };

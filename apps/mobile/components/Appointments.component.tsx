@@ -5,7 +5,7 @@ import { AppText } from './AppText';
 import { ActionButton } from './ActionButton';
 import { ScreenContent } from './ScreenContent';
 import { AppointmentAudit } from './AppointmentAudit.component';
-import { appointmentDate, appointmentTime, timePolicyNote } from '@/src/lib/appointmentTime';
+import { appointmentDate, appointmentTime } from '@/src/lib/appointmentTime';
 import { formatMoney } from '@/src/types/flows';
 import type { useAppointments } from '@/src/lib/Appointments.hook';
 export function Appointments(view: ReturnType<typeof useAppointments>) {
@@ -19,7 +19,7 @@ export function Appointments(view: ReturnType<typeof useAppointments>) {
       </View>} /></View>}
       <AppText accessibilityRole="header" className="text-xl font-bold text-ink">{t('lifecycle.history')}</AppText>
       {history.isError ? <View className="gap-2"><AppText accessibilityRole="alert">{t('lifecycle.loadFailed')}</AppText><ActionButton secondary label={t('common.retry')} onPress={() => void history.refetch()} /></View> : !historyList ? <AppText role="status">{t('common.loading')}</AppText> : !historyList.length ? <AppText>{t('lifecycle.empty')}</AppText> : historyList.map(booking => <View key={booking.id} testID={`history-booking-${booking.id}`} className="gap-3 rounded-card border border-line bg-surface p-5">
-        <AppText className="text-lg font-semibold text-ink">{booking.service.name}</AppText><AppText>{booking.business.name} · {booking.staff.displayName}</AppText><AppText>{appointmentDate(booking.startsAt, booking.business.timezone, locale)} · {appointmentTime(booking.startsAt, booking.business.timezone, locale)}</AppText><AppText>{booking.service.durationMinutes} {t('bookingCommit.minutes')} · {formatMoney(booking.service.priceMinor, booking.service.currency)}</AppText><AppText className="text-sm text-muted">{timePolicyNote(booking.business.timezone, locale)}</AppText>
+        <AppText className="text-lg font-semibold text-ink">{booking.service.name}</AppText><AppText>{booking.business.name} · {booking.staff.displayName}</AppText><AppText>{appointmentDate(booking.startsAt, booking.business.timezone, locale)} · {appointmentTime(booking.startsAt, booking.business.timezone, locale)}</AppText><AppText>{booking.service.durationMinutes} {t('bookingCommit.minutes')} · {formatMoney(booking.service.priceMinor, booking.service.currency)}</AppText>
         <Link href={{ pathname: '/appointment/[bookingId]', params: { bookingId: booking.id } }} className="min-h-touch py-3 font-semibold text-brand">{t('details.open')}</Link>
         <AppointmentAudit key={`${identity}:${booking.id}`} booking={booking} timezone={booking.business.timezone} />
       </View>)}

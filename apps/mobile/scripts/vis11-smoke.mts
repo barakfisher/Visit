@@ -31,7 +31,7 @@ try {
   await mkdir(output, { recursive: true });
   await writeFile(path.join(output, 'report.json'), JSON.stringify({ passed: false, source, checks }, null, 2));
   browser = await chromium.launch();
-  const stories = ['home-screen--empty', 'home-screen--many', 'home-screen--english', 'home-navigation--customer', 'home-navigation--approved', 'home-navigation--english', 'booking-compact-controls--available', 'booking-compact-controls--closed-calendar', 'booking-compact-controls--interactive-calendar', 'booking-compact-controls--service-selection', 'booking-advisory-review--hebrew', 'booking-advisory-review--first-occurrence', 'home-upcoming-appointment--hebrew-long-text'];
+  const stories = ['home-screen--empty', 'home-screen--many', 'home-screen--english', 'home-navigation--customer', 'home-navigation--manager', 'home-navigation--english', 'booking-compact-controls--available', 'booking-compact-controls--closed-calendar', 'booking-compact-controls--interactive-calendar', 'booking-compact-controls--service-selection', 'booking-advisory-review--hebrew', 'booking-advisory-review--first-occurrence', 'home-upcoming-appointment--hebrew-long-text'];
   for (const story of stories) for (const [width, zoom] of [[320, 1], [390, 1], [1280, 1], [640, 2]]) {
     if (width === undefined || zoom === undefined) throw new Error('Invalid viewport fixture');
     const page = await browser.newPage({ viewport: { width, height: 1000 }, reducedMotion: 'reduce', timezoneId: 'America/New_York' });
@@ -45,26 +45,6 @@ try {
     await page.locator('#storybook-root').waitFor();
     await page.waitForFunction(() => document.querySelector('#storybook-root')?.textContent?.trim());
     await page.evaluate(value => { document.documentElement.style.zoom = String(value); }, zoom);
-    if (story.includes('navigation')) {
-      const trigger = page.getByRole('button', { name: /Open menu|פתיחת תפריט/ });
-      await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label')?.match(/Open menu|פתיחת תפריט/) && document.activeElement.getAttribute('aria-expanded') !== 'true');
-      await trigger.click();
-      await page.getByTestId('menu-panel').waitFor();
-      const panel = page.getByTestId('menu-panel');
-      const buttons = panel.getByRole('button');
-      await buttons.last().focus(); await page.keyboard.press('Tab');
-      await page.waitForFunction(() => document.querySelector('[data-testid="menu-panel"]')?.contains(document.activeElement));
-      assert.equal(await panel.evaluate(node => node.contains(document.activeElement)), true, `${story}: focus escaped drawer`);
-      await buttons.first().focus(); await page.keyboard.press('Shift+Tab');
-      await page.waitForFunction(() => document.querySelector('[data-testid="menu-panel"]')?.contains(document.activeElement));
-      assert.equal(await panel.evaluate(node => node.contains(document.activeElement)), true, `${story}: reverse focus escaped drawer`);
-      const panelBox = await panel.boundingBox();
-      assert.ok(panelBox, `${story}: drawer panel not rendered`);
-      // A real pointer tap beside the drawer (left or right depending on direction) must dismiss it.
-      await page.mouse.click(panelBox.x > 0 ? 1 : width / zoom - 1, panelBox.y + panelBox.height / 2);
-      await panel.waitFor({ state: 'detached' });
-      await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label')?.match(/Open menu|פתיחת תפריט/), undefined, { timeout: FOCUS_RETURN_TIMEOUT_MS });
-    }
     if (story.includes('interactive-calendar')) {
       await page.waitForFunction(() => document.querySelector('[data-testid="booking-date-trigger"]')?.getAttribute('aria-label')?.includes('2026-10-29') && !document.querySelector('[data-testid="booking-day-2026-10-29"]'));
       await page.getByTestId('booking-date-trigger').click();

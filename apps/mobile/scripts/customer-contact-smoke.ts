@@ -83,11 +83,11 @@ export async function customerContactSmoke({ browser, webUrl, apiUrl, prisma, ru
     await page.waitForURL(webUrl + '/');
     const finishedResponse = page.waitForResponse(response => response.url().endsWith('/api/bookings/commit'));
     release(); const delivered = await finishedResponse; await delivered.finished();
-    await page.getByRole('heading', { name: 'Your time, well spent.', exact: true }).filter({ visible: true }).waitFor();
+    await page.getByTestId('home-screen').filter({ visible: true }).waitFor();
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     assert.equal(new URL(page.url()).pathname, '/');
     await page.unrouteAll({ behavior: 'wait' });
-    await page.getByRole('button', { name: 'Book appointment', exact: true }).filter({ visible: true }).click();
+    await page.getByRole('button', { name: /Book appointment$/ }).filter({ visible: true }).click();
     await page.getByRole('button', { name: 'Check or retry this booking', exact: true }).filter({ visible: true }).click();
     await page.waitForURL(url => url.pathname === `/confirmation/${committedId}`);
     assert.equal(await prisma.booking.count({ where: { customerId: person.id, status: 'CONFIRMED' } }), 2);

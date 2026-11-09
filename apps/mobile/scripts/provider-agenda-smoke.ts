@@ -57,7 +57,7 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     assert.ok(agendaReads >= 1);
     await livePage.close(); await page.goto(agendaUrl);
     // Hours live in business settings (decisions.md, 2026-11-02).
-    await page.getByRole('button', { name: 'Open menu', exact: true }).filter({ visible: true }).click(); await page.getByRole('dialog').getByRole('button', { name: 'Business settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Account', exact: true }).click(); await page.getByRole('button', { name: 'Business settings', exact: true }).filter({ visible: true }).click();
     await page.getByTestId('setup-guide-hours').filter({ visible: true }).click(); await page.getByRole('heading', { name: 'Business hours', exact: true }).filter({ visible: true }).waitFor();
     // Closing Tuesday would strand the appointment and the active reservation on that day: nothing is written.
     await page.getByRole('button', { name: 'Edit hours', exact: true }).filter({ visible: true }).click();
@@ -97,7 +97,7 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     await dialog.waitFor({ state: 'detached' }); await page.getByRole('status').filter({ hasText: 'Hours saved.' }).filter({ visible: true }).waitFor();
     assert.equal(new URL(page.url()).pathname, `/provider/${business.id}/hours`);
     assert.equal(await summaryText(page, 'hours-group-2'), 'Tue: 00:00–23:00');
-    await page.getByRole('button', { name: 'Open menu', exact: true }).filter({ visible: true }).click(); await page.getByRole('dialog').getByRole('button', { name: 'Home', exact: true }).click();
+    await page.getByTestId('app-footer').getByRole('button', { name: 'Home', exact: true }).click();
     // Leaving the agenda clears its draft by design, so the date is chosen again.
     await page.getByLabel('Agenda date', { exact: true }).filter({ visible: true }).fill(date); await firstCard.waitFor();
     // Blocking the whole business on a day with an appointment is refused, lists it, and writes nothing.

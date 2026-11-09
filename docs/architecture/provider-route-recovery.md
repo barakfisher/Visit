@@ -4,7 +4,7 @@
 
 Ordinary sign-in always lands on Home, including for approved owners/managers. Explicit provider entry opens the same identity's new-business application flow; the entry explains that existing-team joining requires a private invitation and ownership requires administrator evidence. Customer sharing links only save a provider and resume booking. VIS-32 review and VIS-33 invitations remain the sources of membership, never client role selectors.
 
-The drawer uses server account capabilities: Become a provider for eligible ordinary accounts, Application status for pending/rejected requests, and mode switch for active approved Owner/Manager membership. Pending applications and valid management memberships can coexist. Mode switching reloads the authenticated profile so a newly approved provider can enter without signing out or a full browser reload. Approval permits private setup even while unpublished; publication separately permits customer booking.
+Account and the header's mode switch use server account capabilities: Become a provider for eligible ordinary accounts, Application status for pending/rejected requests, and mode switch for active approved Owner/Manager membership. Pending applications and valid management memberships can coexist. Mode switching reloads the authenticated profile so a newly approved provider can enter without signing out or a full browser reload. Approval permits private setup even while unpublished; publication separately permits customer booking.
 
 ## Protected routes
 

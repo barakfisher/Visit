@@ -66,10 +66,44 @@ test('provider links and saved lists are public-read-only, identity-owned and pu
       const booking = await prisma.booking.create({ data: { businessId: target.id, customerId: a.id, staffId: staff.id, serviceId: service.id, startsAt, endsAt, occupiedFrom: startsAt, occupiedUntil: endsAt, status: 'CONFIRMED', idempotencyKey: randomUUID() } });
       const remove = () => app.inject({ method: 'DELETE', url: `/api/me/providers/${target.id}`, headers: a.headers });
       assert.equal((await remove()).statusCode, 200); assert.equal((await remove()).statusCode, 200);
-      assert.equal(await prisma.savedProvider.count({ where: { identityId: a.id, businessId: target.id } }), 0);
-      assert.equal(await prisma.savedProvider.count({ where: { identityId: b.id, businessId: target.id } }), 1);
+      assert.equal(await prisma.savedProvider.count({ where: { identityId: a.id, businessId: target.id, archivedAt: null } }), 0);
+      assert.deepEqual((await app.inject({ url: '/api/me/providers', headers: a.headers })).json().providers, []);
+      assert.equal(await prisma.savedProvider.count({ where: { identityId: b.id, businessId: target.id, archivedAt: null } }), 1);
       assert.ok(await prisma.identity.findUnique({ where: { id: a.id } }));
       assert.deepEqual(await prisma.booking.findUnique({ where: { id: booking.id } }), booking);
+    });
+    await t.test('an archived provider is listed apart, restores only for its owner, and returns when its link is opened again', async () => {
+      const archived = () => app.inject({ url: '/api/me/providers?archived=true', headers: a.headers });
+      const restore = (headers: Record<string, string>, businessId = target.id) => app.inject({ method: 'POST', url: `/api/me/providers/${businessId}/restore`, headers });
+      assert.deepEqual((await archived()).json().providers.map((row: { businessId: string }) => row.businessId), [target.id]);
+      assert.deepEqual((await app.inject({ url: '/api/me/providers?archived=true', headers: b.headers })).json().providers, []);
+      assert.equal((await app.inject({ url: '/api/me/providers?archived=yes', headers: a.headers })).statusCode, 400);
+      const c = await person();
+      assert.equal((await restore(c.headers)).statusCode, 404);
+      assert.equal((await restore({ ...a.headers, 'x-visit-expected-identity': b.id })).statusCode, 409);
+      assert.equal((await app.inject({ method: 'POST', url: `/api/me/providers/${target.id}/restore`, headers: { cookie: `visit_session=${a.token}`, origin: 'https://evil.test' } })).statusCode, 403);
+      assert.equal((await archived()).json().providers.length, 1);
+      assert.equal((await restore(a.headers)).statusCode, 200); assert.equal((await restore(a.headers)).statusCode, 200);
+      assert.deepEqual((await archived()).json().providers, []);
+      assert.deepEqual((await app.inject({ url: '/api/me/providers', headers: a.headers })).json().providers.map((row: { businessId: string }) => row.businessId), [target.id]);
+      assert.equal((await app.inject({ method: 'DELETE', url: `/api/me/providers/${target.id}`, headers: a.headers })).statusCode, 200);
+      assert.equal((await add()).statusCode, 200);
+      assert.deepEqual((await archived()).json().providers, []);
+      assert.equal((await app.inject({ url: '/api/me/providers', headers: a.headers })).json().providers[0].businessId, target.id);
+      // A closed business shows only its saved name in the archive, and restores as unavailable.
+      assert.equal((await app.inject({ method: 'DELETE', url: `/api/me/providers/${target.id}`, headers: a.headers })).statusCode, 200);
+      await prisma.business.update({ where: { id: target.id }, data: { publishedAt: null, name: 'Private draft name' } });
+      const closed = (await archived()).json().providers[0];
+      assert.equal(closed.available, false); assert.deepEqual(closed.provider, { id: target.id, name: 'Public studio' });
+      assert.equal((await restore(a.headers)).statusCode, 200);
+      const reopened = (await app.inject({ url: '/api/me/providers', headers: a.headers })).json().providers[0];
+      assert.equal(reopened.available, false); assert.deepEqual(reopened.provider, { id: target.id, name: 'Public studio' });
+      await prisma.business.update({ where: { id: target.id }, data: { publishedAt: new Date(), name: 'Public studio' } });
+      // Another account's row is no cursor for the archive, and a cookie without an Origin cannot restore.
+      const foreign = await prisma.savedProvider.findFirstOrThrow({ where: { identityId: b.id } });
+      assert.equal((await app.inject({ url: `/api/me/providers?archived=true&cursor=${foreign.id}`, headers: a.headers })).statusCode, 400);
+      assert.equal((await app.inject({ method: 'POST', url: `/api/me/providers/${target.id}/restore`, headers: { cookie: `visit_session=${a.token}` } })).statusCode, 403);
+      await prisma.savedProvider.deleteMany({ where: { identityId: a.id, businessId: target.id } }); // The race below starts with no saved row.
     });
     await t.test('unpublish racing a save cannot persist a draft and revoked sessions cannot activate', async () => {
       let locked!: () => void, release!: () => void;

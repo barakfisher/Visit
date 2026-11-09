@@ -23,11 +23,11 @@ export const HebrewMobile: Story = { play: async ({ canvas }) => {
   await expect(Object.keys(he).sort()).toEqual(Object.keys(en).sort());
   await expect(canvas.getByRole('heading', { name: he['auth.welcome'] })).toBeVisible();
   await expect(canvas.getByLabelText(he['auth.phone'], { exact: true })).toHaveValue('+972501234567');
-  await expect(canvas.getByRole('button', { name: 'עברית' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(canvas.getByRole('button', { name: 'English' })).toBeEnabled();
 } };
 export const HebrewDesktop: Story = { args: { width: 900 } };
 export const EnglishMobile: Story = { args: { locale: 'en' }, play: async ({ canvas }) => {
   await expect(canvas.getByRole('heading', { name: en['auth.welcome'] })).toBeVisible();
-  await expect(canvas.getByRole('button', { name: 'English' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(canvas.getByRole('button', { name: 'עברית' })).toBeEnabled();
 } };
 export const EnglishDesktop: Story = { args: { locale: 'en', width: 900 } };

@@ -5,9 +5,6 @@ export const intlLocale = (locale: Locale) => locale === 'he' ? 'he-IL' : 'en-GB
 export function businessTimezoneLabel(timezone: string, locale: Locale) {
   return timezone === PILOT_TIMEZONE ? translate(locale, 'time.israel') : timezone;
 }
-export function timePolicyNote(timezone: string, locale: Locale) {
-  return translate(locale, timezone === PILOT_TIMEZONE ? 'time.israelNote' : 'time.legacyNote', { timezone });
-}
 export function localDate(timezone: string, instant = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(instant);
   const part = (key: string) => parts.find(p => p.type === key)!.value;
@@ -25,6 +22,15 @@ export function appointmentTime(instant: string, timezone: string, locale: Local
 }
 export function appointmentDate(instant: string, timezone: string, locale: Locale) {
   return new Intl.DateTimeFormat(intlLocale(locale), { dateStyle: 'medium', timeZone: timezone }).format(new Date(instant));
+}
+/** "Today", "Tomorrow", or the short date; the year shows only when it is not the current one. Days are the business's, not the device's. */
+export function appointmentDay(instant: string, timezone: string, locale: Locale, now = new Date()) {
+  const date = new Date(instant), day = localDate(timezone, date), today = localDate(timezone, now);
+  if (day === today) return translate(locale, 'time.today');
+  const [year, month, dayOfMonth] = today.split('-').map(Number) as [number, number, number];
+  if (day === new Date(Date.UTC(year, month - 1, dayOfMonth + 1)).toISOString().slice(0, 10)) return translate(locale, 'time.tomorrow');
+  if (!day.startsWith(`${year}-`)) return appointmentDate(instant, timezone, locale);
+  return new Intl.DateTimeFormat(intlLocale(locale), { day: 'numeric', month: 'short', timeZone: timezone }).format(date);
 }
 /** "10:00–10:30", or "3 Nov 2026 · 10:00–10:30" with the date; the date repeats only when the end falls on another local day.
  *  Times read left to right in Hebrew too, as in the hours and time blocks lists. */

@@ -4,7 +4,7 @@ Scope: compact advisory booking, Home/My Providers, upcoming appointment and con
 
 ## Implementation
 
-Navigation now exposes a typed pure view and separate orchestration hook. Production membership/profile/session checks are preserved. Drawer dismissal uses Close, Escape or a tap outside the panel. The tap-outside backdrop is non-focusable, so it stays out of React Native Web's programmatic focus trap; the isolated runner checks Tab/Shift+Tab containment and a real pointer dismissal with focus return. Booking review and final action are typed pure components reused by the production booking screen.
+(Historic: the drawer was removed on 2026-11-08; see decisions.md.) Navigation now exposes a typed pure view and separate orchestration hook. Production membership/profile/session checks are preserved. Drawer dismissal uses Close, Escape or a tap outside the panel. The tap-outside backdrop is non-focusable, so it stays out of React Native Web's programmatic focus trap; the isolated runner checks Tab/Shift+Tab containment and a real pointer dismissal with focus return. Booking review and final action are typed pure components reused by the production booking screen.
 
 Independent 320px checks found calendar targets only 34px wide. The day grid fills the sheet with a minimum of seven 44px targets (`tokens.layout.minTouchTarget`) and scrolls horizontally only below that, so the full week is visible from 375px phones upward (asserted by the isolated runner) while 320px and 200% zoom keep reachable 44px targets; the sheet scrolls vertically at constrained heights and zoom. Keyboard selection returns focus to its trigger. Safe-area-context is excluded from Vite dependency prebundling so its real web implementation resolves instead of native Flow sources.
 

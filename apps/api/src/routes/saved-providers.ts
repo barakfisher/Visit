@@ -30,16 +30,16 @@ export async function registerSavedProviders(app: FastifyInstance) {
       await tx.$queryRaw`SELECT id FROM "Business" WHERE id = ${target.id} FOR SHARE`;
       const provider = await tx.business.findFirst({ where: { id: target.id, ...publicBusinessWhere }, select: publicSelect });
       if (!provider) throw notFound();
-      const saved = await tx.savedProvider.upsert({ where: { identityId_businessId: { identityId: actor.identity.id, businessId: provider.id } }, create: { identityId: actor.identity.id, businessId: provider.id, displayName: provider.name }, update: { displayName: provider.name }, select: { id: true, savedAt: true } });
+      const saved = await tx.savedProvider.upsert({ where: { identityId_businessId: { identityId: actor.identity.id, businessId: provider.id } }, create: { identityId: actor.identity.id, businessId: provider.id, displayName: provider.name }, update: { displayName: provider.name, archivedAt: null }, select: { id: true, savedAt: true } });
       return { saved: { ...saved, businessId: provider.id }, provider };
     }));
   });
   app.get('/api/me/providers', async request => {
     const { identity } = await authenticate(request);
-    const { cursor } = z.strictObject({ cursor: id.optional() }).parse(request.query);
+    const { cursor, archived } = z.strictObject({ cursor: id.optional(), archived: z.literal('true').optional() }).parse(request.query);
     const boundary = cursor ? await prisma.savedProvider.findFirst({ where: { id: cursor, identityId: identity.id }, select: { id: true, savedAt: true } }) : undefined;
     if (cursor && !boundary) throw new AppError(400, 'INVALID_CURSOR', 'Refresh your providers list.');
-    const rows = await prisma.savedProvider.findMany({ where: { identityId: identity.id, ...(boundary ? { OR: [{ savedAt: { lt: boundary.savedAt } }, { savedAt: boundary.savedAt, id: { lt: boundary.id } }] } : {}) }, orderBy: [{ savedAt: 'desc' }, { id: 'desc' }], take: 51, select: { id: true, businessId: true, displayName: true, savedAt: true, business: { select: { ...publicSelect, approvalStatus: true, publishedAt: true, deletedAt: true } } } });
+    const rows = await prisma.savedProvider.findMany({ where: { identityId: identity.id, archivedAt: archived ? { not: null } : null, ...(boundary ? { OR: [{ savedAt: { lt: boundary.savedAt } }, { savedAt: boundary.savedAt, id: { lt: boundary.id } }] } : {}) }, orderBy: [{ savedAt: 'desc' }, { id: 'desc' }], take: 51, select: { id: true, businessId: true, displayName: true, savedAt: true, business: { select: { ...publicSelect, approvalStatus: true, publishedAt: true, deletedAt: true } } } });
     const page = rows.slice(0, 50);
     return { providers: page.map(row => {
       const available = row.business.approvalStatus === 'APPROVED' && !!row.business.publishedAt && !row.business.deletedAt;
@@ -52,7 +52,17 @@ export async function registerSavedProviders(app: FastifyInstance) {
     const expected = request.headers['x-visit-expected-identity'];
     if (expected !== undefined && expected !== identity.id) throw new AppError(409, 'SESSION_CHANGED', 'The signed-in account changed. Refresh your providers.');
     const { businessId } = z.strictObject({ businessId: id }).parse(request.params);
-    await prisma.savedProvider.deleteMany({ where: { identityId: identity.id, businessId } });
+    await prisma.savedProvider.updateMany({ where: { identityId: identity.id, businessId, archivedAt: null }, data: { archivedAt: new Date() } });
     return { removed: true };
+  });
+  // Restores even a business that has since closed: the list then shows it as unavailable, as it would had it never been archived.
+  app.post('/api/me/providers/:businessId/restore', async request => {
+    const { identity } = await authenticate(request);
+    const expected = request.headers['x-visit-expected-identity'];
+    if (expected !== undefined && expected !== identity.id) throw new AppError(409, 'SESSION_CHANGED', 'The signed-in account changed. Refresh your providers.');
+    const { businessId } = z.strictObject({ businessId: id }).parse(request.params);
+    const { count } = await prisma.savedProvider.updateMany({ where: { identityId: identity.id, businessId }, data: { archivedAt: null } });
+    if (!count) throw notFound();
+    return { restored: true };
   });
 }

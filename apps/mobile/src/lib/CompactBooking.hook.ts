@@ -2,7 +2,7 @@ import { useAuthStore } from '../state/auth';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAppLocale } from '../i18n/LocaleContext';
-import { intlLocale, localDate, timePolicyNote } from './appointmentTime';
+import { intlLocale, localDate } from './appointmentTime';
 import { slotLabels } from './slotLabels';
 import { readBookingCalendar } from './CompactBooking.service';
 import { addBookingDays, availableBookingSlots, bookingMonthCells, bookingSlotId, preferredBookingPage, shiftBookingMonth, validBookingDate } from './CompactBooking.utils';
@@ -67,6 +67,6 @@ export function useCompactBooking(input: CompactBookingInput) {
     calendarLoading: calendar.isFetching, calendarError: calendar.isError, retryCalendar: () => void calendar.refetch(),
     preferred, validPreferred, changePreferred, page, earlier: () => setPageOffset(Math.max(0, start - 6)), later: () => setPageOffset(Math.min(Math.max(0, available.length - 6), start + 6)),
     hasEarlier: start > 0, hasLater: start + 6 < available.length, pageSummary: t('compact.page', { start: page.length ? start + 1 : 0, end: start + page.length, total: available.length }),
-    nextDate, searching, searchNotice, canSearch: Boolean(calendar.data && input.date < calendar.data.maximumDate), timeNote: input.provider ? timePolicyNote(input.provider.timezone, locale) : '',
+    nextDate, searching, searchNotice, canSearch: Boolean(calendar.data && input.date < calendar.data.maximumDate),
   };
 }
