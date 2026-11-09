@@ -4,6 +4,7 @@ import { CALENDAR_MIN_WIDTH, compactBookingStyles as styles } from './CompactBoo
 import { ActivityIndicator, Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { AppText } from './AppText';
 import { ActionButton } from './ActionButton';
+import { SmoothHeight } from './SmoothHeight.component';
 import { TimeChips } from './TimeChips';
 import type { CompactBookingControlsProps } from './CompactBookingControls.types';
 export function CompactBookingControls({ controls: c, t, disabled, date, selectedId, slotLoading, slotError, onRetrySlots, onSelectSlot }: CompactBookingControlsProps) {
@@ -20,7 +21,7 @@ export function CompactBookingControls({ controls: c, t, disabled, date, selecte
     {c.chosen ? <View className="gap-3"><AppText className="text-sm font-semibold text-body">{t('compact.around')}</AppText><TextInput placeholderTextColor={tokens.color.disabled} testID="booking-preferred-time" accessibilityLabel={t('compact.around')} value={c.preferred} onChangeText={c.changePreferred} editable={!disabled} placeholder="09:00" maxLength={5} keyboardType="numbers-and-punctuation" style={styles.identifier} className="rounded-control border border-line bg-surface px-4 py-3 text-ink" />
       <AppText className="text-sm text-muted">{t('compact.preferenceHelp')}</AppText>
       {!c.validPreferred ? <AppText accessibilityRole="alert" className="text-danger">{t('compact.validTime')}</AppText> : slotError ? <View className="gap-2"><AppText accessibilityRole="alert" className="text-danger">{t('compact.slotsFailed')}</AppText><ActionButton secondary label={t('common.retry')} onPress={onRetrySlots} /></View> : <>
-        <TimeChips timezone="" slots={c.page} selectedId={selectedId} loading={slotLoading} busy={disabled} onSelect={onSelectSlot} />
+        <SmoothHeight><TimeChips timezone="" slots={c.page} selectedId={selectedId} loading={slotLoading} busy={disabled} onSelect={onSelectSlot} /></SmoothHeight>
         {!slotLoading && !c.page.length ? <AppText role="status" className="text-body">{t('compact.noTimes')}</AppText> : null}
         {!slotLoading && c.page.length ? <><AppText accessibilityLiveRegion="polite" className="text-sm text-muted">{c.pageSummary}</AppText><View className="flex-row gap-3"><View className="flex-1"><ActionButton secondary label={t('compact.earlier')} disabled={disabled || !c.hasEarlier} onPress={c.earlier} /></View><View className="flex-1"><ActionButton secondary label={t('compact.later')} disabled={disabled || !c.hasLater} onPress={c.later} /></View></View></> : null}
         {!slotLoading && !c.page.length ? <ActionButton secondary label={t('compact.nextDate')} disabled={disabled || !c.canSearch} busy={c.searching} onPress={() => void c.nextDate()} /> : null}

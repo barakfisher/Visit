@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { appointmentOutcomeDelay, appointmentRefusalKey, bookingLoadRefusalKey, bookingRefusalKey, canContinueAppointmentAction, canRecordAppointmentOutcome, CANCELLATION_CUTOFF, RESCHEDULE_CUTOFF } from '../src/lib/AppointmentLifecycle.utils';
+import { appointmentOutcomeDelay, appointmentRefusalKey, bookingLoadRefusalKey, bookingRefusalKey, canContinueAppointmentAction, canRecordAppointmentOutcome, CANCELLATION_CUTOFF, isPassingBookingRefusal, RESCHEDULE_CUTOFF } from '../src/lib/AppointmentLifecycle.utils';
 import { translate } from '../src/i18n/messages';
 import type { AppointmentActionScope, LifecycleAppointment } from '../src/types/AppointmentLifecycle.types';
+test('only a time that is gone may fade away; a cutoff, a contact requirement or an uncertain result stays on screen', () => {
+  for (const code of ['SLOT_TAKEN', 'SLOT_LOCKED', 'CONFLICT', 'HOLD_EXPIRED', undefined]) assert.equal(isPassingBookingRefusal(bookingRefusalKey(code)), true);
+  for (const code of [RESCHEDULE_CUTOFF, CANCELLATION_CUTOFF, 'CUSTOMER_CONTACT_REQUIRED']) assert.equal(isPassingBookingRefusal(bookingRefusalKey(code)), false);
+  assert.equal(isPassingBookingRefusal('bookingCommit.uncertain'), false);
+});
 const booking: LifecycleAppointment = { id: 'booking', status: 'CONFIRMED', revision: 0, startsAt: '2026-10-26T07:00:00Z', endsAt: '2026-10-26T07:30:00Z' };
 test('outcome controls require a scheduled appointment that has ended at the exact absolute instant', () => {
   const end = Date.parse(booking.endsAt);

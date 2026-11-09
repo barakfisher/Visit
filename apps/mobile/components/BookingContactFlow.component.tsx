@@ -6,6 +6,7 @@ import { ActivityIndicator, ScrollView, Text, TextInput, View } from 'react-nati
 import { AccountMethods } from '@/components/auth/AccountMethods';
 import { ActionButton } from '@/components/ActionButton';
 import { CompactBookingControls } from './CompactBookingControls.component';
+import { SmoothReveal } from './SmoothHeight.component';
 import { bookingSlotId } from '@/src/lib/CompactBooking.utils';
 import type { useBookingContactFlow } from '@/src/lib/BookingContactFlow.hook';
 const slotId = bookingSlotId;
@@ -22,6 +23,7 @@ export function BookingContactFlow(props: ReturnType<typeof useBookingContactFlo
     </> : null}</View> : null}
     </>}
 
-  {review ? <BookingReview {...review} heading={t('bookingCommit.review')} advisory={t('bookingCommit.advisory')} /> : null}
-  </ScrollView><View className="border-t border-line bg-surface px-5 py-4"><View className="mx-auto w-full max-w-3xl gap-3">{notice ? <Text accessibilityLiveRegion="polite" className="rounded-control bg-brand-soft p-4 text-brand">{notice}</Text> : null}{error ? <Text accessibilityRole="alert" accessibilityLiveRegion="assertive" className="rounded-control bg-red-50 p-4 text-danger">{error}</Text> : null}<BookingFinalAction label={!identityId ? t('compact.signIn') : fromBookingId && !pendingAttempt ? t('compact.reschedule') : pendingElsewhere ? t('bookingCommit.resumeOther') : busy && pendingAttempt ? t('bookingCommit.processing') : pendingAttempt ? t('bookingCommit.retry') : t('compact.confirm')} onConfirm={confirm} busy={busy} disabled={!pendingElsewhere && ((!selected && !pendingAttempt) || Boolean(identityId && !fromBookingId && !contacts.data?.ready && !pendingAttempt))} /></View></View></View>;
+  {/* The margin cancels the list's gap while there is no review, so an empty slot here takes no room. */}
+  <View className="-mt-6"><SmoothReveal>{review ? <View className="pt-6"><BookingReview {...review} heading={t('bookingCommit.review')} advisory={t('bookingCommit.advisory')} /></View> : null}</SmoothReveal></View>
+  </ScrollView><View className="border-t border-line bg-surface px-5 py-4"><View className="mx-auto w-full max-w-3xl"><SmoothReveal>{notice || error ? <View className="gap-3 pb-3">{notice ? <Text accessibilityLiveRegion="polite" className="rounded-control bg-brand-soft p-4 text-brand">{notice}</Text> : null}{error ? <Text accessibilityRole="alert" accessibilityLiveRegion="assertive" className="rounded-control bg-red-50 p-4 text-danger">{error}</Text> : null}</View> : null}</SmoothReveal><BookingFinalAction label={!identityId ? t('compact.signIn') : fromBookingId && !pendingAttempt ? t('compact.reschedule') : pendingElsewhere ? t('bookingCommit.resumeOther') : busy && pendingAttempt ? t('bookingCommit.processing') : pendingAttempt ? t('bookingCommit.retry') : t('compact.confirm')} onConfirm={confirm} busy={busy} disabled={!pendingElsewhere && ((!selected && !pendingAttempt) || Boolean(identityId && !fromBookingId && !contacts.data?.ready && !pendingAttempt))} /></View></View></View>;
 }

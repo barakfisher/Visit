@@ -157,7 +157,7 @@ export async function appointmentRetentionSmoke(deps: Deps) {
       const refusedMove = rescheduleResponse(owner.page, id);
       await rescheduleButton(owner, owner.page).click();
       const refusal = await refusedMove; assert.equal(refusal.status(), 409); assert.equal(await errorCode(refusal), 'SLOT_TAKEN');
-      await alert(owner.page, owner.t('compact.changed')).waitFor();
+      await owner.page.getByTestId('app-toast').getByText(owner.t('compact.changed'), { exact: true }).waitFor();
       // The action settles back to its labelled state once the screen has refetched (it shows a spinner meanwhile).
       await settled(rescheduleButton(owner, owner.page), owner.t('compact.reschedule'));
       await owner.page.screenshot({ path: path.join(evidence, `reschedule-conflict-${locale}-mobile.png`), fullPage: true });

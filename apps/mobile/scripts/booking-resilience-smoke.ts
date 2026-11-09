@@ -83,7 +83,7 @@ export async function bookingResilienceSmoke({ browser, webUrl, apiUrl, prisma, 
     await shopper.page.waitForTimeout(UNTOUCHED_SCREEN_MS);
     assert.equal(reads, 0, 'an untouched booking screen read from the server');
     await slotButton(shopper.page, slot).first().click();
-    await shopper.page.getByText(shopper.t('compact.changed'), { exact: true }).filter({ visible: true }).waitFor();
+    await shopper.page.getByTestId('app-toast').getByText(shopper.t('compact.changed'), { exact: true }).waitFor();
     await shopper.page.screenshot({ path: path.join(evidence, 'stale-choice-en-mobile.png'), fullPage: true });
     await assertBackAtSelection(shopper.page, date, slot);
     await assertNothingHeld(shopper.id, 0);
@@ -130,7 +130,7 @@ export async function bookingResilienceSmoke({ browser, webUrl, apiUrl, prisma, 
     await confirmButton(shopper.page, shopper.t).click();
     const response = await refused; assert.equal(response.status(), 409); assert.equal(await errorCode(response), 'SLOT_TAKEN');
     // The customer reads the refusal in their own language (VIS-14 acceptance), not the server's diagnostic text.
-    await shopper.page.getByRole('alert').filter({ visible: true, hasText: shopper.t('compact.changed') }).waitFor();
+    await shopper.page.getByRole('alert').and(shopper.page.getByTestId('app-toast')).filter({ visible: true, hasText: shopper.t('compact.changed') }).waitFor();
     // The stale snapshot still lists the slot as available; the app must exclude it anyway.
     await slotButton(shopper.page, slot).waitFor({ state: 'hidden' });
     await shopper.page.screenshot({ path: path.join(evidence, 'stale-confirm-he-mobile.png'), fullPage: true });
