@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { Temporal } from '@js-temporal/polyfill';
 import { BookingStatus, MembershipRole } from '../generated/prisma/client.js';
 import { prisma } from '../db/client.js';
-import { AppError, conflict, notFound } from '../http/errors.js';
+import { AppError, conflict, notFound, slotTaken } from '../http/errors.js';
 import { occupiedInterval, assertCapacity } from '../scheduling/intervals.js';
 import { localDateTimeToInstant } from '../scheduling/local-time.js';
 import { acquireIntervalLocks } from '../scheduling/redis-slot-lock.js';
@@ -110,7 +110,7 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
       return { id: prior.id, status: prior.status, startsAt: prior.startsAt.toISOString(), endsAt: prior.endsAt.toISOString(), holdExpiresAt: prior.holdExpiresAt?.toISOString() };
     }
     const slotLock = await acquireLocks(business.id, staffLink.staff.id, occupied);
-    if (!slotLock.acquired) throw conflict('That time is being booked. Choose another time or retry shortly.');
+    if (!slotLock.acquired) throw slotTaken('That time is being booked. Choose another time or retry shortly.');
     try {
       const booking = await withBookingTransaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM "Business" WHERE id = ${business.id} FOR SHARE`;
@@ -127,8 +127,8 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
         if (!currentStaffLink?.staff.active) throw conflict('This staff assignment changed. Choose an available provider.');
         await tx.booking.updateMany({ where: { businessId: business.id, staffId: input.staffId, status: BookingStatus.HELD, holdExpiresAt: { lte: now } }, data: { status: BookingStatus.EXPIRED } });
         const conflicts = await tx.booking.findMany({ where: { businessId: business.id, staffId: input.staffId, status: { in: activeStatuses }, occupiedFrom: { lt: occupied.endsAt }, occupiedUntil: { gt: occupied.startsAt } }, select: { occupiedFrom: true, occupiedUntil: true } });
-        if (!assertCapacity(occupied, conflicts.map((item) => ({ startsAt: item.occupiedFrom, endsAt: item.occupiedUntil })), currentStaffLink.staff.parallelCapacity)) throw conflict('That time was just booked. Choose another time.');
-        if (await tx.timeBlock.count({ where: blocksCovering(business.id, input.staffId, occupied.startsAt, occupied.endsAt) })) throw conflict('This provider has blocked this time. Choose another time.');
+        if (!assertCapacity(occupied, conflicts.map((item) => ({ startsAt: item.occupiedFrom, endsAt: item.occupiedUntil })), currentStaffLink.staff.parallelCapacity)) throw slotTaken('That time was just booked. Choose another time.');
+        if (await tx.timeBlock.count({ where: blocksCovering(business.id, input.staffId, occupied.startsAt, occupied.endsAt) })) throw slotTaken('This provider has blocked this time. Choose another time.');
         await tx.$queryRaw`SELECT id FROM "Service" WHERE id = ${service.id} AND "businessId" = ${business.id} FOR SHARE`;
         const currentService = await tx.service.findFirst({ where: { id: service.id, businessId: business.id, active: true } });
         if (!currentService || currentService.updatedAt.getTime() !== service.updatedAt.getTime() || currentService.name !== service.name || currentService.durationMinutes !== service.durationMinutes || currentService.priceMinor !== service.priceMinor || currentService.currency !== service.currency) throw conflict('This service changed. Review the service and select a time again.');
@@ -179,7 +179,7 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
       const horizon = Temporal.Now.zonedDateTimeISO(business.timezone).toPlainDate().add({ days: policy.maximumAdvanceDays });
       if (current.startsAt.getTime() < Date.now() + policy.minimumNoticeMinutes * 60000 || Temporal.PlainDate.compare(localDate, horizon) > 0) throw conflict('The requested time is outside this business’s booking window.');
       await assertWorkingHours(business.id, business.timezone, current.staffId, current.startsAt, occupied, tx);
-      if (await tx.timeBlock.count({ where: blocksCovering(business.id, current.staffId, occupied.startsAt, occupied.endsAt) })) throw conflict('This time is blocked. Choose another time.');
+      if (await tx.timeBlock.count({ where: blocksCovering(business.id, current.staffId, occupied.startsAt, occupied.endsAt) })) throw slotTaken('This time is blocked. Choose another time.');
       // Recheck complete Redis ownership after database locks, immediately before the write.
       await requireHold(current.id, identity.id);
       await setBookingAudit(tx, identity.id, 'CUSTOMER', 'FINAL_CONSENT');

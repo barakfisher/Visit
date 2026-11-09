@@ -54,7 +54,7 @@ All payloads are JSON. Mutations that can be retried accept `Idempotency-Key`; a
 | `POST /v1/businesses/:businessId/bookings/:bookingId/reschedule` | Owner or authorized provider | Atomically move a booking while preserving it on failure. |
 | `POST /v1/businesses/:businessId/bookings/:bookingId/cancel` | Owner or authorized provider | Idempotently cancel and release capacity. |
 
-Validation errors use `{ "error": { "code": "VALIDATION_ERROR", "message": "Request validation failed", "fields": { "field": "reason" } } }`. Other stable codes include `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `HOLD_EXPIRED`, `POLICY_VIOLATION`, `RATE_LIMITED`, and `INTERNAL_ERROR`. Responses never disclose whether an email/phone has an account, expose another tenant's records, or return internal database/provider details.
+Validation errors use `{ "error": { "code": "VALIDATION_ERROR", "message": "Request validation failed", "fields": { "field": "reason" } } }`. Other stable codes include `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `SLOT_TAKEN` (a 409 meaning the requested time itself is taken, being taken or blocked), `HOLD_EXPIRED`, `POLICY_VIOLATION`, `RATE_LIMITED`, and `INTERNAL_ERROR`. Responses never disclose whether an email/phone has an account, expose another tenant's records, or return internal database/provider details.
 
 ## Time and policy payloads
 

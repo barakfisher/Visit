@@ -7,7 +7,7 @@ import { generateAvailability, workingWindows, evaluateCandidate, type Availabil
 import { occupiedInterval } from '../src/scheduling/intervals.js';
 import { prisma } from '../src/db/client.js';
 import { redis } from '../src/infra/redis.js';
-import { AppError } from '../src/http/errors.js';
+import { AppError, SLOT_TAKEN } from '../src/http/errors.js';
 import { registerBookingRoutes } from '../src/routes/bookings.js';
 import { registerScreenFlows } from '../src/routes/screen-flows.js';
 import { getBusinessAvailability } from '../src/repositories/availability.js';
@@ -171,6 +171,24 @@ test('availability repository and legacy/compatibility routes share scoped sched
       assert.equal((await app.inject({ method: 'POST', url: `/v1/bookings/${existing.id}/reschedule`, headers, payload: { finalConsent: true, expectedRevision: 0, idempotencyKey: randomUUID(), staffId: expert.id, startsAt: `${day}T09:00:00Z` } })).statusCode, 409);
       await prisma.booking.delete({ where: { id: existing.id } });
       await prisma.bookingPolicy.update({ where: { businessId: a.id }, data: { bufferBeforeMinutes: 0, bufferAfterMinutes: 0 } });
+    });
+    await t.test('a refusal names the time as gone only when it is', async () => {
+      const errorCode = (response: { json: () => { error: { code: string } } }) => response.json().error.code;
+      const hold = (time: string) => app.inject({ method: 'POST', url: '/v1/bookings', headers, payload: { finalConsent: true, businessId: a.id, serviceId: service.id, staffId: expert.id, startsAt: `${day}T${time}:00Z`, idempotencyKey: randomUUID() } });
+      const move = (id: string, time: string, expectedRevision = 0) => app.inject({ method: 'POST', url: `/v1/bookings/${id}/reschedule`, headers, payload: { finalConsent: true, expectedRevision, idempotencyKey: randomUUID(), staffId: expert.id, startsAt: `${day}T${time}:00Z` } });
+      const taken = await book(expert.id, '11:00'), mine = await book(expert.id, '13:00');
+      const block = await prisma.timeBlock.create({ data: { businessId: a.id, staffId: expert.id, startsAt: from('15:00'), endsAt: from('16:00') } });
+      try {
+        for (const refused of [await hold('11:00'), await hold('15:00'), await move(mine.id, '11:00'), await move(mine.id, '15:00')]) {
+          assert.equal(refused.statusCode, 409, refused.body); assert.equal(errorCode(refused), SLOT_TAKEN);
+        }
+        // A free time refused because the appointment itself changed must not be reported as gone.
+        const stale = await move(mine.id, '14:00', 99);
+        assert.equal(stale.statusCode, 409, stale.body); assert.equal(errorCode(stale), 'CONFLICT');
+      } finally {
+        await prisma.timeBlock.delete({ where: { id: block.id } });
+        await prisma.booking.deleteMany({ where: { id: { in: [taken.id, mine.id] } } });
+      }
     });
     await t.test('capacity and temporary holds update per resource, and cross-day blocks are loaded', async () => {
       await book(parallel.id, '10:00');

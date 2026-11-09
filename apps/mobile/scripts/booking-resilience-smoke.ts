@@ -13,6 +13,11 @@ import { COMMIT_PATH, pilotCustomers, type Slot } from './pilot-customers';
 // through the UI. Each scenario books on its own date, so no scenario's bookings or buffers shape another's slots.
 // Error codes are the API's response contract (AppError codes), not tuning values.
 const evidence = path.resolve('test-results/vis14');
+// Longer than the slowest of the timers this screen used to run, so a timer brought back would be caught.
+const UNTOUCHED_SCREEN_MS = 11000;
+// The app's query client retries a failed read once before reporting it.
+const READS_PER_FAILURE = 2;
+const RENDER_SETTLE_MS = 500;
 
 type Deps = { browser: Browser; webUrl: string; apiUrl: string; prisma: typeof Prisma; redis: typeof Redis; identityIds: string[]; business: PilotBusiness; resetSignInLimits: () => Promise<unknown> };
 type ApiFailure = { error: { code: string } };
@@ -22,7 +27,7 @@ export async function bookingResilienceSmoke({ browser, webUrl, apiUrl, prisma, 
   let dateOffset = 0;
   // Dates after the lifecycle's own booking date and its closed staff date.
   const scenarioDate = () => new Date(Date.parse(`${business.bookableDate}T12:00:00Z`) + ++dateOffset * 86400000).toISOString().slice(0, 10);
-  const { contexts, errors, newPage, customer, freeSlots, slotButton, reviewCard, confirmButton, review, fillSlot, assertNothingHeld } = pilotCustomers({ browser, webUrl, apiUrl, prisma, redis, identityIds, business, resetSignInLimits });
+  const { contexts, errors, newPage, customer, freeSlots, slotButton, reviewCard, confirmButton, showSlot, review, fillSlot, assertNothingHeld } = pilotCustomers({ browser, webUrl, apiUrl, prisma, redis, identityIds, business, resetSignInLimits });
   // Back at selection: the review is gone and another bookable time is offered on the same screen.
   async function assertBackAtSelection(page: Page, date: string, lost: Slot) {
     await reviewCard(page).waitFor({ state: 'hidden' });
@@ -51,7 +56,8 @@ export async function bookingResilienceSmoke({ browser, webUrl, apiUrl, prisma, 
   }
 
   try {
-    await staleDuringReview();
+    await takenBeforeChoosing();
+    await failedReread();
     await staleConfirm();
     await realOutage();
     await neverReachedServer();
@@ -65,19 +71,46 @@ export async function bookingResilienceSmoke({ browser, webUrl, apiUrl, prisma, 
     throw error;
   } finally { await Promise.all(contexts.map(context => context.close())); }
 
-  // A1. The slot is taken while the customer reviews; the background availability refresh clears the review.
-  async function staleDuringReview() {
+  // A1. The screen reads on events, never on a timer: an untouched list stays as it was, and choosing a slot taken
+  // since then clears the choice before the final step.
+  async function takenBeforeChoosing() {
     const date = scenarioDate(), slot = (await freeSlots(date))[0]!;
     const shopper = await customer('en');
-    await review(shopper.page, shopper.t, date, slot);
+    await showSlot(shopper.page, shopper.t, date, slot);
+    let reads = 0;
+    shopper.page.on('request', request => { if (/\/(availability|contact-readiness)(\?|$)/.test(request.url())) reads += 1; });
     await fillSlot('en', date, slot);
-    // Waits on the message, not on the refresh interval (a tuning value).
+    await shopper.page.waitForTimeout(UNTOUCHED_SCREEN_MS);
+    assert.equal(reads, 0, 'an untouched booking screen read from the server');
+    await slotButton(shopper.page, slot).first().click();
     await shopper.page.getByText(shopper.t('compact.changed'), { exact: true }).filter({ visible: true }).waitFor();
-    await shopper.page.screenshot({ path: path.join(evidence, 'stale-review-en-mobile.png'), fullPage: true });
+    await shopper.page.screenshot({ path: path.join(evidence, 'stale-choice-en-mobile.png'), fullPage: true });
     await assertBackAtSelection(shopper.page, date, slot);
     await assertNothingHeld(shopper.id, 0);
     assert.equal(await prisma.bookingAttempt.count({ where: { businessId: business.businessId, customerId: shopper.id } }), 0);
-    console.log('PASS: VIS-14 a slot taken during review is cleared by the availability refresh; the customer returns to selection with nothing held.');
+    console.log('PASS: VIS-14 an untouched booking screen makes no reads; choosing a slot taken since it loaded returns the customer to selection with nothing held.');
+  }
+
+  // A failed re-read leaves the list the customer already has: no timer would ever heal an error put in its place.
+  async function failedReread() {
+    const date = scenarioDate(), slot = (await freeSlots(date))[0]!;
+    const shopper = await customer('en');
+    await showSlot(shopper.page, shopper.t, date, slot);
+    let reads = 0, allFailed!: () => void;
+    const failed = new Promise<void>(resolve => { allFailed = resolve; });
+    await shopper.page.route(url => url.href.startsWith(`${apiUrl}/api/providers/${business.businessId}/availability?`), async route => {
+      await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'LOCK_UNAVAILABLE', message: 'Unavailable.' } }) });
+      if (++reads === READS_PER_FAILURE) allFailed();
+    });
+    await slotButton(shopper.page, slot).first().click();
+    await reviewCard(shopper.page).waitFor();
+    await failed;
+    await shopper.page.waitForTimeout(RENDER_SETTLE_MS);
+    assert.equal(await shopper.page.getByText(shopper.t('compact.slotsFailed'), { exact: true }).filter({ visible: true }).count(), 0);
+    assert.ok(await slotButton(shopper.page, slot).count() > 0, 'the list was lost after a failed re-read');
+    await shopper.page.unrouteAll({ behavior: 'wait' });
+    await assertNothingHeld(shopper.id, 0);
+    console.log('PASS: VIS-14 a failed re-read keeps the list the customer already has.');
   }
 
   // A2 + D. Refreshes are held back, so the customer confirms a stale review; the server refuses, the app returns to
@@ -95,9 +128,9 @@ export async function bookingResilienceSmoke({ browser, webUrl, apiUrl, prisma, 
     await fillSlot('he', date, slot);
     const refused = commitResponse(shopper.page);
     await confirmButton(shopper.page, shopper.t).click();
-    const response = await refused; assert.equal(response.status(), 409); assert.equal(await errorCode(response), 'CONFLICT');
+    const response = await refused; assert.equal(response.status(), 409); assert.equal(await errorCode(response), 'SLOT_TAKEN');
     // The customer reads the refusal in their own language (VIS-14 acceptance), not the server's diagnostic text.
-    await shopper.page.getByRole('alert').filter({ visible: true, hasText: shopper.t('bookingCommit.conflict') }).waitFor();
+    await shopper.page.getByRole('alert').filter({ visible: true, hasText: shopper.t('compact.changed') }).waitFor();
     // The stale snapshot still lists the slot as available; the app must exclude it anyway.
     await slotButton(shopper.page, slot).waitFor({ state: 'hidden' });
     await shopper.page.screenshot({ path: path.join(evidence, 'stale-confirm-he-mobile.png'), fullPage: true });

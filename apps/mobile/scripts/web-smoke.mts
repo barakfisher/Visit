@@ -202,8 +202,7 @@ try {
     await page.getByRole('heading', { name: 'Available appointments' }).waitFor();
     await page.getByRole('button', { name: /Choose a service/ }).click();
     await page.getByRole('dialog', { name: 'Choose a service', exact: true }).getByRole('button', { name: /QA consultation/ }).click();
-    const dateResponse = page.waitForResponse((response) => response.url().includes('/availability?') && response.url().includes(`date=${date}`));
-    await selectBookingDate(page, date); await dateResponse;
+    await selectBookingDate(page, date);
     const beforeReview = await prisma.booking.count({ where: { customerId: identities[0]!.id } });
     await page.getByRole('button', { name: /09:00 · Alex North/ }).click();
     await page.getByRole('heading', { name: 'Review your appointment' }).waitFor();
