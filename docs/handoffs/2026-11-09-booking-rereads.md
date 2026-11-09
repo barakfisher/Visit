@@ -1,6 +1,6 @@
 # Visit handoff — 2026-11-09, booking screen reads on events
 
-Supersedes `2026-11-08-live-updates.md` for current state. Its decisions, lessons and debt still hold unless corrected below.
+Supersedes `2026-11-09-notification-centre.md` for current state; read that one for the notification centre itself. Its decisions, lessons and debt, and those it carries from `2026-11-08-live-updates.md`, still hold unless corrected below.
 
 ## Authorization
 
