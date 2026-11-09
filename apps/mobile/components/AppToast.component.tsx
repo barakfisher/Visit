@@ -8,6 +8,9 @@ const config: ToastConfig = {
   success: ({ text1 }) => <View role="status" accessibilityLiveRegion="polite" testID="app-toast" className="mx-5 max-w-md rounded-control bg-ink px-4 py-3">
     <AppText style={{ textAlign: 'center' }} className="font-semibold text-white">{text1}</AppText>
   </View>,
+  refusal: ({ text1 }) => <View role="alert" accessibilityLiveRegion="assertive" testID="app-toast" className="mx-5 max-w-md rounded-control bg-danger px-4 py-3">
+    <AppText style={{ textAlign: 'center' }} className="font-semibold text-white">{text1}</AppText>
+  </View>,
 };
 
 /** The one toast host. It sits above the navigator, so a message survives the route change it announces. */

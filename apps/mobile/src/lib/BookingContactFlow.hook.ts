@@ -15,7 +15,7 @@ import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest, ApiError } from '@/src/lib/api';
-import { bookingLoadRefusalKey, bookingRefusalKey, bookingWindowWarningKey } from './AppointmentLifecycle.utils';
+import { bookingLoadRefusalKey, bookingRefusalKey, bookingWindowWarningKey, isPassingBookingRefusal } from './AppointmentLifecycle.utils';
 import { useScreenReturn } from './ScreenReturn.hook';
 import { appointmentDate, appointmentTime, localDate } from './appointmentTime';
 import { useCompactBooking } from './CompactBooking.hook';
@@ -24,7 +24,7 @@ import type { AdvisorySelection } from '../types/CompactBooking.types';
 import { useAuthStore } from '@/src/state/auth';
 import { cancellationCutoffText } from '@/src/i18n/cancellationCutoff';
 import { bookingCommitToastKey } from './BookingDetails.utils';
-import { showSuccessToast } from './AppToast.service';
+import { hideToast, showRefusalToast, showSuccessToast } from './AppToast.service';
 import type { BookingContactReadiness } from '@/src/types/BookingContact.types';
 import { formatMoney, type ProviderDetail, type Slot } from '@/src/types/flows';
 const slotId = bookingSlotId;
@@ -85,8 +85,8 @@ export function useBookingContactFlow() {
   const chosenService = provider?.services.some(service => service.id === serviceId) ? serviceId : !serviceId && provider?.services.length === 1 ? provider.services[0]?.id ?? '' : '';
   const chosenDate = validBookingDate(date) ? date : provider ? localDate(provider.timezone) : '';
   const selected = selection?.providerId === providerId && selection.serviceId === chosenService && selection.date === chosenDate ? selection.slot : null;
-  function changeService(id: string) { if (operation.current || pendingAttempt) return; sequence.current += 1; setSelection(null); setConflictSlot(null); setError(''); setServiceId(id); }
-  function changeDate(value: string) { if (operation.current || pendingAttempt || !validBookingDate(value)) return; sequence.current += 1; setSelection(null); setConflictSlot(null); setError(''); setDate(value); }
+  function changeService(id: string) { if (operation.current || pendingAttempt) return; sequence.current += 1; setSelection(null); setConflictSlot(null); setError(''); hideToast(); setServiceId(id); }
+  function changeDate(value: string) { if (operation.current || pendingAttempt || !validBookingDate(value)) return; sequence.current += 1; setSelection(null); setConflictSlot(null); setError(''); hideToast(); setDate(value); }
   const slots = useQuery({ queryKey: ['availability', identityId, contextVersion, providerId, fromBookingId ?? 'public', chosenService, chosenDate], queryFn: () => apiRequest<{ slots: Slot[] }>(`/api/${fromBookingId ? `bookings/${fromBookingId}` : `providers/${providerId}`}/availability?${new URLSearchParams({ serviceId: chosenService, date: chosenDate })}`), enabled: Boolean(chosenService && /^\d{4}-\d{2}-\d{2}$/.test(chosenDate)), staleTime: 0 });
   useEffect(() => {
     // A fresh availability response may make a previously contested slot bookable again.
@@ -100,7 +100,7 @@ export function useBookingContactFlow() {
   async function choose(slot: Slot) {
     if (operation.current || pendingAttempt) return;
     if (!slot.available || slot.locked || slotId(slot) === conflictSlot) return;
-    sequence.current += 1; setSelection({ providerId, serviceId: chosenService, date: chosenDate, slot }); setChosenAt(Date.now()); setError(''); setNotice('');
+    sequence.current += 1; setSelection({ providerId, serviceId: chosenService, date: chosenDate, slot }); setChosenAt(Date.now()); setError(''); setNotice(''); hideToast();
     // A slot taken since the list loaded clears this selection before the customer reaches the final step.
     void slots.refetch();
   }
@@ -144,7 +144,9 @@ export function useBookingContactFlow() {
           if (selected) setConflictSlot(slotId(selected));
           // Refusals are shown in the app's language, never as the server's diagnostic. A reschedule cutoff says why,
           // so a customer past it is not told to choose another time.
-          setError(t(bookingRefusalKey(reason instanceof ApiError ? reason.code : undefined))); await contacts.refetch(); await details.refetch(); await slots.refetch();
+          const refusal = bookingRefusalKey(reason instanceof ApiError ? reason.code : undefined);
+          if (isPassingBookingRefusal(refusal)) showRefusalToast(t(refusal)); else setError(t(refusal));
+          await contacts.refetch(); await details.refetch(); await slots.refetch();
         } else setError(t('bookingCommit.uncertain'));
       }
     } finally {
@@ -159,9 +161,10 @@ export function useBookingContactFlow() {
   }
   const controls = useCompactBooking({ provider, providerId, serviceId: chosenService, date: chosenDate, fromBookingId, slots: slots.data?.slots ?? [], excluded: conflictSlot, disabled: busy || Boolean(pendingAttempt), onDate: changeDate, onService: changeService, onReset: () => { void reset(); } });
   useEffect(() => {
-    if (!selected || operation.current || pendingAttempt || !slots.data || slots.data.slots.some(slot => slotId(slot) === slotId(selected) && slot.available && !slot.locked)) return;
-    setSelection(null); setError(t('compact.changed'));
-  }, [selected, pendingAttempt, slots.data, t]);
+    // The toast host sits above the navigator, so away from this screen the news waits for the return.
+    if (!focused || !selected || operation.current || pendingAttempt || !slots.data || slots.data.slots.some(slot => slotId(slot) === slotId(selected) && slot.available && !slot.locked)) return;
+    setSelection(null); setError(''); showRefusalToast(t('compact.changed'));
+  }, [focused, selected, pendingAttempt, slots.data, t]);
   const routeScope = JSON.stringify([providerId, fromBookingId, params.serviceId, params.date]);
   const previousRoute = useRef(routeScope);
   useEffect(() => {

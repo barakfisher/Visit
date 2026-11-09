@@ -26,6 +26,11 @@ export function bookingRefusalKey(code: string | undefined) {
   if (code === 'CUSTOMER_CONTACT_REQUIRED') return 'bookingContact.help' as const;
   return code === 'SLOT_TAKEN' || code === 'SLOT_LOCKED' ? 'compact.changed' as const : 'bookingCommit.conflict' as const;
 }
+// A time that is gone can be said in passing: the selection is already cleared and the list shows what to do next.
+// Everything else stays on screen until it is dealt with. A cutoff explains a state that will not change, and an
+// uncertain result must not fade before the customer retries, or they could book a second time.
+const PASSING_REFUSALS: readonly string[] = ['compact.changed', 'bookingCommit.conflict'];
+export function isPassingBookingRefusal(key: string) { return PASSING_REFUSALS.includes(key); }
 // A booking screen that cannot load says why in the app's language: a cutoff, a business that is not bookable
 // (not found or unpublished answer alike), or a plain load failure. The server's diagnostic is never shown.
 export function bookingLoadRefusalKey(code: string | undefined, status: number | undefined) {

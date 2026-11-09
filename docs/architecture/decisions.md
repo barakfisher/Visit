@@ -402,3 +402,13 @@ The booking screen read slots every 2 seconds and contact readiness every 10. Me
 - **Choice: a failed re-read keeps the list the customer already has.** The error replaced a good list, and the timer used to heal that within seconds. With no timer it would have stayed until the customer tapped Retry. The list can be stale, which the commit already handles. The error now appears only when there is nothing to show.
 - **Choice: both queries use `staleTime: 0`.** The app's default of 15 seconds would otherwise let a return to the screen show a cached list and make no read, which the polling used to hide.
 - *Not in scope:* `AccountMethods` is shown on this screen when a verified contact is missing, and it still polls. `ProviderAccess` and `ProviderApplication` also still poll.
+
+## A smooth booking screen — 2026-11-09
+
+An Android run showed the refusal message and a time leaving the list making the booking screen jump. The message sat in the bottom bar and shrank the scroll area. The same state change also removed a time, pulled one in from the next page and removed the review card, which threw a scrolled customer upward.
+
+- **Choice: a toast only for "the time is gone" (the user's call).** `compact.changed` and `bookingCommit.conflict` say something the screen already shows: the selection is cleared and the list offers other times. *Rejected:* every refusal except the uncertain result, because a cutoff explains a state that will not change and would fade before a customer has read two lines. *Rejected:* every message, because `bookingCommit.uncertain` means the booking may exist. A customer who missed it could choose another time and book twice.
+- **Choice: the other messages stay in the bottom bar and arrive over time.** They are rare, and they have to be there when the customer looks.
+- **Choice: times fade and glide (the user's call).** *Rejected:* fading without gliding, which is safer for right-to-left layout on Android but leaves the times snapping to new places, which is part of what the user objected to.
+- **Choice: height is animated explicitly in `SmoothHeight`, not with Reanimated's `exiting`.** An exiting view has already left the layout, so the page below it would still shorten in one frame.
+- **Choice: a slot that disappears while the customer is on another screen is announced on their return.** The toast host sits above the navigator, so announcing it at once would show the message over an unrelated screen. The selection stays until then, and Confirm cannot be pressed from elsewhere.
