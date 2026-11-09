@@ -372,6 +372,8 @@ The first run on an Android phone (Expo Go) failed on two things that web, Story
 
 ## Booking screen reads on events — 2026-11-09
 
+PR #48.
+
 The booking screen read slots every 2 seconds and contact readiness every 10. Measured locally on a business with 36 slots, one slot read is 19 SQL statements and about 12 KB, so one open screen cost 1,800 reads, about 34,000 statements and about 22 MB an hour, and 100 reads in a row returned identical bodies. Evenly spread polling held at 250 viewers (95th percentile 148 ms) and degraded at 500 (median 3.4 s). These are one laptop's numbers with statement logging on. There is no production data, so how often slots really change is unknown.
 
 - **Choice: no timer and no stream (the user's call).** Slots and readiness are read on entering the screen, on returning to it or to the app, on changing the date or service, and after a refusal. Choosing a slot also re-reads the slots, so a slot taken since the list loaded clears before the final step. *Rejected:* a signal for signed-in viewers, which was the first recommendation. It was not the cost: a signal reached exactly that provider's viewers (500 of 500, none of the other provider's), and 1,000 simultaneous re-reads finished in about 5.7 s with no failures. It would have needed publishing from about ten more write paths and another stream to verify on devices, to prevent one refusal message. *Rejected:* a public signal per business, which adds long-lived connections with no identity, needs a limit per IP and a ceiling that do not exist, shows anyone when a business is active, and serves viewers who cannot book until they sign in, at which point they re-read anyway.
