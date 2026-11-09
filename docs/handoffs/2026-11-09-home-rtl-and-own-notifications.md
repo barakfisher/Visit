@@ -1,0 +1,19 @@
+# Visit handoff — 2026-11-09, native RTL and customers' own notifications
+
+Supersedes `2026-11-09-booking-rereads.md` for current state. Its lessons and debt, and those it carries, still hold.
+
+## Where things stand
+
+Native text alignment, border-drawn icons, a Home appointments heading and customer notifications for their own changes are built. Reasons are in `decisions.md`, "Native RTL" and "Customers see their own changes".
+
+The user reviewed the notification behaviour and asked for no further change. Adding a provider without a link or QR is deferred until after the pilot (`decisions.md`, "Home appointments heading and adding a provider").
+
+## What has and has not been seen
+
+Tests, Storybook and the Home story in a browser at 375 px. **No device has run the native fix.** This machine has no Android SDK, no connected device and no iOS simulator. The diagnosis rests on React Native 0.88's source and on the user's Android screenshot, whose "v" arrow is exactly what the swap predicts. Open Home, a form with a Hebrew field, a dialog and an `EditButton` on a phone before trusting it.
+
+## Lessons (these will recur if forgotten)
+
+- **`left` and `right` are not physical on native under RTL.** Web shows nothing wrong. Use `nativeDirection.ts`.
+- **A Home story has no `dir=rtl` on its root.** The archive icon overlaps the label there and not in the app; set the document's `dir` before judging a layout in Storybook.
+- **A worktree's `node_modules` can be older than its lockfile.** Run `npm ci` and `npm run db:generate` before believing a typecheck failure.

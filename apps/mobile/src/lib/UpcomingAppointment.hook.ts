@@ -27,7 +27,7 @@ export function useUpcomingAppointment(businessId?: string, enabled = true): Upc
   // A background re-read keeps the cards on screen; only a first read has nothing to show yet.
   const active = Boolean(identity && focused && enabled);
   return { state: upcomingCardState({ visible: active, isPending: query.isPending, isError: query.isError, isFetching: query.isFetching, hasBooking: appointments.length > 0 }),
-    heading: businessId ? t('upcoming.context') : '', loadingLabel: t('home.loadingBooking'), error: query.isError ? t('home.bookingFailure') : '', retryLabel: t('home.retryBooking'),
+    heading: t(businessId ? 'upcoming.context' : 'upcoming.next'), sectionHeading: !businessId, loadingLabel: t('home.loadingBooking'), error: query.isError ? t('home.bookingFailure') : '', retryLabel: t('home.retryBooking'),
     appointments: active && query.isSuccess ? appointments.map(booking => ({ id: booking.id, when: `${appointmentDay(booking.startsAt, booking.business.timezone, locale)} · ${appointmentTime(booking.startsAt, booking.business.timezone, locale)}`, place: [booking.business.name, businessListingLine(booking.business.location, null)].filter(Boolean).join(' · ') })) : [],
     onRetry: () => { if (active) void query.refetch(); },
     onOpen: id => { if (active) router.push({ pathname: '/appointment/[bookingId]', params: { bookingId: id } }); },

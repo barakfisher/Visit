@@ -20,7 +20,7 @@ How it works:
 
 Assumptions stated to the user, open to change:
 
-- The person who made a change gets no notification about it (`actorIdentityId`).
+- A customer is notified of every change to their own appointment, including the ones they made themselves, because the inbox is their record of it (decisions.md, "Customers see their own changes"). The rows count as unread like any other. A manager who made a change gets no notification about it (`actorIdentityId`).
 - Notified: confirmed, cancelled, rescheduled, completed, no-show. Not notified: `HELD` and `EXPIRED`, which are internal steps of booking.
 - Opening the page marks everything read; new items stay highlighted until the person leaves it.
 - Text is built when read, not stored, so it follows the current language.

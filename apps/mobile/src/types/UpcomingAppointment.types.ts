@@ -3,8 +3,8 @@ export type UpcomingAppointment = HistoricalAppointment & { business: { location
 export type UpcomingAppointmentResponse = { booking: UpcomingAppointment | null; additionalCount: number; today: UpcomingAppointment[] };
 export type UpcomingAppointmentView = {
   state: 'hidden' | 'loading' | 'error' | 'ready';
-  /** Empty on Home, where the cards speak for themselves; a booking page says whose appointment this is. */
-  heading: string; loadingLabel: string; error: string; retryLabel: string;
+  /** What the cards show. On Home it is a section title, level with "My providers". */
+  heading: string; sectionHeading?: boolean; loadingLabel: string; error: string; retryLabel: string;
   appointments: { id: string; when: string; place: string }[];
   onRetry: () => void; onOpen: (id: string) => void;
 };

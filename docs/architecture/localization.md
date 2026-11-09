@@ -29,6 +29,8 @@ Product decision confirmed 2026-10-24 for VIS-31: support Hebrew and English; He
 
 The display locale never changes UTC booking instants, business timezone, DST policy, working-day boundaries or money values. Browser `html` lang/dir and root content follow the app locale. Native content uses inherited Yoga direction and Expo Router runtime navigation direction; the app does not force global I18nManager changes or trigger reload loops in Expo Go. Native direction, accessibility and gesture behavior still require device evidence.
 
+Native swaps physical left and right under RTL, which web does not: `textAlign: 'right'` lands on the left and a left border draws on the right. `src/design/nativeDirection.ts` holds the two rules: `startAlignment` for text and `physicalDrawing` for shapes drawn from one-sided borders or `left` offsets. `test/native-direction.test.ts` refuses the unguarded forms, because no browser check can see them.
+
 ## Translation contract
 
 `apps/mobile/src/i18n/messages.ts` owns matching English/Hebrew dictionaries and the MessageKey type. `useAppLocale().t(key, params)` renders text. New screens use these keys rather than inline copy; Hebrew dictionary completeness is checked by TypeScript and component tests. Missing runtime translation entries fall back to English.

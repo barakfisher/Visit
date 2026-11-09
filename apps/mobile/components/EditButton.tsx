@@ -1,4 +1,5 @@
 import { View } from 'react-native';
+import { physicalDrawing } from '@/src/design/nativeDirection';
 import { tokens } from '@/src/design/tokens';
 import { AppText } from './AppText';
 import { Control } from './Control';
@@ -11,7 +12,7 @@ export function EditButton({ label, accessibilityLabel, expanded, onPress, disab
     <AppText className={`font-semibold ${disabled ? 'text-muted' : 'text-brand'}`}>{label}</AppText>
     {/* Two borders of a turned square rather than an icon font or SVG: the app ships neither on web. */}
     <View accessible={false} importantForAccessibility="no-hide-descendants" style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{ width: 8, height: 8, marginTop: expanded ? 4 : -4, borderColor: color, borderRightWidth: 2.5, borderBottomWidth: 2.5, transform: [{ rotate: expanded ? '-135deg' : '45deg' }] }} />
+      <View style={{ ...physicalDrawing, width: 8, height: 8, marginTop: expanded ? 4 : -4, borderColor: color, borderRightWidth: 2.5, borderBottomWidth: 2.5, transform: [{ rotate: expanded ? '-135deg' : '45deg' }] }} />
     </View>
   </Control>;
 }

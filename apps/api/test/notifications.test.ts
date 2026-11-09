@@ -73,9 +73,18 @@ async function inboxApp() {
 
 test('booking events notify the right people', async t => {
   const s = await scene();
-  await t.test('a customer booking tells the managers, not the customer who made it, and not staff', async () => {
+  await t.test('a customer booking tells the customer who made it and the managers, not staff', async () => {
     const booking = await s.book(s.customer.id);
-    assert.deepEqual(await s.recipients(booking.id, 'BOOKING_CONFIRMED'), sorted(as(s.owner, 'BUSINESS'), as(s.manager, 'BUSINESS')));
+    assert.deepEqual(await s.recipients(booking.id, 'BOOKING_CONFIRMED'), sorted(as(s.customer, 'CUSTOMER'), as(s.owner, 'BUSINESS'), as(s.manager, 'BUSINESS')));
+  });
+  await t.test('a customer cancelling or moving their own appointment is told too', async () => {
+    const cancelled = await s.book(s.customer.id);
+    await s.change(s.customer.id, cancelled.id, { status: 'CANCELLED' });
+    assert.deepEqual(await s.recipients(cancelled.id, 'BOOKING_CANCELLED'), sorted(as(s.customer, 'CUSTOMER'), as(s.owner, 'BUSINESS'), as(s.manager, 'BUSINESS')));
+    const moved = await s.book(s.customer.id);
+    const startsAt = new Date(+moved.startsAt + HOUR_MS), endsAt = new Date(+moved.endsAt + HOUR_MS);
+    await s.change(s.customer.id, moved.id, { startsAt, endsAt, occupiedFrom: startsAt, occupiedUntil: endsAt });
+    assert.deepEqual(await s.recipients(moved.id, 'BOOKING_RESCHEDULED'), sorted(as(s.customer, 'CUSTOMER'), as(s.owner, 'BUSINESS'), as(s.manager, 'BUSINESS')));
   });
   await t.test('a manager cancelling tells the customer and the other manager, not themself', async () => {
     const booking = await s.book(s.customer.id);
@@ -111,7 +120,7 @@ test('booking events notify the right people', async t => {
     assert.equal(await prisma.notification.count({ where: { bookingId: released.id } }), 0);
     const confirmed = await s.book(s.customer.id, { status: 'HELD' });
     await s.change(s.customer.id, confirmed.id, { status: 'CONFIRMED', holdExpiresAt: null });
-    assert.deepEqual(await s.recipients(confirmed.id, 'BOOKING_CONFIRMED'), sorted(as(s.owner, 'BUSINESS'), as(s.manager, 'BUSINESS')));
+    assert.deepEqual(await s.recipients(confirmed.id, 'BOOKING_CONFIRMED'), sorted(as(s.customer, 'CUSTOMER'), as(s.owner, 'BUSINESS'), as(s.manager, 'BUSINESS')));
   });
   await t.test('a manager who is the customer of the booking gets one row, as the customer', async () => {
     const booking = await s.book(s.manager.id, { customerId: s.manager.id });
@@ -119,7 +128,7 @@ test('booking events notify the right people', async t => {
     assert.deepEqual(await s.recipients(booking.id, 'BOOKING_CANCELLED'), [as(s.manager, 'CUSTOMER')]);
     const own = await s.book(s.manager.id, { customerId: s.manager.id });
     await s.change(s.manager.id, own.id, { status: 'CANCELLED' });
-    assert.deepEqual(await s.recipients(own.id, 'BOOKING_CANCELLED'), [as(s.owner, 'BUSINESS')], 'someone acting on their own booking is not told');
+    assert.deepEqual(await s.recipients(own.id, 'BOOKING_CANCELLED'), sorted(as(s.manager, 'CUSTOMER'), as(s.owner, 'BUSINESS')), 'acting on their own booking, they are its customer and are told as one');
   });
   await t.test('an appointment entered by hand has no customer to tell', async () => {
     const booking = await s.enterByHand(s.owner);
@@ -174,14 +183,14 @@ test('the inbox API', async t => {
     assert.equal(await prisma.notification.count({ where: { identityId: s.manager.id, bookingId: later.id, readAt: null } }), 1);
   });
   await t.test('losing a role hides the business\'s notifications, and a customer\'s own stay', async () => {
-    const before = await unread(s.owner); assert.ok(before > 0);
+    const before = await unread(s.owner), customerBefore = await unread(s.customer); assert.ok(before > 0); assert.ok(customerBefore > 0);
     await prisma.membership.updateMany({ where: { identityId: s.owner.id, businessId: s.business.id }, data: { status: 'REVOKED' } });
     assert.deepEqual(await list(s.owner), []); assert.equal(await unread(s.owner), 0);
     await prisma.membership.updateMany({ where: { identityId: s.owner.id, businessId: s.business.id }, data: { status: 'ACTIVE', role: 'STAFF' } });
     assert.deepEqual(await list(s.owner), [], 'a staff role is not a managing role');
     await prisma.membership.updateMany({ where: { identityId: s.owner.id, businessId: s.business.id }, data: { role: 'OWNER' } });
     assert.equal(await unread(s.owner), before);
-    assert.equal(await unread(s.customer), 1);
+    assert.equal(await unread(s.customer), customerBefore);
   });
   await t.test('a pending member, and a business that is not approved, show nothing', async () => {
     await prisma.membership.updateMany({ where: { identityId: s.owner.id, businessId: s.business.id }, data: { status: 'PENDING' } });
@@ -209,9 +218,10 @@ test('the inbox API', async t => {
     assert.equal((await prisma.notification.findUniqueOrThrow({ where: { id: older.id } })).readAt, null);
   });
   await t.test('a deleted business hides its managers\' notifications only', async () => {
+    const customerBefore = await unread(s.customer); assert.ok(customerBefore > 0);
     await prisma.business.update({ where: { id: s.business.id }, data: { deletedAt: new Date() } });
     assert.deepEqual(await list(s.manager), []); assert.equal(await unread(s.manager), 0);
-    assert.equal(await unread(s.customer), 1);
+    assert.equal(await unread(s.customer), customerBefore);
     await prisma.business.update({ where: { id: s.business.id }, data: { deletedAt: null } });
   });
 });
