@@ -20,7 +20,7 @@
 - [x] 6i. VIS-38 — provider-entered guest appointments with unverified tenant contact snapshots, audited exceptions and authoritative idempotent scheduling; manual-appointments.md records 272 API / 71 foundation / 102 Storybook, full exported-web, typecheck/lint and JavaScript export evidence.
 - [ ] 7a. VIS-11 — first Storybook/isolated styled browser slice merged (PR #19, evidence in storybook-validation.md); open items are listed on the Linear issue. Native/live release gates remain separate.
 - [ ] 7b. Finish integrated VIS-14/VIS-17/VIS-20 evidence plus CI/staging/native/operational release gates. VIS-14 golden path merged (PR #20, evidence in docs/evidence/vis14); remaining slices are listed in docs/handoffs/2026-10-28-vis14.md.
-- [ ] Notification centre: bell, unread count and one inbox per person, as agreed in notifications.md.
+- [x] Notification centre: bell, unread count and one inbox per person; notifications.md.
 - [ ] Deferred: delivery channels for notifications (email, WhatsApp, SMS, push, possibly Telegram); gaps and open questions in notifications.md.
 - [ ] Deferred: VIS-48 NLP assistant, after pilot validation.
 

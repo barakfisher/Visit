@@ -45,6 +45,7 @@ enum ChallengePurpose {
 }
 
 model Identity {
+  notifications Notification[]
   manualAttempts ManualBookingAttempt[]
   manualBookings Booking[] @relation("ManualBookingActor")
   bookingAttempts BookingAttempt[]
@@ -84,6 +85,7 @@ model Identity {
 }
 
 model Business {
+  notifications Notification[]
   manualAttempts ManualBookingAttempt[]
   bookingAttempts BookingAttempt[]
   accessEvents BusinessAccessEvent[]
@@ -554,6 +556,7 @@ model BookingAttempt {
 
 model BookingEvent {
   notifications BookingNotification[]
+  inboxNotifications Notification[]
   id String @id @default(dbgenerated("gen_random_uuid()::text"))
   businessId String
   bookingId String
@@ -575,6 +578,26 @@ model BookingEvent {
   @@unique([businessId, bookingId, revision])
   @@unique([businessId, bookingId, id])
   @@index([businessId, bookingId, createdAt])
+}
+
+// One row per recipient. It holds references, never text: the wording is built when read, in the reader's language.
+model Notification {
+  id String @id @default(dbgenerated("gen_random_uuid()::text"))
+  identityId String
+  businessId String
+  kind String
+  audience String
+  bookingId String?
+  eventId String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  readAt DateTime? @db.Timestamptz(3)
+  identity Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  event BookingEvent? @relation(fields: [businessId, bookingId, eventId], references: [businessId, bookingId, id], onDelete: Cascade, onUpdate: Restrict)
+  @@unique([identityId, eventId])
+  @@index([identityId, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([identityId, readAt])
+  @@index([businessId, bookingId, eventId])
 }
 
 model BookingNotification {

@@ -10,6 +10,7 @@ import { dashboardEn, dashboardHe } from './dashboardMessages';
 import { hoursEn, hoursHe } from './hoursMessages';
 import { blocksEn, blocksHe } from './blockMessages';
 import { staffEn, staffHe } from './staffMessages';
+import { notificationsEn, notificationsHe } from './notificationMessages';
 export const en = {
   ...manualEn,
   ...agendaEditEn,
@@ -23,11 +24,9 @@ export const en = {
   ...hoursEn,
   ...blocksEn,
   ...staffEn,
+  ...notificationsEn,
   'home.title': 'Your time, well spent.',
   'home.intro': 'Your next appointment and the businesses you visit.',
-  'home.business.approved': 'Your application was approved. Finish the business settings to open bookings.',
-  'home.business.setup': 'Continue business setup',
-  'home.business.failure': "The business couldn't open. Check your connection and try again.",
   'home.providers': 'My Providers',
   'home.empty': "You haven't added any providers yet",
   'home.emptyHelp': 'Ask your business for its Visit link or scan its QR code with your phone camera. Opening the link adds it to your list.',
@@ -321,11 +320,9 @@ export const he: Record<MessageKey, string> = {
   ...hoursHe,
   ...blocksHe,
   ...staffHe,
+  ...notificationsHe,
   'home.title': 'הזמן שלכם, מנוצל היטב.',
   'home.intro': 'התור הבא שלכם והעסקים שאתם מבקרים בהם.',
-  'home.business.approved': 'הבקשה אושרה. השלימו את הגדרות העסק כדי לפתוח הזמנות.',
-  'home.business.setup': 'להמשך הגדרת העסק',
-  'home.business.failure': 'לא הצלחנו לפתוח את העסק. בדקו את החיבור ונסו שוב.',
   'home.providers': 'נותני השירות שלי',
   'home.empty': 'עדיין לא הוספתם נותני שירות',
   'home.emptyHelp': 'בקשו מהעסק את הקישור שלו ל־Visit או סרקו את קוד ה־QR במצלמת הטלפון. פתיחת הקישור תוסיף אותו לרשימה שלכם.',

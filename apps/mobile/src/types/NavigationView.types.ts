@@ -7,6 +7,10 @@ export interface NavigationViewProps {
   canSwitchMode: boolean;
   busy: boolean;
   error: string;
+  bellLabel: string;
+  /** What the circle says; null when nothing is unread, or when the count could not be read. */
+  bellBadge: string | null;
   onAccount: () => void;
+  onNotifications: () => void;
   onSwitchMode: () => void;
 }

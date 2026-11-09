@@ -45,7 +45,9 @@ export async function rescheduleBooking(session: AuthenticatedSession, bookingId
   // Each worker owns a distinct bounded Redis lease; retries cannot release each other's lease.
   const reservationId = `reschedule:${randomUUID()}`;
   try {
+    let changed = false;
     const moved = await withBookingTransaction(async tx => {
+      changed = false; // A serialization retry runs this again.
       await tx.$queryRaw`SELECT id FROM "Session" WHERE id = ${session.sessionId} FOR SHARE`;
       if (!await tx.session.findFirst({ where: { id: session.sessionId, identityId: session.identity.id, revokedAt: null, expiresAt: { gt: new Date() } } })) throw unauthenticated();
       await tx.$queryRaw`SELECT id FROM "Business" WHERE id = ${original.businessId} FOR SHARE`;
@@ -88,9 +90,11 @@ export async function rescheduleBooking(session: AuthenticatedSession, bookingId
       await setBookingAudit(tx, session.identity.id, businessId ? 'PROVIDER' : 'CUSTOMER', businessId ? 'PROVIDER_REQUEST' : 'CUSTOMER_REQUEST');
       const updated = await tx.booking.update({ where: { id: bookingId }, data: { staffId: input.staffId, startsAt, endsAt: new Date(+startsAt + current.serviceDurationMinutes * 60000), occupiedFrom: occupied.startsAt, occupiedUntil: occupied.endsAt } });
       await tx.bookingReschedule.create({ data: { bookingId, idempotencyKey: input.idempotencyKey, fingerprint } });
+      changed = updated.revision !== current.revision;
       return response(updated);
     });
-    signalAppointmentChanged(original);
+    // A move to the same place changes nothing, and otherwise any customer could wake every manager of the business for free.
+    if (changed) signalAppointmentChanged(original);
     return moved;
   } finally { await releaseHold(reservationId, session.identity.id).catch(() => {}); }
 }

@@ -1,5 +1,7 @@
 import { Redis, type RedisOptions } from 'ioredis';
+import { prisma } from '../db/client.js';
 import { AppError } from '../http/errors.js';
+import { MANAGING_ROLES } from '../security/tenant-context.js';
 import { redis } from './redis.js';
 
 /**
@@ -18,7 +20,8 @@ let publisher: Redis | null = null;
 let subscribed: Promise<unknown> | null = null;
 
 export const agendaTopic = (businessId: string) => `agenda:${businessId}`;
-export const customerTopic = (identityId: string) => `customer:${identityId}`;
+/** One topic per person, for their appointments and their notifications alike: a browser can spare only one stream for this. */
+export const personTopic = (identityId: string) => `person:${identityId}`;
 
 function loseEveryFollower() {
   for (const set of [...followers.values()]) for (const follower of [...set]) follower.onLost();
@@ -82,10 +85,21 @@ export function publishLiveSignal(topic: string) {
 
 export const signalAgendaChanged = (businessId: string) => publishLiveSignal(agendaTopic(businessId));
 
-/** A customer's appointment changed: tells the business and, unless it was entered by hand, the customer. */
+export const signalPersonChanged = (identityId: string) => publishLiveSignal(personTopic(identityId));
+
+/** Who is told is decided by the booking event's trigger; this only wakes the screens that might show it. A manager who was not notified just re-reads. */
+async function signalBusinessManagers(businessId: string) {
+  try {
+    const managers = await prisma.membership.findMany({ where: { businessId, status: 'ACTIVE', role: { in: [...MANAGING_ROLES] } }, distinct: ['identityId'], select: { identityId: true } });
+    for (const { identityId } of managers) signalPersonChanged(identityId);
+  } catch { console.warn('The business managers could not be signalled.'); }
+}
+
+/** An appointment changed: tells the business's screens and managers and, unless it was entered by hand, the customer. */
 export function signalAppointmentChanged({ businessId, customerId }: { businessId: string; customerId: string | null }) {
   signalAgendaChanged(businessId);
-  if (customerId) publishLiveSignal(customerTopic(customerId));
+  if (customerId) signalPersonChanged(customerId);
+  void signalBusinessManagers(businessId);
 }
 
 /** Ends every open stream and the subscriber connection, so server shutdown does not wait on them. */
