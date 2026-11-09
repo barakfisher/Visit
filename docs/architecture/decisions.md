@@ -353,6 +353,13 @@ The user found the centre empty after booking and first asked for a notification
 - **Choice: the empty state says "updates from your providers and from Visit".** *Accepted:* a new customer sees an empty centre after booking, and the old text, "changes to appointments", promised otherwise. A provider's empty inbox reads the same, although customers' changes also arrive there.
 - **Later:** when email or WhatsApp arrive, a booking confirmation may belong there, since a record outside the app has value of its own. That does not change this rule.
 
+## Toasts after a booking commit — 2026-11-09
+
+PR #50. Both surfaced when PR #51 reached this branch.
+
+- **Lesson: a screen stays focused after `router.replace`.** The "that time is no longer available" check ran in that gap, once a re-read showed the time gone, and the customer who had just booked it saw a refusal instead of the success toast. Whether it fires depends on timing: it passed on `main` and failed locally. The screen now records that it is leaving after a commit (`leavingAfterCommit`). *Rejected:* clearing the selection before leaving, which shows the time list for a moment first.
+- **Lesson: times that left stay in the page during their fade-out.** Counting straight after a change saw both pages, 12 instead of 6. The smoke now waits for the extra ones to go and still requires the exact count (`settledTimeCount`).
+
 ## Home appointments heading and adding a provider — 2026-11-09
 
 PR #50.

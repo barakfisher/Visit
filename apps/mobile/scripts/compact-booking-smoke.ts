@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import type { Browser } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
-import { preferBookingTime, selectedBookingDate } from './booking-controls.utils';
+import { preferBookingTime, selectedBookingDate, settledTimeCount } from './booking-controls.utils';
 const FOCUS_RETURN_TIMEOUT_MS = 2000;
 export async function compactBookingSmoke({ browser, webUrl, prisma, run, businessIds }: { browser: Browser; webUrl: string; prisma: typeof Prisma; run: string; businessIds: string[] }) {
   const business = await prisma.business.create({ data: { name: `Compact ${run}`, slug: `compact-${run}`, timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED', publishedAt: new Date() } });
@@ -40,10 +40,10 @@ export async function compactBookingSmoke({ browser, webUrl, prisma, run, busine
     await preferBookingTime(page, '15:00');
     await page.getByRole('button', { name: /15:00 · Calendar specialist/ }).waitFor();
     await page.getByRole('button', { name: 'Earlier', exact: true }).click();
-    assert.equal(await page.getByRole('button', { name: /Calendar specialist/ }).count(), 6);
+    assert.equal(await settledTimeCount(page, /Calendar specialist/, 6), 6);
     await preferBookingTime(page, '25:00');
     await page.getByRole('alert').filter({ hasText: 'Enter a time' }).waitFor();
-    assert.equal(await page.getByRole('button', { name: /Calendar specialist/ }).count(), 0);
+    assert.equal(await settledTimeCount(page, /Calendar specialist/, 0), 0);
     await preferBookingTime(page, '');
     let fail = true;
     await page.route('**/booking-calendar?*', async route => { if (fail) await route.fulfill({ status: 503, json: { error: 'Unavailable' } }); else await route.continue(); });
