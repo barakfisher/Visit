@@ -20,7 +20,7 @@ How it works:
 
 Assumptions stated to the user, open to change:
 
-- The person who made a change gets no notification about it (`actorIdentityId`).
+- The person who made a change gets no notification about it (`actorIdentityId`). The centre says what others did, a rule the user confirmed on 2026-11-09 (decisions.md, "The centre reports what others did").
 - Notified: confirmed, cancelled, rescheduled, completed, no-show. Not notified: `HELD` and `EXPIRED`, which are internal steps of booking.
 - Opening the page marks everything read; new items stay highlighted until the person leaves it.
 - Text is built when read, not stored, so it follows the current language.

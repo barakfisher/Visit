@@ -1,4 +1,5 @@
 import { View } from 'react-native';
+import { physicalDrawing } from '@/src/design/nativeDirection';
 
 /* Drawn from Views rather than an icon font or SVG: the app ships neither on web. */
 const hidden = { accessible: false, importantForAccessibility: 'no-hide-descendants' } as const;
@@ -27,7 +28,7 @@ export function BellIcon({ color }: IconProps) {
 
 export function HomeIcon({ color }: IconProps) {
   return <View {...hidden} style={{ width: 22, height: 22, alignItems: 'center' }}>
-    <View style={{ width: 15, height: 15, marginTop: 2, borderLeftWidth: 2, borderTopWidth: 2, borderColor: color, transform: [{ rotate: '45deg' }] }} />
+    <View style={{ ...physicalDrawing, width: 15, height: 15, marginTop: 2, borderLeftWidth: 2, borderTopWidth: 2, borderColor: color, transform: [{ rotate: '45deg' }] }} />
     <View style={{ position: 'absolute', bottom: 0, width: 15, height: 12, borderLeftWidth: 2, borderRightWidth: 2, borderBottomWidth: 2, borderColor: color, borderBottomLeftRadius: 2, borderBottomRightRadius: 2 }} />
   </View>;
 }
@@ -50,7 +51,7 @@ export function PlusIcon({ color }: IconProps) {
 export function ShareIcon({ color }: IconProps) {
   const dot = (left: number, top: number) => <View key={`${left}-${top}`} style={{ position: 'absolute', left, top, width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />;
   const line = (top: number, rotate: string) => <View key={rotate} style={{ position: 'absolute', left: 3, top, width: 12, height: 1.5, backgroundColor: color, transform: [{ rotate }] }} />;
-  return <View {...hidden} style={{ width: 18, height: 18 }}>
+  return <View {...hidden} style={{ ...physicalDrawing, width: 18, height: 18 }}>
     {line(5, '-27deg')}{line(11.5, '27deg')}{dot(0, 6)}{dot(12, 0)}{dot(12, 12)}
   </View>;
 }

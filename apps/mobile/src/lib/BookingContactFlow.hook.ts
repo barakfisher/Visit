@@ -43,6 +43,8 @@ export function useBookingContactFlow() {
   const [error, setError] = useState('');
   const [conflictSlot, setConflictSlot] = useState<string | null>(null);
   const operation = useRef(false);
+  /** Set once this screen is being replaced after a commit: the time it just took is gone from the list, and that is not news. */
+  const leavingAfterCommit = useRef(false);
   const mounted = useRef(true);
   const focused = useIsFocused();
   const focusRef = useRef(focused);
@@ -153,7 +155,7 @@ export function useBookingContactFlow() {
       if (result && (isCommittedBookingOutcome(result) || Boolean(fromBookingId && result.status === 'CANCELLED')) && isCurrent()) {
         if (fromBookingId) useRescheduleAttempt.getState().set(null); else useBookingAttempt.getState().set(null);
         await Promise.allSettled([client.invalidateQueries({ predicate: query => isBookingQuery(query.queryKey) })]);
-        if (isCurrent()) { if (result.status === 'CONFIRMED') { router.replace({ pathname: '/confirmation/[bookingId]', params: { bookingId: result.id } }); showSuccessToast(t(bookingCommitToastKey(Boolean(fromBookingId)))); } else router.replace('/appointments'); }
+        if (isCurrent()) { leavingAfterCommit.current = true; if (result.status === 'CONFIRMED') { router.replace({ pathname: '/confirmation/[bookingId]', params: { bookingId: result.id } }); showSuccessToast(t(bookingCommitToastKey(Boolean(fromBookingId)))); } else router.replace('/appointments'); }
       }
       operation.current = false;
       if (mounted.current) setBusy(false);
@@ -162,7 +164,7 @@ export function useBookingContactFlow() {
   const controls = useCompactBooking({ provider, providerId, serviceId: chosenService, date: chosenDate, fromBookingId, slots: slots.data?.slots ?? [], excluded: conflictSlot, disabled: busy || Boolean(pendingAttempt), onDate: changeDate, onService: changeService, onReset: () => { void reset(); } });
   useEffect(() => {
     // The toast host sits above the navigator, so away from this screen the news waits for the return.
-    if (!focused || !selected || operation.current || pendingAttempt || !slots.data || slots.data.slots.some(slot => slotId(slot) === slotId(selected) && slot.available && !slot.locked)) return;
+    if (!focused || !selected || operation.current || leavingAfterCommit.current || pendingAttempt || !slots.data || slots.data.slots.some(slot => slotId(slot) === slotId(selected) && slot.available && !slot.locked)) return;
     setSelection(null); setError(''); showRefusalToast(t('compact.changed'));
   }, [focused, selected, pendingAttempt, slots.data, t]);
   const routeScope = JSON.stringify([providerId, fromBookingId, params.serviceId, params.date]);

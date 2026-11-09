@@ -331,6 +331,42 @@ Agreed design, not built; see notifications.md. Recorded in PR #45. The question
 - **Choice: one inbox per person, the same in both modes.** The user's decision. *Rejected:* one inbox per mode, where the count changes on switching and a message waiting in the other mode needs a marker of its own, the problem the centre exists to remove. *Accepted cost:* a busy business can bury personal notifications until a filter is added.
 - **Debt: the centre reaches only people with the app open and an account.** Real-time reach, customers without an account, staff and free-text messages wait for delivery channels (email, WhatsApp, SMS, push, possibly Telegram). notifications.md lists each gap and the questions to answer before adding a channel.
 
+## Native RTL — 2026-11-09
+
+PR #50.
+
+The user saw Hebrew aligned left, a broken Home icon and a downward arrow on the Home appointment card, on an Android phone only. All three are one cause: under RTL, React Native on native treats physical left and right as start and end. `RCTResolveTextAlignment` (iOS) and `TextLayoutManager.getTextAlignment` (Android) turn `right` into the left edge; `BorderInsets.resolve` (Android) draws a left border on the right. Web keeps them physical, so every browser check passed. The arrow's left and bottom borders became right and bottom, which turned "<" into "v" and made the card look collapsible.
+
+- **Choice: native text states no alignment and follows the layout's direction; web keeps the physical value** (`startAlignment`). *Rejected:* `I18nManager.swapLeftAndRightInRTL(false)`, a global persisted setting that takes effect only after a reload, which localization.md already rules out; the app also relies on `end` offsets. *Rejected:* removing `writingDirection`, which does not change the swap.
+- **Choice: shapes drawn from one-sided borders set `direction: 'ltr'` on themselves** (`physicalDrawing`). An icon's geometry is not text and never mirrors; the chevron already picks its own rotation from the app direction. *Rejected:* redrawing them from rotated bars, more code for the same picture.
+- **Choice: a test scans the source for `textAlign: 'right'` and one-sided borders without the guard.** No browser run can catch this class of bug, and no device runs in CI.
+- **Debt: an identifier field (phone, email) keeps `textAlign: 'left'`, which native places on the right under RTL.** The text itself stays left to right. It reads acceptably and was not reported, so it is unchanged until seen on a device.
+
+## The centre reports what others did — 2026-11-09
+
+PR #50.
+
+The user found the centre empty after booking and first asked for a notification on their own bookings and cancellations. Measured on the local data: 11 customer bookings since the centre shipped produced 11 business rows and no customer rows, which was the stated assumption working as designed. The change was built, and the user reversed it before merge.
+
+- **Choice: nobody is notified of their own action (user's decision).** A customer hears from their providers and from the app. A provider also hears from their customers. No code changes: `actorIdentityId` in the trigger already does this. *Rejected:* a customer row for their own changes, which raises the bell's count for something the person just did, while the toast and the appointment on Home already confirm it. A count that rises without news teaches people to ignore it.
+- **Confirmed: another manager of the same business is still told,** because to them someone else changed the agenda. A change with no actor tells everyone.
+- **Choice: the empty state says "updates from your providers and from Visit".** *Accepted:* a new customer sees an empty centre after booking, and the old text, "changes to appointments", promised otherwise. A provider's empty inbox reads the same, although customers' changes also arrive there.
+- **Later:** when email or WhatsApp arrive, a booking confirmation may belong there, since a record outside the app has value of its own. That does not change this rule.
+
+## Toasts after a booking commit — 2026-11-09
+
+PR #50. Both surfaced when PR #51 reached this branch.
+
+- **Lesson: a screen stays focused after `router.replace`.** The "that time is no longer available" check ran in that gap, once a re-read showed the time gone, and the customer who had just booked it saw a refusal instead of the success toast. Whether it fires depends on timing: it passed on `main` and failed locally. The screen now records that it is leaving after a commit (`leavingAfterCommit`). *Rejected:* clearing the selection before leaving, which shows the time list for a moment first.
+- **Lesson: times that left stay in the page during their fade-out.** Counting straight after a change saw both pages, 12 instead of 6. The smoke now waits for the extra ones to go and still requires the exact count (`settledTimeCount`).
+
+## Home appointments heading and adding a provider — 2026-11-09
+
+PR #50.
+
+- **Choice: one Home heading, "התור הקרוב שלכם", for every state of the list (user's decision).** *Rejected:* separate headings for today's appointments and for a later one, more copy and a branch to keep correct. *Accepted:* with several appointments today, a singular title sits above several cards.
+- **Deferred until after the pilot (user's decision): adding a provider without a link or QR.** `pilot-product-journey.md` stays as it is. Considered when this returns: lookup by the business's exact phone, which needs a rate limit against scanning numbers; name search, which brings back the cancelled directory.
+
 ## Notification centre built — 2026-11-09
 
 PR #47. The user put it before booking slot availability: both had been agreed in separate sessions and never ordered. The scope below was approved before building.
