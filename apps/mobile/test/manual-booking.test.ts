@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { manualInput } from '../src/lib/ManualBooking.utils';
+import { manualDraftScope, manualInput } from '../src/lib/ManualBooking.utils';
+import { openManualBooking } from '../src/lib/ManualBookingEntry';
+import { useSessionStore } from '../src/state/session';
 import { emptyManualDraft, useManualDraft } from '../src/state/ManualBooking.store';
 import type { ManualDraft, ManualOptions } from '../src/types/ManualBooking.types';
 const options: ManualOptions = { timezone: 'Asia/Jerusalem', bookable: true, requiresException: true, services: [{ id: 'service', name: 'Consultation', durationMinutes: 30, priceMinor: 10000, currency: 'ILS', staff: [{ id: 'staff', displayName: 'Specialist', parallelCapacity: 1 }] }] };
@@ -33,4 +35,22 @@ test('manual store retains the same uncertain attempt, ignores stale results and
  store.getState().finish('a', result); assert.equal(store.getState().result, null);
  store.getState().finish('b', result); assert.deepEqual(store.getState().result, result);
  store.getState().clear(); assert.equal(store.getState().scope, ''); assert.deepEqual(store.getState().draft, emptyManualDraft); assert.equal(store.getState().result, null);
+});
+test('Add appointment starts a new form on the day it is given and leaves a form in progress alone', () => {
+ const business = { id: 'business', name: 'Clinic', timezone: 'Asia/Jerusalem', role: 'OWNER' as const };
+ useSessionStore.getState().clear(); useManualDraft.getState().clear();
+ try {
+  useSessionStore.getState().setAuth('token', { id: 'manager', email: null, phone: null, is_provider: true, businesses: [business] });
+  const day = '2027-03-15', later = '2027-03-20';
+  openManualBooking(business.id, day);
+  const { identityId, contextVersion } = useSessionStore.getState(), scope = manualDraftScope(identityId, contextVersion, business.id);
+  assert.equal(useManualDraft.getState().scope, scope); assert.equal(useManualDraft.getState().draft.open, true); assert.equal(useManualDraft.getState().draft.localDate, day);
+  useManualDraft.getState().update(scope, { customerName: 'Caller' });
+  openManualBooking(business.id, later);
+  assert.equal(useManualDraft.getState().draft.customerName, 'Caller'); assert.equal(useManualDraft.getState().draft.localDate, day);
+  useManualDraft.getState().finish(scope, { id: 'saved', status: 'CONFIRMED', startsAt: '', endsAt: '', revision: 1, source: 'MANUAL', contactVerification: 'UNVERIFIED', notification: 'NOT_SENT' });
+  openManualBooking(business.id, later);
+  assert.equal(useManualDraft.getState().result, null); assert.equal(useManualDraft.getState().draft.customerName, ''); assert.equal(useManualDraft.getState().draft.localDate, later);
+  openManualBooking('foreign-business', day); assert.equal(useManualDraft.getState().scope, scope);
+ } finally { useSessionStore.getState().clear(); useManualDraft.getState().clear(); }
 });
