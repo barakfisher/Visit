@@ -1,21 +1,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { E164_PATTERN, internationalBusinessPhone, ISRAEL_COUNTRY_CODE } from '../src/lib/BusinessPhone';
+import { E164_PATTERN, internationalPhone, ISRAEL_COUNTRY_CODE } from '../src/lib/PhoneNumber';
 import { BUSINESS_SLUG_MAX_LENGTH, businessSlugInput, businessSlugPath, isBusinessSlug } from '../src/lib/BusinessSlug';
 import { businessListingLine } from '../src/lib/BusinessListing';
 import { translate } from '../src/i18n/messages';
 
 test('Israeli local numbers, typed as people write them, become the international number the API stores', () => {
   const mobile = `+${ISRAEL_COUNTRY_CODE}501234567`;
-  for (const typed of ['050-1234567', '0501234567', '050 123 4567', ' (050) 123-4567 ', '050.123.4567']) assert.equal(internationalBusinessPhone(typed), mobile, typed);
-  assert.equal(internationalBusinessPhone('03-1234567'), `+${ISRAEL_COUNTRY_CODE}31234567`);
-  assert.equal(internationalBusinessPhone('+972501234567'), mobile);
-  assert.equal(internationalBusinessPhone('+44 20 7946 0958'), '+442079460958');
-  for (const typed of ['050-1234567', '03-1234567', '+44 20 7946 0958']) assert.match(internationalBusinessPhone(typed)!, E164_PATTERN);
+  for (const typed of ['050-1234567', '0501234567', '050 123 4567', ' (050) 123-4567 ', '050.123.4567']) assert.equal(internationalPhone(typed), mobile, typed);
+  assert.equal(internationalPhone('03-1234567'), `+${ISRAEL_COUNTRY_CODE}31234567`);
+  assert.equal(internationalPhone('+972501234567'), mobile);
+  assert.equal(internationalPhone('+44 20 7946 0958'), '+442079460958');
+  for (const typed of ['050-1234567', '03-1234567', '+44 20 7946 0958']) assert.match(internationalPhone(typed)!, E164_PATTERN);
 });
 
 test('anything that is not a phone number is refused rather than guessed', () => {
-  for (const typed of ['', '12345', '050-12345', '050-12345678', '00501234567', '972501234567', '+0501234567', 'phone', '050-123456a']) assert.equal(internationalBusinessPhone(typed), null, typed);
+  for (const typed of ['', '12345', '050-12345', '050-12345678', '00501234567', '972501234567', '+0501234567', 'phone', '050-123456a']) assert.equal(internationalPhone(typed), null, typed);
 });
 
 test('the business URL name folds capitals but refuses Hebrew, spaces and loose hyphens', () => {

@@ -67,12 +67,13 @@ export async function registerAuthRoutes(app: FastifyInstance, { emailLogin = em
 
   app.get('/v1/me', async (request) => {
     const { identity } = await authenticate(request);
-    // displayName prefills "Add myself" in staff settings; publishedAt tells Home whether a managed business is open yet.
+    // displayName prefills "Add myself" in staff settings; contactPhone fills the profile's phone field;
+    // publishedAt tells Home whether a managed business is open yet.
     const [profile, memberships, applications] = await Promise.all([
-      prisma.identity.findUniqueOrThrow({ where: { id: identity.id }, select: { displayName: true } }),
+      prisma.identity.findUniqueOrThrow({ where: { id: identity.id }, select: { displayName: true, contactPhone: true } }),
       prisma.membership.findMany({ where: { identityId: identity.id }, select: { role: true, status: true, business: { select: { id: true, name: true, slug: true, approvalStatus: true, publishedAt: true } } } }),
       prisma.providerApplication.findMany({ where: { identityId: identity.id }, select: { id: true, status: true, business: { select: { id: true, name: true, approvalStatus: true } } } }),
     ]);
-    return { identity: { ...identity, displayName: profile.displayName }, memberships, providerApplications: applications };
+    return { identity: { ...identity, displayName: profile.displayName, contactPhone: profile.contactPhone }, memberships, providerApplications: applications };
   });
 }
