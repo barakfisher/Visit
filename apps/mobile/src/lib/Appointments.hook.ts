@@ -1,45 +1,25 @@
-import { isBookingQuery } from './BookingQueries.utils';
-import { appointmentCancelFailureKey, canContinueAppointmentAction } from './AppointmentLifecycle.utils';
-import { useEffect, useRef, useState } from 'react';
-import { router } from 'expo-router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useAuthStore } from '../state/auth';
 import { useAppLocale } from '../i18n/LocaleContext';
-import { ApiError, apiRequest } from './api';
-import { confirmAppointmentCancellation } from './bookingActions';
+import { apiRequest } from './api';
 import { historyEntries } from './AppointmentHistory';
-import type { ActiveAppointment, HistoricalAppointment } from '../types/AppointmentLifecycle.types';
-import type { ActiveBooking } from '../types/flows';
+import { useActiveAppointments } from './ActiveAppointments.hook';
+import { appointmentsAt } from './ProviderHome';
+import { useProviderDetail } from './ProviderDetail.service';
+import type { HistoricalAppointment } from '../types/AppointmentLifecycle.types';
 export function useAppointments() {
-  const { t, locale } = useAppLocale(), client = useQueryClient();
-  const identity = useAuthStore(state => state.identityId), contextVersion = useAuthStore(state => state.contextVersion);
-  // A failed cancel belongs to the card it came from, so it shows next to that card's button.
-  const [error, setError] = useState<{ bookingId: string; message: string } | null>(null);
-  const [busyBookingId, setBusyBookingId] = useState<string | null>(null);
-  const pending = useRef(false), mounted = useRef(true);
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
-  const bookings = useQuery({ queryKey: ['consumer', 'active', identity, contextVersion], queryFn: () => apiRequest<{ bookings: ActiveAppointment[] }>('/api/consumer/bookings/active'), enabled: Boolean(identity) });
+  const { t, locale } = useAppLocale();
+  const contextVersion = useAuthStore(state => state.contextVersion);
+  // A business page opens this list narrowed to its own appointments; the URL keeps that across a reload.
+  const params = useLocalSearchParams<{ businessId?: string }>();
+  const businessId = typeof params.businessId === 'string' && params.businessId ? params.businessId : undefined;
+  const { identity, error, busyBookingId, bookings, cancel, reschedule } = useActiveAppointments();
   const history = useQuery({ queryKey: ['me', 'bookings', identity, contextVersion], queryFn: () => apiRequest<{ bookings: HistoricalAppointment[] }>('/v1/me/bookings'), enabled: Boolean(identity) });
   const historyList = history.data ? historyEntries(history.data.bookings, { status: bookings.status, ids: bookings.data?.bookings.map(booking => booking.id) ?? [] }) : null;
-  async function cancel(booking: ActiveBooking) {
-    if (pending.current) return;
-    const current = bookings.data?.bookings.find(item => item.id === booking.id);
-    if (!current?.actions.canCancel) return;
-    const scope = { identityId: identity, contextVersion, activeBusinessId: useAuthStore.getState().activeBusinessId };
-    pending.current = true; setBusyBookingId(booking.id);
-    try {
-      if (!await confirmAppointmentCancellation(locale)) return;
-      if (!canContinueAppointmentAction(scope, useAuthStore.getState(), mounted.current)) return;
-      setError(null);
-      await apiRequest(`/v1/bookings/${encodeURIComponent(booking.id)}/cancel`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedRevision: current.revision }) });
-      if (!canContinueAppointmentAction(scope, useAuthStore.getState(), mounted.current)) return;
-      await client.invalidateQueries({ predicate: query => isBookingQuery(query.queryKey) });
-    } catch (reason) { if (canContinueAppointmentAction(scope, useAuthStore.getState(), mounted.current)) { setError({ bookingId: booking.id, message: t(appointmentCancelFailureKey(reason instanceof ApiError ? reason.code : undefined)) }); await bookings.refetch(); } }
-    finally { pending.current = false; if (mounted.current) setBusyBookingId(null); }
-  }
-  function reschedule(booking: ActiveBooking) {
-    if (!bookings.data?.bookings.find(item => item.id === booking.id)?.actions.canReschedule) return;
-    router.push({ pathname: '/booking/[providerId]', params: { providerId: booking.business.id, serviceId: booking.service.id, fromBookingId: booking.id } });
-  }
-  return { t, locale, identity, error, busyBookingId, bookings, history, historyList, cancel, reschedule };
+  const provider = useProviderDetail(businessId ?? '', Boolean(businessId));
+  const upcoming = bookings.data ? appointmentsAt(bookings.data.bookings, businessId) : undefined;
+  const businessName = businessId ? provider.data?.provider.name ?? upcoming?.[0]?.business.name ?? history.data?.bookings.find(booking => booking.business.id === businessId)?.business.name ?? '' : '';
+  return { t, locale, identity, error, busyBookingId, bookings, upcoming, history, historyList: historyList ? appointmentsAt(historyList, businessId) : null, cancel, reschedule,
+    filter: businessId ? { name: businessName, onClear: () => router.setParams({ businessId: undefined }) } : null };
 }

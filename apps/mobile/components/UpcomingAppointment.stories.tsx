@@ -14,7 +14,6 @@ export const SeveralToday: Story = { args: { appointments: [{ id: 'one', when: '
   await userEvent.click(canvas.getByRole('button', { name: /Today · 15:00/ })); await expect(args.onOpen).toHaveBeenCalledWith('two');
 } };
 export const OnHome: Story = { args: { heading: 'Your next appointment', sectionHeading: true }, play: async ({ canvas }) => { await expect(canvas.getByRole('heading', { name: 'Your next appointment' })).toBeVisible(); } };
-export const OnABusinessPage: Story = { args: { heading: 'Your appointment with this business' }, play: async ({ canvas }) => { await expect(canvas.getByRole('heading', { name: 'Your appointment with this business' })).toBeVisible(); } };
 export const Hidden: Story = { args: { state: 'hidden', appointments: [] }, play: async ({ canvas }) => { await expect(canvas.queryAllByRole('button')).toHaveLength(0); } };
 export const NoAppointments: Story = { args: { appointments: [] }, play: async ({ canvas }) => { await expect(canvas.queryAllByRole('button')).toHaveLength(0); } };
 export const Loading: Story = { args: { state: 'loading', appointments: [] }, play: async ({ canvas }) => { await expect(canvas.getByRole('status')).toHaveTextContent('Loading upcoming appointment…'); await expect(canvas.queryAllByRole('button')).toHaveLength(0); } };

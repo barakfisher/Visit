@@ -5,7 +5,7 @@ import type { Browser, Page, Response } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
 import type { redis as Redis } from '../../api/src/infra/redis.js';
 import { translate } from '../src/i18n/messages';
-import { preferBookingTime } from './booking-controls.utils';
+import { showBookingTime } from './booking-controls.utils';
 import type { PilotBusiness } from './pilot-lifecycle-smoke';
 import { COMMIT_PATH, pilotCustomers, type Slot } from './pilot-customers';
 
@@ -34,7 +34,7 @@ export async function bookingResilienceSmoke({ browser, webUrl, apiUrl, prisma, 
     await slotButton(page, lost).waitFor({ state: 'hidden' });
     const other = (await freeSlots(date)).find(slot => slot.startsAt !== lost.startsAt && slot.localTime !== lost.localTime);
     assert.ok(other, 'no other free slot on this date');
-    await preferBookingTime(page, other.localTime);
+    await showBookingTime(page, other.localTime);
     await slotButton(page, other).first().waitFor();
     return other;
   }

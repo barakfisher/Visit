@@ -7,13 +7,13 @@ const meta = { globals: { locale: 'he' }, title: 'Home/Screen', component: Home,
   t: (key, values) => translate('he', key, values), identity: 'synthetic-customer', bootstrapping: false,
   upcoming: { state: 'hidden', heading: '', loadingLabel: '', error: '', retryLabel: '', appointments: [], onRetry: fn(), onOpen: fn() },
   providersState: 'ready', providers: [], hasMore: false, loadingMore: false, removingId: null, removeError: false, hasArchive: false, removeName: null,
-  onRetryProviders: fn(), onMore: fn(), onBook: fn(), onRemove: fn(), onConfirmRemove: fn(), onCancelRemove: fn(), onArchive: fn(),
+  onRetryProviders: fn(), onMore: fn(), onOpenProvider: fn(), onRemove: fn(), onConfirmRemove: fn(), onCancelRemove: fn(), onArchive: fn(),
 } } satisfies Meta<typeof Home>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 const providers = Array.from({ length: 5 }, (_, index) => ({ id: `saved-${index}`, businessId: `business-${index}`, available: true, provider: { id: `business-${index}`, name: `המרכז המקצועי לייעוץ ושירותים עם צוות המומחים ${index}`, location: 'תל אביב · רחוב ארוך במיוחד' } }));
 export const Empty: Story = { play: async ({ canvas }) => { await expect(canvas.getByText(translate('he', 'home.empty'))).toBeVisible(); await expect(canvas.queryAllByText(/Explore|Discover/)).toHaveLength(0); } };
-export const One: Story = { args: { providers: providers.slice(0, 1) }, play: async ({ canvas, args }) => { await userEvent.click(canvas.getByRole('button', { name: new RegExp(`${translate('he', 'home.book')}$`) })); await expect(args.onBook).toHaveBeenCalledOnce(); await expect(args.onBook).toHaveBeenCalledWith('business-0'); } };
+export const One: Story = { args: { providers: providers.slice(0, 1) }, play: async ({ canvas, args }) => { await userEvent.click(canvas.getByRole('button', { name: new RegExp(`${translate('he', 'home.book')}$`) })); await expect(args.onOpenProvider).toHaveBeenCalledOnce(); await expect(args.onOpenProvider).toHaveBeenCalledWith('business-0'); } };
 export const Many: Story = { args: { providers, hasMore: true } };
 export const English: Story = { args: { t: (key, values) => translate('en', key, values), providers: providers.map(p => ({ ...p, provider: { ...p.provider, name: 'Extended consultation and follow-up care with the specialist team' } })) }, globals: { locale: 'en' } };
 export const WithUpcomingAppointment: Story = { args: { providers: providers.slice(0, 3), upcoming: { state: 'ready', heading: translate('he', 'upcoming.next'), sectionHeading: true, loadingLabel: '', error: '', retryLabel: '', appointments: [{ id: 'today', when: 'היום · 14:30', place: 'Dana Studio · Tel Aviv' }], onRetry: fn(), onOpen: fn() } }, play: async ({ canvas }) => { await expect(canvas.getByRole('heading', { name: translate('he', 'upcoming.next') })).toBeVisible(); } };

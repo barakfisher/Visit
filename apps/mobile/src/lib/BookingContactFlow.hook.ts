@@ -1,4 +1,3 @@
-import { useUpcomingAppointment } from './UpcomingAppointment.hook';
 import { isBookingQuery } from './BookingQueries.utils';
 import { useRescheduleAttempt } from '../state/BookingReschedule.store';
 import { commitReschedule } from './BookingReschedule.service';
@@ -32,7 +31,6 @@ export function useBookingContactFlow() {
   const { locale, t } = useAppLocale();
   const params = useLocalSearchParams<{ providerId: string; serviceId?: string; date?: string; fromBookingId?: string }>();
   const { providerId, fromBookingId } = params;
-  const upcoming = useUpcomingAppointment(providerId, !fromBookingId);
   const [serviceId, setServiceId] = useState(params.serviceId ?? '');
   const [date, setDate] = useState(params.date ?? '');
   const [selection, setSelection] = useState<AdvisorySelection | null>(null);
@@ -161,7 +159,7 @@ export function useBookingContactFlow() {
       if (mounted.current) setBusy(false);
     }
   }
-  const controls = useCompactBooking({ provider, providerId, serviceId: chosenService, date: chosenDate, fromBookingId, slots: slots.data?.slots ?? [], excluded: conflictSlot, disabled: busy || Boolean(pendingAttempt), onDate: changeDate, onService: changeService, onReset: () => { void reset(); } });
+  const controls = useCompactBooking({ provider, providerId, serviceId: chosenService, date: chosenDate, fromBookingId, slots: slots.data?.slots ?? [], excluded: conflictSlot, disabled: busy || Boolean(pendingAttempt), onDate: changeDate, onService: changeService });
   useEffect(() => {
     // The toast host sits above the navigator, so away from this screen the news waits for the return.
     if (!focused || !selected || operation.current || leavingAfterCommit.current || pendingAttempt || !slots.data || slots.data.slots.some(slot => slotId(slot) === slotId(selected) && slot.available && !slot.locked)) return;
@@ -192,5 +190,5 @@ export function useBookingContactFlow() {
   const detailsError = details.isError ? t(bookingLoadRefusalKey(detailsFailure?.code, detailsFailure?.status)) : '';
   const reauthReturnTo = `/booking/${providerId}?${new URLSearchParams({ serviceId: chosenService, date: chosenDate })}`;
   function saveReauthDraft() { if (identityId) useBookingContactDraft.getState().save({ identityId, providerId, serviceId: chosenService, date: chosenDate, selected }); }
-  return { upcoming, controls, review, movingFrom, reauthReturnTo, saveReauthDraft, locale, t, providerId, fromBookingId, serviceId, date, selected, busy, editingDisabled: busy || Boolean(pendingAttempt), pendingAttempt, pendingElsewhere, notice, error, detailsError, conflictSlot, identityId, details, provider, chosenService, chosenDate, slots, contacts, name, setName, setServiceId, setDate, setNotice, reset, choose, confirm, saveName };
+  return { controls, review, movingFrom, reauthReturnTo, saveReauthDraft, locale, t, providerId, fromBookingId, serviceId, date, selected, busy, editingDisabled: busy || Boolean(pendingAttempt), pendingAttempt, pendingElsewhere, notice, error, detailsError, conflictSlot, identityId, details, provider, chosenService, chosenDate, slots, contacts, name, setName, setServiceId, setDate, setNotice, reset, choose, confirm, saveName };
 }

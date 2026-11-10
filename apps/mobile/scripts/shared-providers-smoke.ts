@@ -29,7 +29,7 @@ export async function sharedProvidersSmoke({ browser, webUrl, apiUrl, prisma, ru
     let saves = 0; page.on('request', r => { if (r.url() === `${apiUrl}/api/me/providers` && r.method() === 'POST') saves++; });
     await page.getByRole('textbox', { name: 'Six-digit verification code', exact: true }).fill(otp.code);
     await page.getByRole('button', { name: 'Verify & continue', exact: true }).click();
-    await page.waitForURL(`${webUrl}/booking/${businessId}`);
+    await page.waitForURL(`${webUrl}/business/${businessId}`);
     const me = await (await anonymous.request.get(`${apiUrl}/api/auth/me`)).json(); identityIds.push(me.profile.id);
     assert.equal(await prisma.savedProvider.count({ where: { identityId: me.profile.id, businessId } }), 1);
 
@@ -42,13 +42,13 @@ export async function sharedProvidersSmoke({ browser, webUrl, apiUrl, prisma, ru
     const mailbox = await (await emailContext.request.get(`${apiUrl}/__dev/mailbox?email=${encodeURIComponent(email)}`)).json();
     assert.equal(new URL(mailbox.link).searchParams.get('returnTo'), path);
     const callback = await emailContext.newPage(); await callback.goto(mailbox.link);
-    await callback.getByRole('button', { name: 'Verify sign-in', exact: true }).click(); await callback.waitForURL(`${webUrl}/booking/${businessId}`);
+    await callback.getByRole('button', { name: 'Verify sign-in', exact: true }).click(); await callback.waitForURL(`${webUrl}/business/${businessId}`);
     const emailMe = await (await emailContext.request.get(`${apiUrl}/api/auth/me`)).json(); identityIds.push(emailMe.profile.id);
     assert.equal(await prisma.savedProvider.count({ where: { identityId: emailMe.profile.id, businessId } }), 1);
     assert.equal(await prisma.membership.count({ where: { identityId: me.profile.id } }), 0);
-    await page.getByRole('heading', { name: 'Available appointments', exact: true }).waitFor();
-    assert.equal(saves, 1); // Link activation is reused by the booking route.
-    await page.goto(`${webUrl}${path}`); await page.waitForURL(`${webUrl}/booking/${businessId}`);
+    await page.getByTestId('provider-home').waitFor();
+    assert.equal(saves, 1); // The link saves once and lands on the business page.
+    await page.goto(`${webUrl}${path}`); await page.waitForURL(`${webUrl}/business/${businessId}`);
     assert.equal(await prisma.savedProvider.count({ where: { identityId: me.profile.id, businessId } }), 1);
 
     const retryContext = await context(), b = await session(retryContext, 'retry'), retry = await retryContext.newPage(); retry.on('pageerror', e => errors.push(e.message));
@@ -61,7 +61,7 @@ export async function sharedProvidersSmoke({ browser, webUrl, apiUrl, prisma, ru
     await retry.route(`${apiUrl}/api/me/providers`, route => route.request().method() === 'POST' && failSave ? route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":{"code":"UNAVAILABLE"}}' }) : route.continue());
     await retry.getByRole('button', { name: 'Try again', exact: true }).click();
     await retry.getByText('Could not add this provider. Check your connection and retry.', { exact: true }).waitFor();
-    failSave = false; await retry.getByRole('button', { name: 'Try again', exact: true }).click(); await retry.waitForURL(`${webUrl}/booking/${businessId}`);
+    failSave = false; await retry.getByRole('button', { name: 'Try again', exact: true }).click(); await retry.waitForURL(`${webUrl}/business/${businessId}`);
     const freshDevice = await context(); await freshDevice.addCookies(await retryContext.cookies());
     const list = await (await freshDevice.request.get(`${apiUrl}/api/me/providers`)).json(); assert.equal(list.providers[0].businessId, businessId);
     assert.equal((await freshDevice.request.delete(`${apiUrl}/api/me/providers/${businessId}`, { headers: { Origin: webUrl } })).status(), 200);

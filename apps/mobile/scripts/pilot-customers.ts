@@ -5,7 +5,7 @@ import type { prisma as Prisma } from '../../api/src/db/client.js';
 import type { redis as Redis } from '../../api/src/infra/redis.js';
 import { translate, type Locale } from '../src/i18n/messages';
 import { SETUP_SERVICE, SETUP_STAFF_NAME } from './business-setup-smoke';
-import { preferBookingTime } from './booking-controls.utils';
+import { showBookingTime } from './booking-controls.utils';
 import type { PilotBusiness } from './pilot-lifecycle-smoke';
 
 // Customers, slots and review steps on the business the VIS-14 lifecycle smoke onboarded through the UI, shared by the
@@ -70,8 +70,8 @@ export function pilotCustomers({ browser, webUrl, apiUrl, prisma, redis, identit
   async function showSlot(page: Page, t: (key: Parameters<typeof translate>[1]) => string, date: string, slot: Slot) {
     await page.goto(bookingUrl(date));
     await page.getByRole('heading', { name: t('compact.title'), exact: true }).filter({ visible: true }).waitFor();
-    await page.getByText(t('bookingContact.ready'), { exact: true }).filter({ visible: true }).waitFor();
-    await preferBookingTime(page, slot.localTime);
+    await page.getByTestId('booking-contact-ready').filter({ visible: true }).waitFor();
+    await showBookingTime(page, slot.localTime);
     await slotButton(page, slot).first().waitFor();
   }
   // Opens the booking screen on a date and reviews one slot. Review is advisory: nothing is written yet.

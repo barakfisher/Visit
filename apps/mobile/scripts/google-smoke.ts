@@ -71,10 +71,10 @@ export async function googleSmoke({ browser, webUrl, apiUrl, claims, run, prisma
     const sharedContext = await context(), sharedPage = await sharedContext.newPage(); await intercept(sharedPage);
     await begin(sharedPage, `/p/${sharedBusiness.slug}`);
     await sharedPage.getByRole('button', { name: 'Confirm & continue', exact: true }).click();
-    await sharedPage.waitForURL(`${webUrl}/booking/${sharedBusinessId}`);
+    await sharedPage.waitForURL(`${webUrl}/business/${sharedBusinessId}`);
     assert.equal(await prisma.savedProvider.count({ where: { identityId: identity.id, businessId: sharedBusinessId } }), 1);
     assert.equal((await (await sharedContext.request.get(`${apiUrl}/api/auth/me`)).json()).profile.id, identity.id);
-    console.log('PASS: Google shared-provider intent saves to the existing unified identity and continues to booking.');
+    console.log('PASS: Google shared-provider intent saves to the existing unified identity and continues to the business page.');
 
     // Account settings use a distinct code proof and preserve its issued replacement on profile failure.
     await page.unroute(`${apiUrl}/api/auth/me`);

@@ -3,8 +3,8 @@ import test from 'node:test';
 import { accountBusiness, footerHidden, isProviderPath } from '../src/lib/navigation';
 
 test('the footer leaves flows and signed-out screens alone', () => {
-  for (const path of ['/auth/login', '/booking/abc', '/register/provider', '/invite']) assert.equal(footerHidden(path), true, path);
-  for (const path of ['/', '/appointments', '/appointment/abc', '/account', '/provider/dashboard', '/bookingish']) assert.equal(footerHidden(path), false, path);
+  for (const path of ['/auth/login', '/register/provider', '/invite']) assert.equal(footerHidden(path), true, path);
+  for (const path of ['/', '/booking/abc', '/business/abc', '/appointments', '/appointment/abc', '/account', '/provider/dashboard', '/bookingish']) assert.equal(footerHidden(path), false, path);
 });
 
 test('provider mode is decided by the path', () => {

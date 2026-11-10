@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import type { Browser } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
-import { preferBookingTime, selectedBookingDate, settledTimeCount } from './booking-controls.utils';
+import { showBookingTime, selectedBookingDate, settledTimeCount } from './booking-controls.utils';
 const FOCUS_RETURN_TIMEOUT_MS = 2000;
 export async function compactBookingSmoke({ browser, webUrl, prisma, run, businessIds }: { browser: Browser; webUrl: string; prisma: typeof Prisma; run: string; businessIds: string[] }) {
   const business = await prisma.business.create({ data: { name: `Compact ${run}`, slug: `compact-${run}`, timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED', publishedAt: new Date() } });
@@ -18,7 +18,7 @@ export async function compactBookingSmoke({ browser, webUrl, prisma, run, busine
   try {
     const page = await context.newPage();
     await page.goto(`${webUrl}/booking/${business.id}?date=${date}`);
-    await page.getByRole('heading', { name: 'תורים זמינים' }).waitFor();
+    await page.getByRole('heading', { name: 'קביעת תור' }).waitFor();
     assert.equal(await page.locator('html').getAttribute('dir'), 'rtl');
     await page.getByTestId('booking-date-trigger').click();
     await page.getByTestId(`booking-day-${date}`).waitFor();
@@ -31,20 +31,21 @@ export async function compactBookingSmoke({ browser, webUrl, prisma, run, busine
     await page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'booking-date-trigger', undefined, { timeout: FOCUS_RETURN_TIMEOUT_MS });
     await page.goto(`${webUrl}/account`); await page.getByTestId('language-en').click();
     await page.goto(`${webUrl}/booking/${business.id}?date=${date}`);
-    await page.getByRole('heading', { name: 'Available appointments' }).waitFor();
+    await page.getByRole('heading', { name: 'Book an appointment' }).waitFor();
     await page.getByText('No available times on this date. Choose another date or look for the next available day.', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Find the next available date', exact: true }).click();
     await page.getByRole('button', { name: /09:00 · Calendar specialist/ }).waitFor();
     assert.equal(await selectedBookingDate(page), next);
     assert.equal(await page.getByRole('button', { name: /Calendar specialist/ }).count(), 6);
-    await preferBookingTime(page, '15:00');
+    await showBookingTime(page, '15:00');
     await page.getByRole('button', { name: /15:00 · Calendar specialist/ }).waitFor();
     await page.getByRole('button', { name: 'Earlier', exact: true }).click();
     assert.equal(await settledTimeCount(page, /Calendar specialist/, 6), 6);
-    await preferBookingTime(page, '25:00');
-    await page.getByRole('alert').filter({ hasText: 'Enter a time' }).waitFor();
-    assert.equal(await settledTimeCount(page, /Calendar specialist/, 0), 0);
-    await preferBookingTime(page, '');
+    // Earlier walks back to the first group, which starts at the day's first time.
+    const earlier = page.getByRole('button', { name: 'Earlier', exact: true });
+    while (await earlier.getAttribute('aria-disabled') !== 'true') { await earlier.click(); await settledTimeCount(page, /Calendar specialist/, 6); }
+    await page.getByRole('button', { name: /09:00 · Calendar specialist/ }).waitFor();
+    assert.equal(await page.getByRole('textbox').filter({ visible: true }).count(), 0);
     let fail = true;
     await page.route('**/booking-calendar?*', async route => { if (fail) await route.fulfill({ status: 503, json: { error: 'Unavailable' } }); else await route.continue(); });
     await page.getByTestId('booking-date-trigger').click();

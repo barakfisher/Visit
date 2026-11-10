@@ -9,8 +9,8 @@ export type AccountNavigation = {
 export const isProviderPath = (pathname: string) => pathname.startsWith('/provider/');
 /** Account and the notifications belong to the person, not to a mode: each keeps the business it was opened from, carried in its URL so a reload keeps it too. Only a business in the person's own profile counts. */
 export const accountBusiness = (pathname: string, businessId: string | string[] | undefined, businesses: readonly { id: string }[] | undefined) => (pathname === '/account' || pathname === '/notifications') && businesses?.some(business => business.id === businessId) ? businessId as string : null;
-/** A flow with its own commit button at the bottom, or a screen outside the signed-in shell, keeps the whole screen. */
-export const footerHidden = (pathname: string) => ['/auth', '/booking', '/register', '/invite'].some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`));
+/** A screen outside the signed-in shell keeps the whole screen. Booking has its own commit bar and keeps the footer under it (decisions.md, 2026-11-09). */
+export const footerHidden = (pathname: string) => ['/auth', '/register', '/invite'].some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`));
 export function menuCapabilities(account?: AccountNavigation) {
   const eligible = account?.memberships.filter(m => m.status === 'ACTIVE' && m.business.approvalStatus === 'APPROVED' && ['OWNER', 'MANAGER'].includes(m.role)) ?? [];
   const byBusiness = new Map<string, (typeof eligible)[number]>();

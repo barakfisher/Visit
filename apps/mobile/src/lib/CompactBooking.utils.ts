@@ -27,15 +27,9 @@ export function bookingMonthCells(month: string, availableDates: readonly string
     return { date, day: String(day), label: `${date} · ${formatter.format(new Date(`${date}T12:00:00Z`))}`, available: available.has(date), selected: date === selectedDate };
   });
 }
+/** How many times the booking screen shows at once; Earlier and Later move by this many. */
+export const BOOKING_PAGE_SIZE = 6;
 export const bookingSlotId = (slot: Slot) => `${slot.staffId}:${slot.startsAt}`;
 export function availableBookingSlots(slots: readonly Slot[], excluded: string | null) {
   return slots.filter(slot => slot.available && !slot.locked && bookingSlotId(slot) !== excluded).sort((a, b) => a.startsAt.localeCompare(b.startsAt) || a.staffId.localeCompare(b.staffId));
-}
-export function preferredBookingPage(slots: readonly Slot[], preferred: string, size = 6) {
-  if (!slots.length || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(preferred)) return 0;
-  const minute = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
-  const target = minute(preferred);
-  let nearest = 0;
-  slots.forEach((slot, index) => { if (Math.abs(minute(slot.localTime) - target) < Math.abs(minute(slots[nearest]?.localTime ?? '00:00') - target)) nearest = index; });
-  return Math.max(0, Math.min(slots.length - size, nearest - Math.floor(size / 2)));
 }

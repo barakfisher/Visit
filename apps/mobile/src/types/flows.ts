@@ -1,7 +1,8 @@
 export type AuthProfile = { id: string; email: string | null; phone: string | null; preferredLocale?: 'he' | 'en' | null; is_provider: boolean; businesses: { id: string; name: string; timezone: string; role?: 'OWNER' | 'MANAGER' }[] };
 export type Service = { id: string; name: string; description: string | null; durationMinutes: number; priceMinor: number | null; currency: string | null };
 export type Provider = { id: string; name: string; timezone: string; location: string | null; category: string | null; rating: number | null };
-export type ProviderDetail = Provider & { services: Service[]; weeklyAvailability: { weekday: number; startLocal: string; endLocal: string }[]; bookingPolicy: { maximumAdvanceDays: number; cancellationCutoffMinutes?: number; rescheduleCutoffMinutes?: number } | null };
+/** The API also returns the owner's public contact details; each may be missing. */
+export type ProviderDetail = Provider & { description?: string | null; contactPhone?: string | null; contactEmail?: string | null; services: Service[]; weeklyAvailability: { weekday: number; startLocal: string; endLocal: string }[]; bookingPolicy: { maximumAdvanceDays: number; cancellationCutoffMinutes?: number; rescheduleCutoffMinutes?: number } | null };
 export type Slot = { startsAt: string; localTime: string; utcOffset: string; staffId: string; staffName: string; available: boolean; locked: boolean };
 export type Hold = { holdId: string; expiresAt: string; startsAt: string; endsAt: string };
 export type ActiveBooking = { id: string; startsAt: string; service: { id: string; name: string }; business: { id: string; name: string; timezone: string }; staff: { displayName: string } };

@@ -1,5 +1,5 @@
 import { manualBookingSmoke } from './manual-booking-smoke';
-import { selectBookingDate, preferBookingTime } from './booking-controls.utils';
+import { selectBookingDate, showBookingTime } from './booking-controls.utils';
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID, randomInt, createHash } from 'node:crypto';
@@ -68,7 +68,7 @@ async function otpLogin(page: Page, phone: string, provider = false) {
 }
 async function openBooking(page: Page, businessId: string, serviceId: string) {
   await page.goto(`${webUrl}/booking/${businessId}?serviceId=${serviceId}&date=${date}`);
-  await page.getByRole('heading', { name: 'Available appointments' }).waitFor();
+  await page.getByRole('heading', { name: 'Book an appointment' }).waitFor();
   await page.getByRole('button', { name: /Alex North/ }).first().waitFor();
 }
 let suitePassed = false;
@@ -199,7 +199,7 @@ try {
     console.log('PASS: expired access refreshes through the HttpOnly cookie without ordinary token storage.');
     // Organic direct booking; the global directory has been retired.
     await page.goto(`${webUrl}/booking/${businessIds[0]}?serviceId=${service.id}&date=${date}`);
-    await page.getByRole('heading', { name: 'Available appointments' }).waitFor();
+    await page.getByRole('heading', { name: 'Book an appointment' }).waitFor();
     await page.getByRole('button', { name: /Choose a service/ }).click();
     await page.getByRole('dialog', { name: 'Choose a service', exact: true }).getByRole('button', { name: /QA consultation/ }).click();
     await selectBookingDate(page, date);
@@ -402,7 +402,7 @@ try {
     await Promise.all([openBooking(page, businessIds[0]!, service.id), openBooking(pageB, businessIds[0]!, service.id)]);
     capture = pageB;
     assert.equal(await page.getByRole('button', { name: /10:00 · Alex North/ }).count(), 0);
-    await Promise.all([page, pageB].map(contestant => preferBookingTime(contestant, '11:00')));
+    await Promise.all([page, pageB].map(contestant => showBookingTime(contestant, '11:00')));
     let arrived = 0; let unblock!: () => void;
     const barrier = new Promise<void>((resolve) => { unblock = resolve; });
     const barrierTimeout = setTimeout(unblock, 10000);
@@ -425,7 +425,7 @@ try {
     // Existing appointment actions remain covered after the new screen flow.
     capture = page;
     await page.goto(`${webUrl}/booking/${businessIds[0]}?serviceId=${service.id}&date=${date}&fromBookingId=${hold.holdId}`);
-    await preferBookingTime(page, '14:00');
+    await showBookingTime(page, '14:00');
     const originalAppointment = await prisma.booking.findUniqueOrThrow({ where: { id: hold.holdId } });
     const movesBefore = await prisma.bookingReschedule.count({ where: { bookingId: hold.holdId } });
     await page.getByRole('button', { name: /14:00 · Alex North/ }).click();
@@ -545,9 +545,10 @@ try {
     capture = providerPage;
     await providerPage.goto(`${webUrl}/booking/${foldBusiness.id}?serviceId=${foldService.id}&date=${foldDate}`);
     await providerPage.getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).waitFor();
-    await preferBookingTime(providerPage, '01:30');
+    await showBookingTime(providerPage, '01:30');
     await providerPage.getByRole('button', { name: /01:30 \(first occurrence\) · Fold specialist/ }).waitFor();
-    await providerPage.getByRole('button', { name: 'Later', exact: true }).click();
+    // The repeated hour's second pass may sit in this group of six or a later one.
+    await showBookingTime(providerPage, /01:30 \(second occurrence\) · Fold specialist/);
     const foldHoldResponse = providerPage.waitForResponse(response => response.url().endsWith('/api/bookings/commit'));
     await providerPage.getByRole('button', { name: /01:30 \(second occurrence\) · Fold specialist/ }).click();
     const previousDay = new Date(`${foldDate}T00:00:00Z`); previousDay.setUTCDate(previousDay.getUTCDate() - 1);
