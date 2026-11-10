@@ -32,10 +32,10 @@ export async function appointmentLifecycleSmoke({ browser, webUrl, apiUrl, prism
     await page.goto(`${webUrl}/provider/dashboard?businessId=${business.id}`);
     await page.getByLabel('Agenda date', { exact: true }).fill(past);
     const completeCard = page.getByTestId(`agenda-booking-${completed.id}`);
-    await completeCard.getByRole('button', { name: 'Mark completed', exact: true }).click();
+    // An ended appointment reads as completed with nothing recorded; the business can only say the customer did not come.
     await completeCard.getByText('Completed', { exact: true }).waitFor();
-    await completeCard.getByRole('button', { name: 'Show audit history', exact: true }).click();
-    await completeCard.getByText('Business manager · Appointment finished', { exact: true }).waitFor();
+    assert.equal(await completeCard.getByRole('button', { name: 'Mark completed', exact: true }).count(), 0);
+    await completeCard.getByRole('button', { name: 'Mark no-show', exact: true }).waitFor();
     const noShowCard = page.getByTestId(`agenda-booking-${noShow.id}`);
     await noShowCard.getByRole('button', { name: 'Mark no-show', exact: true }).click();
     await noShowCard.getByText('No-show', { exact: true }).waitFor();
@@ -44,7 +44,7 @@ export async function appointmentLifecycleSmoke({ browser, webUrl, apiUrl, prism
     await cancelCard.getByText('Cancelled', { exact: true }).waitFor();
     await page.getByLabel('Agenda date', { exact: true }).fill(future);
     const futureCard = page.getByTestId(`agenda-booking-${scheduled.id}`); await futureCard.waitFor();
-    assert.equal(await futureCard.getByRole('button', { name: 'Mark completed', exact: true }).count(), 0);
+    assert.equal(await futureCard.getByRole('button', { name: 'Mark no-show', exact: true }).count(), 0);
     const customerPage = await customerContext.newPage();
     await customerPage.goto(`${webUrl}/appointments`);
     // Past appointments have their own screen, behind a link; My appointments shows only what is ahead.
@@ -64,9 +64,11 @@ export async function appointmentLifecycleSmoke({ browser, webUrl, apiUrl, prism
       assert.equal(await card.getByRole('button', { name: 'Mark completed', exact: true }).count(), 0);
     }
     assert.equal(await customerPage.getByTestId(`history-booking-${scheduled.id}`).count(), 0);
-    const owned = customerPage.getByTestId(`history-booking-${completed.id}`);
-    await owned.getByRole('button', { name: 'Show audit history', exact: true }).click();
-    await owned.getByText('Business manager · Appointment finished', { exact: true }).waitFor();
+    // A tap on a past card opens its changes in place.
+    const owned = customerPage.getByTestId(`history-booking-${noShow.id}`);
+    await owned.getByRole('button', { expanded: false }).click();
+    await owned.getByText('Business manager · Customer absent', { exact: true }).waitFor();
+    assert.equal(customerPage.url(), `${webUrl}/appointments/history`);
     // The history screen is its own address, so a reload stays on it.
     await customerPage.reload(); await customerPage.getByTestId(`history-booking-${noShow.id}`).getByText('No-show', { exact: true }).waitFor();
     await customerPage.goto(`${webUrl}/account`); await customerPage.getByTestId('language-he').click();
@@ -74,7 +76,7 @@ export async function appointmentLifecycleSmoke({ browser, webUrl, apiUrl, prism
     await customerPage.getByTestId(`history-booking-${completed.id}`).getByText('הושלם', { exact: true }).waitFor();
     assert.equal(await customerPage.locator('html').getAttribute('dir'), 'rtl');
     assert.equal(await prisma.savedProvider.count({ where: { identityId: customer.id } }), 0);
-    assert.equal(await prisma.bookingEvent.count({ where: { businessId: business.id, kind: { in: ['COMPLETED', 'NO_SHOW', 'CANCELLED'] } } }), 3);
-    console.log('PASS: provider completion/no-show/cancellation and immutable audit, future outcome guard, owned persisted customer history without saved provider, service snapshots and Hebrew RTL on traveler devices.');
+    assert.equal(await prisma.bookingEvent.count({ where: { businessId: business.id, kind: { in: ['COMPLETED', 'NO_SHOW', 'CANCELLED'] } } }), 2);
+    console.log('PASS: ended appointments read as completed, provider no-show/cancellation and immutable audit, future outcome guard, owned persisted customer history without saved provider, service snapshots and Hebrew RTL on traveler devices.');
   } finally { await ownerContext.close(); await customerContext.close(); }
 }

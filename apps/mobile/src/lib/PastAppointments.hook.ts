@@ -35,11 +35,10 @@ export function usePastAppointments(): PastAppointmentsView {
       status: t(`lifecycle.${booking.status}`),
     })),
     hasMore: Boolean(pages.hasNextPage), loadingMore: pages.isFetchingNextPage, moreFailed: pages.isFetchNextPageError,
-    filter: businessId ? { name: provider.data?.provider.name ?? bookings[0]?.business.name ?? '', onClear: () => router.setParams({ businessId: undefined }) } : null,
+    filter: businessId ? { name: provider.data?.provider.name ?? bookings[0]?.business.name ?? '' } : null,
     onMore: more,
     // A failed next page keeps the pages already shown and asks for the same page again.
     onRetry: () => { if (pages.isFetchNextPageError) void pages.fetchNextPage(); else void pages.refetch(); },
-    onOpen: id => router.push({ pathname: '/appointment/[bookingId]', params: { bookingId: id } }),
     onBack: () => { if (router.canGoBack()) router.back(); else router.replace(businessId ? { pathname: '/appointments', params: { businessId } } : '/appointments'); },
   };
 }

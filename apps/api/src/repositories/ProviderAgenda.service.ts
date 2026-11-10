@@ -2,6 +2,7 @@ import { Temporal } from '@js-temporal/polyfill';
 import { prisma } from '../db/client.js';
 import { validateBusinessContext, type AuthorizedBusinessContext } from '../security/tenant-context.js';
 import { bookingServiceSnapshot } from './bookings.js';
+import { canMarkNoShow, presentedStatus } from './AppointmentOutcome.utils.js';
 import { blockProjection, presentBlocks } from './TimeBlocks.service.js';
 export async function readProviderAgenda(context: AuthorizedBusinessContext, date: string, days: 1 | 7) {
   await validateBusinessContext(context, ['OWNER', 'MANAGER']);
@@ -15,8 +16,8 @@ export async function readProviderAgenda(context: AuthorizedBusinessContext, dat
       tx.timeBlock.findMany({ where: { businessId: context.businessId, startsAt: { lt: endsAt }, endsAt: { gt: startsAt } }, orderBy: [{ startsAt: 'asc' }, { id: 'asc' }], select: blockProjection }),
       tx.staff.findMany({ where: { businessId: context.businessId, active: true }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }], select: { id: true, displayName: true, parallelCapacity: true } }),
     ]);
-    const revenue: Record<string, number> = {};
+    const revenue: Record<string, number> = {}, now = Date.now();
     for (const row of rows) if (['CONFIRMED', 'COMPLETED'].includes(row.status) && row.serviceCurrency && row.servicePriceMinor !== null) revenue[row.serviceCurrency] = (revenue[row.serviceCurrency] ?? 0) + row.servicePriceMinor;
-    return { business, fromDate: first.toString(), toDate: end.subtract({ days: 1 }).toString(), staff, blocks: presentBlocks(blocks, business.timezone), summary: { appointments: rows.filter(row => row.status !== 'CANCELLED').length, revenue }, bookings: rows.map(row => ({ id: row.id, source: row.source, manualReason: row.manualReason, revision: row.revision, status: row.status, startsAt: row.startsAt, endsAt: row.endsAt, customer: { displayName: row.customerName, phone: row.customerPhone, email: row.customerEmail }, service: bookingServiceSnapshot(row), staff: row.staff })) };
+    return { business, fromDate: first.toString(), toDate: end.subtract({ days: 1 }).toString(), staff, blocks: presentBlocks(blocks, business.timezone), summary: { appointments: rows.filter(row => row.status !== 'CANCELLED').length, revenue }, bookings: rows.map(row => ({ id: row.id, source: row.source, manualReason: row.manualReason, revision: row.revision, status: presentedStatus(row, now), canMarkNoShow: canMarkNoShow(row, now), startsAt: row.startsAt, endsAt: row.endsAt, customer: { displayName: row.customerName, phone: row.customerPhone, email: row.customerEmail }, service: bookingServiceSnapshot(row), staff: row.staff })) };
   }, { isolationLevel: 'RepeatableRead', maxWait: 5000, timeout: 10000 });
 }
