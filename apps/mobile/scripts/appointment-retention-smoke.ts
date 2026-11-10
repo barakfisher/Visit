@@ -7,7 +7,7 @@ import type { redis as Redis } from '../../api/src/infra/redis.js';
 import { translate, type Locale } from '../src/i18n/messages';
 import { webCancellationPrompt } from '../src/i18n/cancellationConfirm';
 import { SETUP_SERVICE } from './business-setup-smoke';
-import { preferBookingTime } from './booking-controls.utils';
+import { showBookingTime } from './booking-controls.utils';
 import { CANCELLATION_CUTOFF, RESCHEDULE_CUTOFF } from '../src/lib/AppointmentLifecycle.utils';
 import { MINUTES_PER_HOUR } from '../src/lib/BookingPolicyForm';
 import { pilotCustomers, type PilotCustomer, type Slot } from './pilot-customers';
@@ -67,8 +67,8 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     await page.getByRole('button', { name: owner.t('details.reschedule'), exact: true }).filter({ visible: true }).click();
     await page.waitForURL(url => url.pathname === `/booking/${business.businessId}` && url.searchParams.get('fromBookingId') === bookingId);
     const url = new URL(page.url()); url.searchParams.set('date', date); await page.goto(url.href);
-    await page.getByRole('heading', { name: owner.t('compact.title'), exact: true }).filter({ visible: true }).waitFor();
-    await preferBookingTime(page, slot.localTime);
+    await page.getByRole('heading', { name: owner.t('compact.rescheduleTitle'), exact: true }).filter({ visible: true }).waitFor();
+    await showBookingTime(page, slot.localTime);
     await slotButton(page, slot).first().click();
     await reviewCard(page).waitFor();
   }
@@ -292,7 +292,10 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     // B4. Republishing makes the saved entry bookable again; the customer refused during review books exactly once.
     await publication(provider.page, 'publish.action', 'publish.live');
     await he.page.goto(webUrl);
+    // The saved card opens the business page; booking starts from its Book tile.
     await savedCard(he.page).getByRole('button', { name: he.t('home.book') }).click();
+    await he.page.waitForURL(url => url.pathname === `/business/${business.businessId}`);
+    await he.page.getByTestId('provider-tile-book').filter({ visible: true }).click();
     await he.page.waitForURL(url => url.pathname === `/booking/${business.businessId}`);
     await review(he.page, he.t, reviewDate, reviewSlot);
     await confirmButton(he.page, he.t).click();

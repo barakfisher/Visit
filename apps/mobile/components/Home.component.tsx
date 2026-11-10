@@ -21,7 +21,7 @@ export function Home(view: HomeView) {
       {empty ? <View className="gap-3 rounded-card border border-line bg-surface p-5"><AppText className="font-semibold text-ink">{t('home.empty')}</AppText><AppText className="leading-6 text-body">{t('home.emptyHelp')}</AppText></View> : <View className="gap-3">
         {/* Rows of two at every width; the spacer keeps a lone last card the same width as the others. */}
         {pairs(view.providers).map(([first, second]) => <View key={first.id} className="flex-row gap-3">
-          {[first, second].map(item => <View key={item?.id ?? 'spacer'} className="flex-1">{item ? <SavedProviderCard item={item} removing={view.removingId === item.businessId} onBook={() => view.onBook(item.businessId)} onRemove={() => view.onRemove(item.businessId)} /> : null}</View>)}
+          {[first, second].map(item => <View key={item?.id ?? 'spacer'} className="flex-1">{item ? <SavedProviderCard item={item} removing={view.removingId === item.businessId} onBook={() => view.onOpenProvider(item.businessId)} onRemove={() => view.onRemove(item.businessId)} /> : null}</View>)}
         </View>)}
       </View>}
       {view.hasMore ? <ActionButton secondary label={t('home.more')} busy={view.loadingMore} onPress={view.onMore} /> : null}

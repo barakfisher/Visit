@@ -49,7 +49,7 @@ export async function homeNavigationSmoke({ browser, webUrl, apiUrl, prisma, run
     const upcoming = page.getByTestId(`active-booking-${booking.id}`); await upcoming.waitFor();
     assert.equal(await upcoming.isEnabled(), true);
     const above = await upcoming.boundingBox(), below = await page.getByRole('heading', { name: 'My Providers', exact: true }).boundingBox(); assert.ok(above && below && above.y < below.y);
-    await card.getByRole('button', { name: /Book appointment$/ }).click(); await page.waitForURL(`${webUrl}/booking/${targetId}`);
+    await card.getByRole('button', { name: /Book appointment$/ }).click(); await page.waitForURL(`${webUrl}/business/${targetId}`);
     await page.goto(webUrl);
     // Declining the confirmation keeps the provider; confirming archives it, and the archive brings it back.
     await card.getByRole('button', { name: /^Remove .* from my list$/ }).click();

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { addBookingDays, availableBookingSlots, bookingMonthCells, preferredBookingPage, shiftBookingMonth, validBookingDate } from '../src/lib/CompactBooking.utils';
+import { addBookingDays, availableBookingSlots, bookingMonthCells, shiftBookingMonth, validBookingDate } from '../src/lib/CompactBooking.utils';
 import type { Slot } from '../src/types/flows';
 const slot = (time: string, staffId = 'staff'): Slot => ({ startsAt: `2026-11-01T${time}:00Z`, localTime: time, staffId, staffName: staffId, utcOffset: '+02:00', available: true, locked: false });
 test('calendar is timezone-independent, leap-aware and obeys server-provided date availability', () => {
@@ -15,12 +15,6 @@ test('only real available slots appear and ranking preserves exact staff and abs
   const available = availableBookingSlots(input, 'staff:2026-11-01T11:00:00Z');
   assert.deepEqual(available.map(item => item.staffId), ['a', 'other']); assert.equal(input.length, 5);
   assert.deepEqual(availableBookingSlots([], null), []);
-});
-test('nearby pages are chronological around preference and remain bounded at either edge', () => {
-  const slots = Array.from({ length: 12 }, (_, index) => slot(`${String(8 + Math.floor(index / 2)).padStart(2, '0')}:${index % 2 ? '30' : '00'}`));
-  assert.equal(preferredBookingPage(slots, '11:00'), 3);
-  assert.equal(preferredBookingPage(slots, '00:00'), 0); assert.equal(preferredBookingPage(slots, '23:59'), 6);
-  assert.equal(preferredBookingPage(slots, '25:00'), 0); assert.equal(preferredBookingPage([], '11:00'), 0);
 });
 test('calendar rejects malformed dates and impossible month boundaries', () => {
   for (const date of ['', '2026-2-01', '2026-02-1', '2026-00-01', '2026-13-01', '2026-04-31', '1900-02-29', '2026-01-01T00:00:00Z']) {
@@ -76,14 +70,6 @@ test('slot filtering preserves input order and objects while returning chronolog
   assert.deepEqual(input, [latest, earliest, sameTime]);
   assert.deepEqual(availableBookingSlots([slot('09:00', 'a'), slot('09:00', 'b')], 'a:2026-11-01T09:00:00Z').map(item => item.staffId), ['b']);
   assert.deepEqual(availableBookingSlots([{ ...slot('09:00'), available: false }, { ...slot('10:00'), locked: true }], null), []);
-});
-test('preference handles small pages, invalid input, nearest ties and custom page sizes', () => {
-  const slots = [slot('08:00'), slot('09:00'), slot('10:00'), slot('11:00'), slot('12:00'), slot('13:00'), slot('14:00'), slot('15:00')];
-  for (const preferred of ['', '9:00', '24:00', '12:60', '12:00:00', ' 12:00']) assert.equal(preferredBookingPage(slots, preferred), 0);
-  assert.equal(preferredBookingPage(slots.slice(0, 2), '23:59'), 0);
-  assert.equal(preferredBookingPage(slots, '10:30', 2), 1);
-  assert.equal(preferredBookingPage(slots, '15:00', 2), 6);
-  assert.equal(preferredBookingPage(slots, '08:00', 2), 0);
 });
 test('calendar renders the final four-digit year without overflowing into an invalid month', () => {
   assert.equal(validBookingDate('9999-12-31'), true);

@@ -62,3 +62,10 @@ export function GlobeIcon({ color }: IconProps) {
     <View style={{ position: 'absolute', width: 15, height: 1.5, backgroundColor: color }} />
   </View>;
 }
+
+export function InfoIcon({ color }: IconProps) {
+  return <View {...hidden} style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: color, alignItems: 'center', paddingTop: 4, gap: 2 }}>
+    <View style={{ width: 3, height: 3, borderRadius: 2, backgroundColor: color }} />
+    <View style={{ width: 2, height: 7, backgroundColor: color }} />
+  </View>;
+}

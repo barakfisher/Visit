@@ -89,6 +89,7 @@ function RootLayoutNav() {
           <Stack.Screen name="register" options={{ headerShown: false }} />
           <Stack.Screen name="auth" options={{ headerShown: false }} />
           <Stack.Screen name="booking" options={{ headerShown: false }} />
+          <Stack.Screen name="business/[businessId]" options={{ headerShown: false }} />
           <Stack.Screen name="provider" options={{ headerShown: false }} />
           <Stack.Screen name="appointment" options={{ headerShown: false }} />
           <Stack.Screen name="confirmation/[bookingId]" options={{ headerShown: false }} />

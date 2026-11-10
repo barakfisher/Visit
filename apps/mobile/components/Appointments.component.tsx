@@ -4,16 +4,21 @@ import { ActiveBookings } from './ActiveBookings';
 import { AppText } from './AppText';
 import { ActionButton } from './ActionButton';
 import { ScreenContent } from './ScreenContent';
+import { Control } from './Control';
 import { AppointmentAudit } from './AppointmentAudit.component';
 import { appointmentDate, appointmentTime } from '@/src/lib/appointmentTime';
 import { formatMoney } from '@/src/types/flows';
 import type { useAppointments } from '@/src/lib/Appointments.hook';
 export function Appointments(view: ReturnType<typeof useAppointments>) {
-  const { t, locale, identity, error, busyBookingId, bookings, history, historyList, cancel, reschedule } = view;
+  const { t, locale, identity, error, busyBookingId, bookings, upcoming, history, historyList, cancel, reschedule, filter } = view;
   return <ScrollView className="flex-1 bg-canvas" contentContainerClassName="px-5 py-8"><ScreenContent className="gap-5">
     <AppText accessibilityRole="header" className="text-3xl font-bold text-ink">{t('appointments.title')}</AppText>
+    {filter ? <View testID="appointments-filter" className="flex-row flex-wrap items-center justify-between gap-x-3 rounded-control bg-brand-soft px-4 py-1">
+      <AppText className="font-semibold text-ink">{filter.name ? t('appointments.filtered', { name: filter.name }) : t('appointments.filteredUnnamed')}</AppText>
+      <Control accessibilityRole="button" onPress={filter.onClear} className="justify-center"><AppText className="font-semibold text-brand">{t('appointments.showAll')}</AppText></Control>
+    </View> : null}
     {!identity ? <Link href="/auth/login" className="min-h-touch py-3 font-semibold text-brand">{t('common.signIn')}</Link> : <>
-      {bookings.isLoading ? <AppText>{t('common.loading')}</AppText> : bookings.isError ? <ActionButton secondary label={t('common.retry')} onPress={() => void bookings.refetch()} /> : <View className="gap-3">{error && !bookings.data?.bookings.some(booking => booking.id === error.bookingId) ? <AppText accessibilityRole="alert" className="rounded-control bg-red-50 p-3 text-danger">{error.message}</AppText> : null}<ActiveBookings busyBookingId={busyBookingId} bookings={bookings.data?.bookings ?? []} error={error} onCancel={booking => void cancel(booking)} onReschedule={reschedule} footer={booking => <View className="gap-3">
+      {bookings.isLoading ? <AppText>{t('common.loading')}</AppText> : bookings.isError ? <ActionButton secondary label={t('common.retry')} onPress={() => void bookings.refetch()} /> : <View className="gap-3">{error && !bookings.data?.bookings.some(booking => booking.id === error.bookingId) ? <AppText accessibilityRole="alert" className="rounded-control bg-red-50 p-3 text-danger">{error.message}</AppText> : null}<ActiveBookings busyBookingId={busyBookingId} bookings={upcoming ?? []} error={error} onCancel={booking => void cancel(booking)} onReschedule={reschedule} footer={booking => <View className="gap-3">
         <Link href={{ pathname: '/appointment/[bookingId]', params: { bookingId: booking.id } }} className="min-h-touch py-3 font-semibold text-brand">{t('details.open')}</Link>
         <AppointmentAudit key={`${identity}:${booking.id}`} booking={booking} timezone={booking.business.timezone} />
       </View>} /></View>}

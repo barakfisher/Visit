@@ -18,7 +18,7 @@ export default function SharedProvider() {
   const { t } = useAppLocale();
   const identity = useAuthStore(s => s.identityId);
   const resolved = useQuery({ queryKey: ['public', 'provider-link', slug], queryFn: () => apiRequest<{ provider: { id: string; name: string; location: string | null; category: string | null } }>(`/api/provider-links/${encodeURIComponent(slug)}`), enabled: !!path, retry: false });
-  const saved = useCallback((result: { provider: { id: string } }) => { router.replace({ pathname: '/booking/[providerId]', params: { providerId: result.provider.id } }); }, []);
+  const saved = useCallback((result: { provider: { id: string } }) => { router.replace({ pathname: '/business/[businessId]', params: { businessId: result.provider.id } }); }, []);
   const activation = useProviderActivation(resolved.data && !resolved.isError && path ? { slug } : undefined, saved);
   const failed = !path || resolved.isError;
   return <ScrollView className="flex-1 bg-canvas" contentContainerClassName="px-5 py-8"><ScreenContent form className="gap-5 rounded-card border border-line bg-surface">

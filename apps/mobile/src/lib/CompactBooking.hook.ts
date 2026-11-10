@@ -5,7 +5,7 @@ import { useAppLocale } from '../i18n/LocaleContext';
 import { intlLocale, localDate } from './appointmentTime';
 import { slotLabels } from './slotLabels';
 import { readBookingCalendar } from './CompactBooking.service';
-import { addBookingDays, availableBookingSlots, bookingMonthCells, bookingSlotId, preferredBookingPage, shiftBookingMonth, validBookingDate } from './CompactBooking.utils';
+import { BOOKING_PAGE_SIZE, addBookingDays, availableBookingSlots, bookingMonthCells, bookingSlotId, shiftBookingMonth, validBookingDate } from './CompactBooking.utils';
 import type { CompactBookingInput } from '../types/CompactBooking.types';
 import { formatMoney } from '../types/flows';
 export function useCompactBooking(input: CompactBookingInput) {
@@ -13,7 +13,7 @@ export function useCompactBooking(input: CompactBookingInput) {
   const { locale, t, direction } = useAppLocale(), language = intlLocale(locale);
   const [sheet, setSheet] = useState<'service' | 'calendar' | null>(null);
   const [monthChoice, setMonthChoice] = useState({ scope: '', month: '' });
-  const [preferred, setPreferred] = useState(''), [pageOffset, setPageOffset] = useState<number | null>(null);
+  const [pageOffset, setPageOffset] = useState<number | null>(null);
   const [searching, setSearching] = useState(false), [searchNotice, setSearchNotice] = useState('');
   const search = useRef<AbortController | null>(null), sequence = useRef(0);
   const scope = `${identityId}:${contextVersion}:${input.providerId}:${input.fromBookingId ?? ''}:${input.serviceId}:${input.date}`;
@@ -28,16 +28,14 @@ export function useCompactBooking(input: CompactBookingInput) {
   }, [scope]);
   const available = availableBookingSlots(input.slots, input.excluded);
   const labels = slotLabels(input.slots, locale), byId = new Map(input.slots.map((slot, index) => [bookingSlotId(slot), labels[index] ?? slot.localTime]));
-  const validPreferred = preferred === '' || /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(preferred);
-  const start = Math.max(0, Math.min(pageOffset ?? preferredBookingPage(available, preferred), Math.max(0, available.length - 6)));
-  const page = validPreferred ? available.slice(start, start + 6).map(slot => ({ id: bookingSlotId(slot), label: byId.get(bookingSlotId(slot)) ?? slot.localTime })) : [];
+  const start = Math.max(0, Math.min(pageOffset ?? 0, Math.max(0, available.length - BOOKING_PAGE_SIZE)));
+  const page = available.slice(start, start + BOOKING_PAGE_SIZE).map(slot => ({ id: bookingSlotId(slot), label: byId.get(bookingSlotId(slot)) ?? slot.localTime }));
   const availableDates = calendar.data?.days.filter(day => day.available && day.date >= calendar.data.today && day.date <= calendar.data.maximumDate).map(day => day.date) ?? [];
   const choices = input.provider?.services.map(service => ({ id: service.id, label: service.name, summary: `${service.durationMinutes} ${t('bookingCommit.minutes')} · ${formatMoney(service.priceMinor, service.currency)}`, selected: service.id === input.serviceId })) ?? [];
   const chosen = choices.find(choice => choice.selected);
   function open(next: 'service' | 'calendar') { if (!input.disabled) { setSearchNotice(''); setSheet(next); if (next === 'calendar') void calendar.refetch(); } }
   function selectDate(date: string) { if (input.disabled || !availableDates.includes(date)) return; input.onDate(date); setSheet(null); setPageOffset(null); }
   function selectService(id: string) { if (input.disabled || !choices.some(choice => choice.id === id)) return; input.onService(id); setSheet(null); setPageOffset(null); }
-  function changePreferred(value: string) { if (input.disabled) return; input.onReset(); setPreferred(value); setPageOffset(null); }
   async function nextDate() {
     if (searching || input.disabled || !input.serviceId || !calendar.data) return;
     const current = ++sequence.current; search.current?.abort(); const controller = new AbortController(); search.current = controller;
@@ -65,8 +63,8 @@ export function useCompactBooking(input: CompactBookingInput) {
     previousMonth: () => setMonthChoice({ scope, month: shiftBookingMonth(month, -1) }), nextMonth: () => setMonthChoice({ scope, month: shiftBookingMonth(month, 1) }),
     canPreviousMonth: Boolean(calendar.data && month > calendar.data.today.slice(0, 7)), canNextMonth: Boolean(calendar.data && month < calendar.data.maximumDate.slice(0, 7)),
     calendarLoading: calendar.isFetching, calendarError: calendar.isError, retryCalendar: () => void calendar.refetch(),
-    preferred, validPreferred, changePreferred, page, earlier: () => setPageOffset(Math.max(0, start - 6)), later: () => setPageOffset(Math.min(Math.max(0, available.length - 6), start + 6)),
-    hasEarlier: start > 0, hasLater: start + 6 < available.length, pageSummary: t('compact.page', { start: page.length ? start + 1 : 0, end: start + page.length, total: available.length }),
+    page, earlier: () => setPageOffset(Math.max(0, start - BOOKING_PAGE_SIZE)), later: () => setPageOffset(Math.min(Math.max(0, available.length - BOOKING_PAGE_SIZE), start + BOOKING_PAGE_SIZE)),
+    hasEarlier: start > 0, hasLater: start + BOOKING_PAGE_SIZE < available.length, pageSummary: t('compact.page', { start: page.length ? start + 1 : 0, end: start + page.length, total: available.length }),
     nextDate, searching, searchNotice, canSearch: Boolean(calendar.data && input.date < calendar.data.maximumDate),
   };
 }

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Browser } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
-import { selectBookingDate, preferBookingTime } from './booking-controls.utils';
+import { selectBookingDate, showBookingTime } from './booking-controls.utils';
 export async function upcomingAppointmentsSmoke({ browser, webUrl, apiUrl, prisma, run, businessIds, identityIds }: { browser: Browser; webUrl: string; apiUrl: string; prisma: typeof Prisma; run: string; businessIds: string[]; identityIds: string[] }) {
   const business = await prisma.business.create({ data: { name: 'Upcoming studio with a long accessible business name — סטודיו לפגישות ייעוץ ושירות אישי', slug: `upcoming-${run}`, timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED', publishedAt: new Date() } }); businessIds.push(business.id);
   const customer = await prisma.identity.create({ data: { email: `upcoming-${run}@example.test`, preferredLocale: 'en' } }), foreign = await prisma.identity.create({ data: { email: `upcoming-foreign-${run}@example.test` } }); identityIds.push(customer.id, foreign.id);
@@ -54,13 +54,13 @@ export async function upcomingAppointmentsSmoke({ browser, webUrl, apiUrl, prism
     await firstCard.click(); await page.waitForURL(`${webUrl}/appointment/${first.id}`);
     await page.getByRole('button', { name: 'Reschedule appointment', exact: true }).filter({ visible: true }).click();
     await page.waitForURL(url => url.pathname === `/booking/${business.id}` && url.searchParams.get('fromBookingId') === first.id);
-    await selectBookingDate(page, date); await preferBookingTime(page, '12:00');
+    await selectBookingDate(page, date); await showBookingTime(page, '12:00');
     await page.getByRole('button', { name: /12:00 · Upcoming expert/ }).click();
     await page.getByRole('button', { name: 'Confirm reschedule', exact: true }).click(); await page.getByTestId('app-toast').getByText('The new time is confirmed and saved.', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Back', exact: true }).filter({ visible: true }).click(); await page.waitForURL(`${webUrl}/`);
     const secondCard = page.getByTestId(`active-booking-${second.id}`); await secondCard.waitFor();
-    await page.goto(`${webUrl}/booking/${business.id}`);
-    const contextual = page.getByTestId(`active-booking-${second.id}`); await page.getByRole('heading', { name: 'Your appointment with this business', exact: true }).waitFor();
+    // The business page shows the next appointment there; the booking screen no longer does.
+    await page.goto(`${webUrl}/business/${business.id}`); await page.getByTestId(`provider-next-${second.id}`).waitFor();
     await page.goto(webUrl); await secondCard.waitFor();
     // Cancelling starts from the card's details screen: declined, failed, then pending and successful.
     await secondCard.click(); await page.waitForURL(`${webUrl}/appointment/${second.id}`);

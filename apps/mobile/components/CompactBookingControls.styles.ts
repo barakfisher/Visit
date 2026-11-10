@@ -12,5 +12,4 @@ export const compactBookingStyles = StyleSheet.create({
   weekday: { width: '14.2857%', textAlign: 'center' },
   cell: { width: '14.2857%', paddingHorizontal: DAY_GUTTER, paddingVertical: 2 },
   blank: { minHeight: 44 },
-  identifier: { writingDirection: 'ltr', textAlign: 'left' },
 });

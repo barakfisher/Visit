@@ -7,5 +7,5 @@ export type HomeView = {
   providersState: 'loading' | 'error' | 'ready'; providers: SavedProviderItem[]; hasMore: boolean; loadingMore: boolean; removingId: string | null; removeError: boolean; hasArchive: boolean;
   /** The provider awaiting confirmation in the removal dialog; null while it is closed. */
   removeName: string | null;
-  onRetryProviders: () => void; onMore: () => void; onBook: (businessId: string) => void; onRemove: (businessId: string) => void; onConfirmRemove: () => void; onCancelRemove: () => void; onArchive: () => void;
+  onRetryProviders: () => void; onMore: () => void; onOpenProvider: (businessId: string) => void; onRemove: (businessId: string) => void; onConfirmRemove: () => void; onCancelRemove: () => void; onArchive: () => void;
 };

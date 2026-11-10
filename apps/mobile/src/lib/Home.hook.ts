@@ -48,7 +48,7 @@ export function useHome(): HomeView {
   return { t, identity, bootstrapping: !identity && bootstrap !== 'ready' || !!identity && restoring, upcoming,
     providersState: saved.isPending ? 'loading' : saved.isError ? 'error' : 'ready', providers: saved.data?.pages.flatMap(page => page.providers) ?? [], hasMore: Boolean(saved.hasNextPage), loadingMore: saved.isFetchingNextPage, removingId: remove.isPending ? remove.variables?.businessId ?? null : null, removeError: remove.isError,
     onRetryProviders: () => { void saved.refetch(); }, onMore: () => { void saved.fetchNextPage(); },
-    onBook: businessId => router.push({ pathname: '/booking/[providerId]', params: { providerId: businessId } }), hasArchive: archive.data === true, onArchive: () => router.push('/archived-providers'),
+    onOpenProvider: businessId => router.push({ pathname: '/business/[businessId]', params: { businessId } }), hasArchive: archive.data === true, onArchive: () => router.push('/archived-providers'),
     removeName: removeTarget ? saved.data?.pages.flatMap(page => page.providers).find(item => item.businessId === removeTarget)?.provider.name ?? null : null,
     onRemove: businessId => { if (!remove.isPending) { remove.reset(); setRemoveTarget(businessId); } }, onCancelRemove: () => { if (!remove.isPending) setRemoveTarget(null); },
     onConfirmRemove: () => { if (identity && removeTarget && !remove.isPending) remove.mutate({ businessId: removeTarget, identity, version: useSessionStore.getState().contextVersion }); },

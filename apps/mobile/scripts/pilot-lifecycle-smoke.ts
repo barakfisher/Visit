@@ -8,7 +8,7 @@ import type { prisma as Prisma } from '../../api/src/db/client.js';
 import type { redis as Redis } from '../../api/src/infra/redis.js';
 import { translate, type Locale } from '../src/i18n/messages';
 import { configureBusinessSmoke, openSettings, sharingBusinessSmoke, SETUP_SERVICE, SETUP_STAFF_NAME } from './business-setup-smoke';
-import { preferBookingTime } from './booking-controls.utils';
+import { showBookingTime } from './booking-controls.utils';
 
 // VIS-14 golden path: one provider is onboarded entirely through the UI (only the platform admin is seeded, as the
 // UI never grants ADMIN), then customers arrive through that provider's real shared link and book through final consent.
@@ -173,6 +173,9 @@ export async function pilotLifecycleSmoke({ browser, webUrl, apiUrl, prisma, red
       await page.waitForURL(url => url.pathname === '/auth/login' && url.searchParams.get('returnTo') === `/p/${slug}`);
       const phone = syntheticPhone();
       await signInWithPhone(page, locale, phone);
+      // The link lands on the business page; booking starts from its Book tile.
+      await page.waitForURL(url => url.pathname === `/business/${business.id}`);
+      await page.getByTestId('provider-tile-book').filter({ visible: true }).click();
       await page.waitForURL(url => url.pathname === `/booking/${business.id}`);
       const customerId = await identityOf(context);
       await page.getByRole('heading', { name: t('compact.title'), exact: true }).filter({ visible: true }).waitFor();
@@ -182,7 +185,7 @@ export async function pilotLifecycleSmoke({ browser, webUrl, apiUrl, prisma, red
       assert.equal(await prisma.membership.count({ where: { identityId: customerId } }), 0);
       // The only service is selected for the customer; phone sign-in already satisfies the verified-phone requirement.
       await page.getByRole('button', { name: new RegExp(`${t('compact.chooseService')} · ${SERVICE_NAME}`) }).filter({ visible: true }).waitFor();
-      await page.getByText(t('bookingContact.ready'), { exact: true }).filter({ visible: true }).waitFor();
+      await page.getByTestId('booking-contact-ready').filter({ visible: true }).waitFor();
       // Calendar: the staff closure is disabled, then the bookable date is chosen.
       await page.getByTestId('booking-date-trigger').filter({ visible: true }).click();
       for (const target of [setup.closedDate, bookableDate]) {
@@ -195,7 +198,7 @@ export async function pilotLifecycleSmoke({ browser, webUrl, apiUrl, prisma, red
       }
       await page.getByTestId(`booking-day-${bookableDate}`).click();
       await page.getByRole('dialog', { name: t('compact.chooseDate'), exact: true }).waitFor({ state: 'hidden' });
-      await preferBookingTime(page, time);
+      await showBookingTime(page, time);
       const confirmedBefore = await prisma.booking.count({ where: { businessId: business.id, status: 'CONFIRMED' } });
       await page.getByRole('button', { name: new RegExp(`${time} · ${STAFF_NAME}`) }).filter({ visible: true }).first().click();
       // Review shows the exact business-local time even though this browser runs in New York.
