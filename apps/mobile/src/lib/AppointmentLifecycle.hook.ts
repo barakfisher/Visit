@@ -9,6 +9,7 @@ import { appointmentOutcomeDelay, canContinueAppointmentAction, canMarkNoShow } 
 import { confirmAppointmentCancellation } from './bookingActions';
 import type { AppointmentStatus, LifecycleAppointment, LifecycleView } from '../types/AppointmentLifecycle.types';
 /** `open`, when given, is the caller's: a card that opens its own changes. Otherwise the history's own toggle decides. */
+// An ended appointment nobody recorded reads as completed, yet the business may still cancel it (a day it was closed) as well as mark a no-show.
 export function useAppointmentLifecycle(booking: LifecycleAppointment, timezone: string, businessId?: string, open?: boolean): LifecycleView {
   const { t, locale } = useAppLocale(), client = useQueryClient();
   const identityId = useAuthStore(state => state.identityId), contextVersion = useAuthStore(state => state.contextVersion);
@@ -38,6 +39,6 @@ export function useAppointmentLifecycle(booking: LifecycleAppointment, timezone:
   }
   const events = history.data?.events.map(event => ({ id: event.id, action: t(`lifecycle.event.${event.kind}`), recorded: formatAppointment(locale, event.createdAt, timezone), detail: `${event.oldStartsAt && event.oldStartsAt !== event.newStartsAt ? `${formatAppointment(locale, event.oldStartsAt, timezone)} → ` : ''}${formatAppointment(locale, event.newStartsAt, timezone)}`, source: `${t(`lifecycle.source.${event.source}`)} · ${t(`lifecycle.reason.${event.reason}`)}` })) ?? [];
   return { status: t(`lifecycle.${booking.status}`), toggleLabel: t(expanded ? 'lifecycle.hide' : 'lifecycle.show'), expanded, loading: history.isLoading, loadingLabel: t('common.loading'), error: error || (history.isError ? t('lifecycle.loadFailed') : ''), busy, events, empty: t('lifecycle.empty'), retryLabel: t('common.retry'), noShowLabel: t('lifecycle.noShow'), cancelLabel: t('lifecycle.cancel'), onToggle: () => setExpanded(value => !value), onRetry: () => void history.refetch(),
-    ...(businessId && canMarkNoShow(booking, now) ? { onNoShow: () => void change('NO_SHOW') } : {}), ...(businessId && booking.status === 'CONFIRMED' ? { onCancel: () => void change('CANCELLED') } : {}),
+    ...(businessId && canMarkNoShow(booking, now) ? { onNoShow: () => void change('NO_SHOW') } : {}), ...(businessId && (booking.status === 'CONFIRMED' || canMarkNoShow(booking, now)) ? { onCancel: () => void change('CANCELLED') } : {}),
   };
 }
