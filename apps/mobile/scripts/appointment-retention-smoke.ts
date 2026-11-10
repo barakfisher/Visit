@@ -297,7 +297,7 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     await publication(provider.page, 'publish.action', 'publish.live');
     await he.page.goto(webUrl);
     // The saved card opens the business page; booking starts from its Book tile.
-    await savedCard(he.page).getByRole('button', { name: he.t('home.book') }).click();
+    await savedCard(he.page).getByRole('button', { disabled: false }).first().click();
     await he.page.waitForURL(url => url.pathname === `/business/${business.businessId}`);
     await he.page.getByTestId('provider-tile-book').filter({ visible: true }).click();
     await he.page.waitForURL(url => url.pathname === `/booking/${business.businessId}`);

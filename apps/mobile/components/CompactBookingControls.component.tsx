@@ -6,6 +6,9 @@ import { AppText } from './AppText';
 import { ActionButton } from './ActionButton';
 import { SmoothHeight } from './SmoothHeight.component';
 import { TimeChips } from './TimeChips';
+import { Control } from './Control';
+import { DirectionalChevron } from './DirectionalChevron.component';
+import { tokens } from '@/src/design/tokens';
 import type { CompactBookingControlsProps } from './CompactBookingControls.types';
 export function CompactBookingControls({ controls: c, t, disabled, date, selectedId, slotLoading, slotError, onRetrySlots, onSelectSlot }: CompactBookingControlsProps) {
   // Sheet width measured at layout; the grid takes it, or scrolls horizontally below the minimum touch-target width.
@@ -31,7 +34,7 @@ export function CompactBookingControls({ controls: c, t, disabled, date, selecte
     <FormDialog testID="booking-choice-sheet" title={t(c.sheet === 'service' ? 'compact.chooseService' : 'compact.chooseDate')} open={c.sheet !== null} onClose={c.close}>
           <ActionButton secondary label={t('compact.close')} onPress={c.close} />
           {c.sheet === 'service' ? <ScrollView contentContainerStyle={styles.choices}>{c.choices.map(choice => <Pressable key={choice.id} accessibilityRole="button" accessibilityState={{ selected: choice.selected }} aria-pressed={choice.selected} onPress={() => c.selectService(choice.id)} className={`min-h-14 gap-1 rounded-control border px-4 py-3 ${choice.selected ? 'border-brand bg-brand-soft' : 'border-line'}`}><AppText className="font-semibold text-ink">{choice.label}</AppText><AppText className="text-sm text-body">{choice.summary}</AppText></Pressable>)}</ScrollView> : <>
-            <View className="flex-row items-center gap-2"><View className="flex-1"><ActionButton secondary label={t('compact.previousMonth')} disabled={c.calendarLoading || !c.canPreviousMonth} onPress={c.previousMonth} /></View><AppText testID="booking-calendar-month" accessibilityLabel={c.month} className="flex-1 text-center font-semibold text-ink">{c.monthTitle}</AppText><View className="flex-1"><ActionButton secondary label={t('compact.nextMonth')} disabled={c.calendarLoading || !c.canNextMonth} onPress={c.nextMonth} /></View></View>
+            <View className="flex-row items-center gap-2"><MonthStep pointing="back" label={t('compact.previousMonth')} disabled={c.calendarLoading || !c.canPreviousMonth} onPress={c.previousMonth} /><AppText testID="booking-calendar-month" accessibilityLabel={c.month} style={{ textAlign: 'center' }} className="flex-1 font-semibold text-ink">{c.monthTitle}</AppText><MonthStep pointing="forward" label={t('compact.nextMonth')} disabled={c.calendarLoading || !c.canNextMonth} onPress={c.nextMonth} /></View>
             {c.calendarLoading ? <ActivityIndicator accessibilityLabel={t('compact.loadingCalendar')} /> : null}
             {c.calendarError ? <View className="gap-2"><AppText accessibilityRole="alert" className="text-danger">{t('compact.calendarFailed')}</AppText><ActionButton secondary label={t('common.retry')} onPress={c.retryCalendar} /></View> : <View onLayout={event => setSheetWidth(event.nativeEvent.layout.width)}><ScrollView horizontal accessibilityLabel={c.monthTitle}><View style={{ width: Math.max(sheetWidth, CALENDAR_MIN_WIDTH) }}>
               <View className="flex-row">{c.weekdays.map((label, index) => <AppText key={index} style={styles.weekday} className="text-xs text-muted">{label}</AppText>)}</View>
@@ -41,4 +44,12 @@ export function CompactBookingControls({ controls: c, t, disabled, date, selecte
           </>}
     </FormDialog>
   </View>;
+}
+
+/** A month step is an arrow beside the month's name; its full name ("Next month") is for screen readers. */
+function MonthStep({ pointing, label, disabled, onPress }: { pointing: 'back' | 'forward'; label: string; disabled: boolean; onPress: () => void }) {
+  return <Control accessibilityRole="button" accessibilityLabel={label} aria-disabled={disabled} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
+    className={`items-center justify-center rounded-control border ${disabled ? 'border-control-line' : 'border-brand active:bg-brand-soft'}`}>
+    <DirectionalChevron pointing={pointing} color={disabled ? tokens.color.muted : tokens.color.brand} />
+  </Control>;
 }

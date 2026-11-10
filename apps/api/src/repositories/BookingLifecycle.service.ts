@@ -6,6 +6,7 @@ import { validateAuthenticatedSession, type AuthenticatedSession } from '../secu
 import { requireBusinessMembership } from '../security/tenant-context.js';
 import { withBookingTransaction } from '../scheduling/booking-transaction.js';
 import { releaseHold } from '../scheduling/reservations.js';
+import { presentedStatus } from './AppointmentOutcome.utils.js';
 import type { AppointmentOutcome, BookingAuditReason, BookingAuditSource } from './BookingLifecycle.types.js';
 
 export async function setBookingAudit(tx: Prisma.TransactionClient, actor: string, source: BookingAuditSource, reason: BookingAuditReason) {
@@ -51,9 +52,10 @@ export async function readBookingHistory(session: AuthenticatedSession, bookingI
   await validateAuthenticatedSession(session);
   if (businessId) await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']);
   const booking = await prisma.booking.findFirst({ where: { id: bookingId, ...(businessId ? { businessId } : { customerId: session.identity.id }), events: { some: {} } }, select: {
-    id: true, businessId: true, status: true, revision: true,
+    id: true, businessId: true, status: true, revision: true, endsAt: true,
     events: { orderBy: { revision: 'asc' }, select: { id: true, revision: true, kind: true, source: true, reason: true, oldStatus: true, newStatus: true, oldStartsAt: true, oldEndsAt: true, newStartsAt: true, newEndsAt: true, oldStaffId: true, newStaffId: true, createdAt: true } },
   } });
   if (!booking) throw notFound();
-  return booking;
+  const { endsAt: _endsAt, ...history } = booking;
+  return { ...history, status: presentedStatus(booking, Date.now()) };
 }

@@ -7,7 +7,7 @@ import type { BlockRemovalState, TimeBlockDialogState } from '../lib/TimeBlocks.
 export type ProviderAgenda = {
   business: { id: string; name: string; timezone: string }; fromDate: string; toDate: string;
   summary: { appointments: number; revenue: Record<string, number> }; staff: { id: string; displayName: string; parallelCapacity: number }[];
-  bookings: { source?: string; manualReason?: string | null; id: string; status: AppointmentStatus; revision: number; startsAt: string; endsAt: string; customer: { displayName: string | null; phone: string | null; email: string | null }; service: { name: string }; staff: { displayName: string } }[];
+  bookings: { source?: string; manualReason?: string | null; id: string; status: AppointmentStatus; canMarkNoShow?: boolean; revision: number; startsAt: string; endsAt: string; customer: { displayName: string | null; phone: string | null; email: string | null }; service: { name: string }; staff: { displayName: string } }[];
   blocks: TimeBlock[];
 };
 export type AgendaDraft = { date: string; mode: 'day' | 'week' };

@@ -52,7 +52,7 @@ test('provider agenda and schedule edits preserve private bookings and occupied 
       assert.deepEqual(day.bookings.map(row => row.id), [`${key}-prior`, `${key}-a`, `${key}-z`]);
       assert.equal(day.business.timezone, 'America/New_York');
       assert.equal(day.fromDate, '2027-03-14'); assert.equal(day.toDate, '2027-03-14');
-      assert.deepEqual(Object.keys(day.bookings[0]!).sort(), ['id', 'revision', 'status', 'startsAt', 'endsAt', 'customer', 'service', 'staff', 'source', 'manualReason'].sort());
+      assert.deepEqual(Object.keys(day.bookings[0]!).sort(), ['id', 'revision', 'status', 'canMarkNoShow', 'startsAt', 'endsAt', 'customer', 'service', 'staff', 'source', 'manualReason'].sort());
       const week = await readProviderAgenda(context, '2027-03-17', 7);
       assert.equal(week.fromDate, '2027-03-14'); assert.equal(week.toDate, '2027-03-20'); assert.equal(week.bookings.length, 4);
       await prisma.booking.deleteMany({ where: { businessId: business.id } });

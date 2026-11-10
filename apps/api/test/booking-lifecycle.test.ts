@@ -47,6 +47,31 @@ test('appointment lifecycle is authorized, append-only, idempotent and capacity 
       await assert.rejects(prisma.booking.update({ where: { id: past.id }, data: { startsAt: new Date(+past.startsAt + 60000) } }));
       await assert.rejects(prisma.booking.update({ where: { id: future.id }, data: { status: 'NO_SHOW' } }));
     });
+    await t.test('an ended appointment reads as completed everywhere until the business records a no-show', async () => {
+      const ended = await create(true), future = await create();
+      const customerReads = async (id: string) => {
+        const read = async (url: string) => { const response = await app.inject({ url, headers: headers(customer.id) }); assert.equal(response.statusCode, 200, response.body); return response.json(); };
+        const list = await read('/v1/me/bookings'), history = await read('/v1/me/bookings/history'), details = await read(`/v1/bookings/${id}/details`), changes = await read(`/v1/bookings/${id}/history`);
+        const find = (rows: { id: string; status: string }[]) => rows.find(row => row.id === id)?.status;
+        return [find(list.bookings), find(history.bookings) ?? 'NOT_IN_HISTORY', details.status, changes.status];
+      };
+      const providerRow = async (booking: { id: string; startsAt: Date }) => {
+        const date = booking.startsAt.toLocaleDateString('en-CA', { timeZone: business.timezone });
+        const response = await app.inject({ url: `/api/provider/agenda?${new URLSearchParams({ businessId: business.id, date })}`, headers: headers(owner.id) });
+        assert.equal(response.statusCode, 200, response.body);
+        return (response.json().bookings as { id: string; status: string; canMarkNoShow: boolean }[]).find(row => row.id === booking.id);
+      };
+      assert.deepEqual(await customerReads(ended.id), ['COMPLETED', 'COMPLETED', 'COMPLETED', 'COMPLETED']);
+      assert.deepEqual(await customerReads(future.id), ['CONFIRMED', 'NOT_IN_HISTORY', 'CONFIRMED', 'CONFIRMED']);
+      assert.deepEqual(await providerRow(ended).then(row => [row?.status, row?.canMarkNoShow]), ['COMPLETED', true]);
+      assert.deepEqual(await providerRow(future).then(row => [row?.status, row?.canMarkNoShow]), ['CONFIRMED', false]);
+      // The stored row is untouched, so the business can still record the absence.
+      assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: ended.id } })).status, 'CONFIRMED');
+      const absent = await app.inject({ method: 'POST', url: outcome(ended.id), headers: headers(owner.id), payload: { status: 'NO_SHOW', expectedRevision: 0 } });
+      assert.equal(absent.statusCode, 200, absent.body);
+      assert.deepEqual(await customerReads(ended.id), ['NO_SHOW', 'NO_SHOW', 'NO_SHOW', 'NO_SHOW']);
+      assert.deepEqual(await providerRow(ended).then(row => [row?.status, row?.canMarkNoShow]), ['NO_SHOW', false]);
+    });
     await t.test('no-show and completed intervals still fence historical capacity and retain service snapshots', async () => {
       const booking = await create(true);
       const response = await app.inject({ method: 'POST', url: outcome(booking.id), headers: headers(owner.id), payload: { status: 'NO_SHOW', expectedRevision: 0 } }); assert.equal(response.statusCode, 200, response.body);
