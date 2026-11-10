@@ -39,7 +39,7 @@ export function useBookingDetails(mode: 'confirmation' | 'details'): BookingDeta
     if (!booking?.actions.canCancel || operation.current) return;
     operation.current = true; setBusy(true); setError(''); const isCurrent = capture();
     try {
-      if (!await confirmAppointmentCancellation(locale) || !isCurrent()) return;
+      if (!await confirmAppointmentCancellation() || !isCurrent()) return;
       await cancelDetailedBooking(booking.id, booking.revision);
       if (isCurrent()) await Promise.allSettled([details.refetch(), client.invalidateQueries({ predicate: query => isBookingQuery(query.queryKey) })]);
     } catch (reason) { if (isCurrent()) { setError(t(appointmentRefusalKey(reason instanceof ApiError ? reason.code : undefined) ?? 'lifecycle.failure')); await details.refetch(); } }

@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Browser } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
 import { summaryText } from './business-setup-smoke.js';
+import { answerCancellation } from './cancellation-prompt';
 export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run, businessIds, identityIds }: { browser: Browser; webUrl: string; apiUrl: string; prisma: typeof Prisma; run: string; businessIds: string[]; identityIds: string[] }) {
   const business = await prisma.business.create({ data: { name: 'Agenda studio — סטודיו לייעוץ ושירות אישי', slug: `agenda-web-${run}`, timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED', publishedAt: new Date() } }); businessIds.push(business.id);
   const owner = await prisma.identity.create({ data: { email: `agenda-web-${run}@example.test`, preferredLocale: 'en' } }), customer = await prisma.identity.create({ data: { email: `agenda-customer-${run}@example.test` } }); identityIds.push(owner.id, customer.id);
@@ -124,11 +125,11 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     await agendaBlocks.getByRole('button', { name: 'Remove block', exact: true }).click(); await agendaBlocks.getByRole('button', { name: 'Confirm', exact: true }).click();
     await agendaBlocks.waitFor({ state: 'detached' }); assert.equal(await prisma.timeBlock.count({ where: { businessId: business.id } }), 0);
     await page.getByLabel('Agenda date', { exact: true }).filter({ visible: true }).fill(date); await firstCard.waitFor();
-    page.once('dialog', dialog => dialog.dismiss()); await firstCard.getByRole('button', { name: 'Cancel appointment', exact: true }).click(); assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: first.id } })).status, 'CONFIRMED');
+    await firstCard.getByRole('button', { name: 'Cancel appointment', exact: true }).click(); await answerCancellation(page, false); assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: first.id } })).status, 'CONFIRMED');
     const cancelUrl = `${apiUrl}/v1/provider/businesses/${business.id}/bookings/${first.id}/cancel`;
     await page.route(cancelUrl, route => route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":{"code":"UNAVAILABLE"}}' }));
-    page.once('dialog', dialog => dialog.accept()); await firstCard.getByRole('button', { name: 'Cancel appointment', exact: true }).click(); await firstCard.getByRole('alert').waitFor(); assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: first.id } })).status, 'CONFIRMED');
-    await page.unroute(cancelUrl); page.once('dialog', dialog => dialog.accept()); await firstCard.getByRole('button', { name: 'Cancel appointment', exact: true }).click(); await firstCard.getByText('Cancelled', { exact: true }).waitFor();
+    await firstCard.getByRole('button', { name: 'Cancel appointment', exact: true }).click(); await answerCancellation(page, true); await firstCard.getByRole('alert').waitFor(); assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: first.id } })).status, 'CONFIRMED');
+    await page.unroute(cancelUrl); await firstCard.getByRole('button', { name: 'Cancel appointment', exact: true }).click(); await answerCancellation(page, true); await firstCard.getByText('Cancelled', { exact: true }).waitFor();
     await page.goto(`${webUrl}/account`); const localeSaved = page.waitForResponse(response => response.url() === `${apiUrl}/api/account/preferences` && response.request().method() === 'PUT'); await page.getByTestId('language-he').click(); assert.equal((await localeSaved).status(), 200);
     await page.goto(`${webUrl}/provider/dashboard?businessId=${business.id}`); await page.getByLabel('תאריך ביומן', { exact: true }).fill(date); await page.getByRole('button', { name: 'תצוגה שבועית', exact: true }).click(); await page.getByText('יומן שבועי', { exact: true }).waitFor();
     assert.equal(await page.locator('html').getAttribute('dir'), 'rtl'); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);

@@ -24,6 +24,7 @@ import { rescheduleBooking, rescheduleInputSchema } from '../repositories/Bookin
 import { getBusinessAvailability } from '../repositories/availability.js';
 import { withBookingTransaction } from '../scheduling/booking-transaction.js';
 import { listCustomerBookings, listProviderBookings } from '../repositories/bookings.js';
+import { listCustomerHistory } from '../repositories/AppointmentHistory.service.js';
 import { blocksCovering } from '../scheduling/time-blocks.js';
 
 const activeStatuses = [BookingStatus.HELD, BookingStatus.CONFIRMED, BookingStatus.COMPLETED, BookingStatus.NO_SHOW];
@@ -241,6 +242,12 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
     const session = await authenticate(request);
     const { businessId } = z.strictObject({ businessId: z.string().min(1).max(256).optional() }).parse(request.query);
     return readUpcomingAppointment(session, businessId);
+  });
+
+  app.get('/v1/me/bookings/history', async request => {
+    const session = await authenticate(request);
+    const query = z.strictObject({ cursor: z.string().min(1).max(512).optional(), businessId: z.string().min(1).max(256).optional() }).parse(request.query);
+    return listCustomerHistory(session, query);
   });
 
   app.get('/v1/me/bookings', async (request) => {

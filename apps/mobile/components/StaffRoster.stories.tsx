@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { translate } from '@/src/i18n/messages';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -92,7 +92,8 @@ export const AddDialog: Story = { args: { locale: 'en' }, play: async ({ canvas,
   await userEvent.click(dialog.getByRole('button', { name: 'Add staff member' }));
   await expect(dialog.getByText('Enter a whole number from 1 to 100.')).toBeVisible();
   await userEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
-  await expect(within(canvasElement.ownerDocument.body).queryByTestId('staff-add-form')).toBeNull();
+  // The sheet slides away before it unmounts.
+  await waitFor(() => expect(within(canvasElement.ownerDocument.body).queryByTestId('staff-add-form')).toBeNull());
 } };
 export const EditGeneral: Story = { args: { locale: 'he' }, play: async ({ canvas }) => {
   const card = within(canvas.getByTestId('staff-card-dan'));

@@ -1,14 +1,17 @@
 import { useState } from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { bookingMonthCells } from '../src/lib/CompactBooking.utils';
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { CompactBookingControls } from './CompactBookingControls.component';
 import type { useCompactBooking } from '@/src/lib/CompactBooking.hook';
 import { en } from '@/src/i18n/messages';
 const controls: ReturnType<typeof useCompactBooking> = {
   direction: 'ltr', sheet: null, open: fn(), close: fn(), choices: [{ id: 'service', label: 'Consultation with a deliberately long service name', summary: '30 min · ₪120', selected: true }], chosen: { id: 'service', label: 'Consultation with a deliberately long service name', summary: '30 min · ₪120', selected: true }, selectService: fn(), month: '2026-10', monthTitle: 'October 2026', dateTitle: 'Tuesday, October 27, 2026', weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], cells: [], selectDate: fn(), previousMonth: fn(), nextMonth: fn(), canPreviousMonth: false, canNextMonth: true, calendarLoading: false, calendarError: false, retryCalendar: fn(), page: [{ id: 'staff:instant', label: '09:00 · Specialist' }], earlier: fn(), later: fn(), hasEarlier: false, hasLater: true, pageSummary: 'Times 1–6 of 12', nextDate: fn(), searching: false, searchNotice: '', canSearch: true,
 };
-const meta = { title: 'Booking/Compact controls', component: CompactBookingControls, args: { controls, t: key => en[key], disabled: false, date: '2026-10-27', selectedId: null, slotLoading: false, slotError: false, onRetrySlots: fn(), onSelectSlot: fn() } } satisfies Meta<typeof CompactBookingControls>;
+const meta = { title: 'Booking/Compact controls', component: CompactBookingControls, args: { controls, t: key => en[key], disabled: false, date: '2026-10-27', selectedId: null, slotLoading: false, slotError: false, onRetrySlots: fn(), onSelectSlot: fn() },
+  // The choice sheet keeps clear of the phone's home indicator, so it needs the insets an app root provides.
+  decorators: [Story => <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, bottom: 0, left: 0, right: 0 } }}><Story /></SafeAreaProvider>] } satisfies Meta<typeof CompactBookingControls>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Available: Story = { play: async ({ canvas, args }) => { await userEvent.click(canvas.getByRole('button', { name: '09:00 · Specialist' })); await expect(args.onSelectSlot).toHaveBeenCalledWith('staff:instant'); await expect(canvas.getByRole('button', { name: 'Earlier' })).toHaveAttribute('aria-disabled', 'true'); } };
@@ -45,5 +48,6 @@ export const InteractiveCalendar: Story = { render: () => <InteractiveFixture />
   trigger.focus(); await userEvent.keyboard('{Enter}');
   const body = within(canvasElement.ownerDocument.body);
   const day = body.getByTestId('booking-day-2026-10-29'); day.focus(); await userEvent.keyboard('{Enter}');
-  await expect(trigger).toHaveFocus(); await expect(trigger).toHaveAttribute('aria-label', expect.stringContaining('2026-10-29'));
+  // Focus returns to the trigger once the sheet has slid away and unmounted.
+  await waitFor(() => expect(trigger).toHaveFocus()); await expect(trigger).toHaveAttribute('aria-label', expect.stringContaining('2026-10-29'));
 } };

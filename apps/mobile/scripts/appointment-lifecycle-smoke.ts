@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import type { Browser } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
+import { answerCancellation } from './cancellation-prompt';
 export async function appointmentLifecycleSmoke({ browser, webUrl, apiUrl, prisma, run, businessIds, identityIds }: { browser: Browser; webUrl: string; apiUrl: string; prisma: typeof Prisma; run: string; businessIds: string[]; identityIds: string[] }) {
   const business = await prisma.business.create({ data: { name: `Lifecycle browser ${run.slice(0, 6)}`, slug: `lifecycle-web-${run}`, timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED', publishedAt: new Date() } }); businessIds.push(business.id);
   const owner = await prisma.identity.create({ data: { email: `lifecycle-owner-${run}@example.test`, preferredLocale: 'en' } }), customer = await prisma.identity.create({ data: { email: `lifecycle-customer-${run}@example.test`, preferredLocale: 'en' } }); identityIds.push(owner.id, customer.id);
@@ -38,37 +39,38 @@ export async function appointmentLifecycleSmoke({ browser, webUrl, apiUrl, prism
     const noShowCard = page.getByTestId(`agenda-booking-${noShow.id}`);
     await noShowCard.getByRole('button', { name: 'Mark no-show', exact: true }).click();
     await noShowCard.getByText('No-show', { exact: true }).waitFor();
-    page.once('dialog', dialog => dialog.accept());
     const cancelCard = page.getByTestId(`agenda-booking-${cancelled.id}`);
-    await cancelCard.getByRole('button', { name: 'Cancel appointment', exact: true }).click();
+    await cancelCard.getByRole('button', { name: 'Cancel appointment', exact: true }).click(); await answerCancellation(page, true);
     await cancelCard.getByText('Cancelled', { exact: true }).waitFor();
     await page.getByLabel('Agenda date', { exact: true }).fill(future);
     const futureCard = page.getByTestId(`agenda-booking-${scheduled.id}`); await futureCard.waitFor();
     assert.equal(await futureCard.getByRole('button', { name: 'Mark completed', exact: true }).count(), 0);
     const customerPage = await customerContext.newPage();
     await customerPage.goto(`${webUrl}/appointments`);
-    // Past appointments are behind a link, not on the page by default.
-    const showPast = (label: string) => customerPage.getByTestId('appointments-history-toggle').filter({ visible: true }).getByText(label, { exact: true });
+    // Past appointments have their own screen, behind a link; My appointments shows only what is ahead.
+    const openPast = async (label: string) => { await customerPage.getByTestId('appointments-history-link').filter({ visible: true }).getByText(label, { exact: true }).click(); await customerPage.waitForURL(`${webUrl}/appointments/history`); };
     assert.equal(await customerPage.getByRole('heading', { name: 'Appointment history', exact: true }).count(), 0);
-    await showPast('View past appointments').click();
+    // The scheduled appointment is an upcoming card, not a history entry; the status every upcoming card shares is not
+    // repeated on it, and its change history waits on its details screen rather than on the card.
+    const upcomingCard = customerPage.getByTestId(`active-booking-${scheduled.id}`);
+    await upcomingCard.getByRole('link').waitFor();
+    assert.equal(await upcomingCard.getByText('Scheduled', { exact: true }).count(), 0);
+    assert.equal(await upcomingCard.getByRole('button', { name: 'Show audit history', exact: true }).count(), 0);
+    await openPast('View past appointments');
     await customerPage.getByRole('heading', { name: 'Appointment history', exact: true }).waitFor();
     for (const [booking, status] of [[completed, 'Completed'], [noShow, 'No-show'], [cancelled, 'Cancelled']] as const) {
       const card = customerPage.getByTestId(`history-booking-${booking.id}`); await card.getByText(status, { exact: true }).waitFor();
       await card.getByText('Lifecycle consultation', { exact: true }).waitFor();
       assert.equal(await card.getByRole('button', { name: 'Mark completed', exact: true }).count(), 0);
     }
-    // The scheduled appointment is an upcoming card with its change history, not a history entry; the status every
-    // upcoming card shares is not repeated on it.
-    const upcomingCard = customerPage.getByTestId(`active-booking-${scheduled.id}`);
-    await upcomingCard.getByRole('button', { name: 'Show audit history', exact: true }).waitFor();
-    assert.equal(await upcomingCard.getByText('Scheduled', { exact: true }).count(), 0);
     assert.equal(await customerPage.getByTestId(`history-booking-${scheduled.id}`).count(), 0);
     const owned = customerPage.getByTestId(`history-booking-${completed.id}`);
     await owned.getByRole('button', { name: 'Show audit history', exact: true }).click();
     await owned.getByText('Business manager · Appointment finished', { exact: true }).waitFor();
-    await customerPage.reload(); await showPast('View past appointments').click(); await customerPage.getByTestId(`history-booking-${noShow.id}`).getByText('No-show', { exact: true }).waitFor();
+    // The history screen is its own address, so a reload stays on it.
+    await customerPage.reload(); await customerPage.getByTestId(`history-booking-${noShow.id}`).getByText('No-show', { exact: true }).waitFor();
     await customerPage.goto(`${webUrl}/account`); await customerPage.getByTestId('language-he').click();
-    await customerPage.goto(`${webUrl}/appointments`); await showPast('צפייה בהיסטוריית התורים').click(); await customerPage.getByRole('heading', { name: 'היסטוריית תורים', exact: true }).waitFor();
+    await customerPage.goto(`${webUrl}/appointments`); await openPast('צפייה בהיסטוריית התורים'); await customerPage.getByRole('heading', { name: 'היסטוריית תורים', exact: true }).waitFor();
     await customerPage.getByTestId(`history-booking-${completed.id}`).getByText('הושלם', { exact: true }).waitFor();
     assert.equal(await customerPage.locator('html').getAttribute('dir'), 'rtl');
     assert.equal(await prisma.savedProvider.count({ where: { identityId: customer.id } }), 0);

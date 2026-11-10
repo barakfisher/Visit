@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, fn, userEvent } from 'storybook/test';
+import { expect, fn, userEvent, waitFor } from 'storybook/test';
 import { ProviderHome } from './ProviderHome.component';
 import { translate, type MessageKey } from '../src/i18n/messages';
 const he = (key: MessageKey) => translate('he', key);
@@ -16,7 +16,12 @@ type Story = StoryObj<typeof meta>;
 
 export const WithNextAppointment: Story = { play: async ({ canvas, args }) => {
   await expect(canvas.getByRole('heading', { name: 'Dana Studio' })).toBeVisible();
-  await userEvent.click(canvas.getByRole('button', { name: new RegExp(he('providerHome.next')) })); await expect(args.next?.onOpen).toHaveBeenCalledOnce();
+  // The whole card is the link: a tap on its text lands on it.
+  const link = canvas.getByRole('link', { name: new RegExp(he('providerHome.next')) });
+  const landsOnLink = () => { const text = canvas.getByText(he('providerHome.next')).getBoundingClientRect(); return link.contains(link.ownerDocument.elementFromPoint(text.x + text.width / 2, text.y + text.height / 2)); };
+  // The card grows into place first (SmoothReveal), so the point is checked once it is there.
+  await waitFor(() => expect(landsOnLink()).toBe(true));
+  await userEvent.click(link); await expect(args.next?.onOpen).toHaveBeenCalledOnce();
   await userEvent.click(canvas.getByRole('button', { name: he('ui.reschedule') })); await expect(args.next?.onReschedule).toHaveBeenCalledOnce();
   await userEvent.click(canvas.getByRole('button', { name: new RegExp(`^${he('providerHome.book')}`) })); await expect(args.onBook).toHaveBeenCalledOnce();
   await userEvent.click(canvas.getByRole('button', { name: new RegExp(`^${he('providerHome.mine')}`) })); await expect(args.onMine).toHaveBeenCalledOnce();

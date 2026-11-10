@@ -1,6 +1,7 @@
 export const providerHomeEn = {
   'providerHome.next': 'Your next appointment',
   'providerHome.book': 'Book an appointment',
+  'providerHome.bookSummary': 'Pick a service and time',
   'providerHome.mine': 'My appointments here',
   'providerHome.mineCount.one': 'One upcoming appointment', 'providerHome.mineCount.two': '{count} upcoming appointments', 'providerHome.mineCount.other': '{count} upcoming appointments',
   'providerHome.mineNone': 'No upcoming appointments',
@@ -18,6 +19,7 @@ export const providerHomeEn = {
 export const providerHomeHe: Record<keyof typeof providerHomeEn, string> = {
   'providerHome.next': 'התור הבא שלך',
   'providerHome.book': 'קביעת תור',
+  'providerHome.bookSummary': 'בחירת שירות ושעה',
   'providerHome.mine': 'התורים שלי כאן',
   'providerHome.mineCount.one': 'תור קרוב אחד', 'providerHome.mineCount.two': 'שני תורים קרובים', 'providerHome.mineCount.other': '{count} תורים קרובים',
   'providerHome.mineNone': 'אין תורים קרובים',

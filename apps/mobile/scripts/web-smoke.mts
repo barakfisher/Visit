@@ -1,5 +1,6 @@
 import { manualBookingSmoke } from './manual-booking-smoke';
 import { openConfirmation, selectBookingDate, showBookingTime } from './booking-controls.utils';
+import { answerCancellation } from './cancellation-prompt';
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID, randomInt, createHash } from 'node:crypto';
@@ -283,6 +284,8 @@ try {
       // completion condition. Drain browser render frames after fulfillment.
       await providerPage.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
       assert.equal(await providerPage.getByText('QA consultation', { exact: true }).count(), 0);
+      // The sheet slides away before it unmounts.
+      await providerPage.getByTestId('service-form').waitFor({ state: 'detached' });
       assert.equal(await providerPage.getByTestId('service-form').count(), 0);
       assert.deepEqual(await providerPage.evaluate(async () => ({ caches: await caches.keys(), registrations: (await navigator.serviceWorker.getRegistrations()).length })), { caches: [], registrations: 0 });
       const storage = await providerPage.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }));
@@ -455,12 +458,10 @@ try {
     const currentBooking = page.locator(`[data-testid="active-booking-${hold.holdId}"]:visible`);
     await currentBooking.waitFor();
     await currentBooking.scrollIntoViewIfNeeded();
-    page.once('dialog', dialog => dialog.dismiss());
-    await currentBooking.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await currentBooking.getByRole('button', { name: 'Cancel', exact: true }).click(); await answerCancellation(page, false);
     assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: hold.holdId } })).status, 'CONFIRMED');
-    page.once('dialog', (dialog) => dialog.accept());
     const cancelled = page.waitForResponse((response) => response.url().endsWith(`/${hold.holdId}/cancel`) && response.status() === 200);
-    await currentBooking.getByRole('button', { name: 'Cancel', exact: true }).click(); await cancelled;
+    await currentBooking.getByRole('button', { name: 'Cancel', exact: true }).click(); await answerCancellation(page, true); await cancelled;
     assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: hold.holdId } })).status, 'CANCELLED');
     const emailContext = await browser.newContext({ viewport: { width: 390, height: 844 } }); contexts.push(emailContext);
     await emailContext.addInitScript(() => { if (!localStorage.getItem('visit.locale.v1.guest')) localStorage.setItem('visit.locale.v1.guest', 'en'); });

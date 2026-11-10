@@ -17,6 +17,7 @@ import { useLivePersonalUpdates } from '@/src/lib/LiveSignals.hook';
 import { AppNavigation } from '@/components/AppNavigation';
 import { AppFooter } from '@/components/AppFooter';
 import { AppToast } from '@/components/AppToast.component';
+import { CancellationPrompt } from '@/components/CancellationPrompt.component';
 import { AppLocaleProvider, useAppLocale } from '@/src/i18n/LocaleProvider';
 
 export {
@@ -99,7 +100,7 @@ function RootLayoutNav() {
           <Stack.Screen name="notifications" options={{ headerShown: false }} />
           <Stack.Screen name="discover" options={{ headerShown: false }} />
           <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-        </Stack><AppFooter /><AppToast /></SafeAreaView></View></LocaleProvider>
+        </Stack><AppFooter /><AppToast /><CancellationPrompt /></SafeAreaView></View></LocaleProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

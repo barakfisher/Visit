@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { AppText } from './AppText';
 import { ActionButton } from './ActionButton';
@@ -5,7 +6,8 @@ import { BackButton } from './BackButton.component';
 import { CalendarIcon, SmsIcon, WhatsappIcon } from './AppointmentActionIcons.component';
 import { IconButton } from './IconButton.component';
 import type { BookingDetailsView } from '@/src/types/BookingDetails.types';
-export function BookingDetails(view: BookingDetailsView) {
+/** `history` is the appointment's change history, built by the route because Storybook cannot bundle its data hook. */
+export function BookingDetails({ history, ...view }: BookingDetailsView & { history?: ReactNode }) {
   const booking = view.booking;
   return <ScrollView testID="booking-confirmation" className="flex-1 bg-canvas" contentContainerClassName="mx-auto w-full max-w-2xl gap-4 px-5 py-3 md:px-8">
     <BackButton label={view.backLabel} onPress={view.onBack} />
@@ -28,6 +30,7 @@ export function BookingDetails(view: BookingDetailsView) {
       {view.notificationNote ? <AppText className="text-sm text-muted">{view.notificationNote}</AppText> : null}
       {booking.actions.canReschedule ? <ActionButton secondary label={view.rescheduleLabel} disabled={view.busy} onPress={view.onReschedule} /> : null}
       {booking.actions.canCancel ? <ActionButton secondary label={view.cancelLabel} busy={view.busy} disabled={view.exporting} onPress={view.onCancel} /> : null}
+      {history}
     </View> : null}
   </ScrollView>;
 }
