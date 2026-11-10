@@ -12,7 +12,7 @@ import type { ActiveBooking } from '../types/flows';
 
 /** The customer's confirmed appointments ahead, with the cancel and reschedule both My appointments and a business page offer. */
 export function useActiveAppointments() {
-  const { t, locale } = useAppLocale(), client = useQueryClient();
+  const { t } = useAppLocale(), client = useQueryClient();
   const identity = useAuthStore(state => state.identityId), contextVersion = useAuthStore(state => state.contextVersion);
   // A failed cancel belongs to the card it came from, so it shows next to that card's button.
   const [error, setError] = useState<{ bookingId: string; message: string } | null>(null);
@@ -27,7 +27,7 @@ export function useActiveAppointments() {
     const scope = { identityId: identity, contextVersion, activeBusinessId: useAuthStore.getState().activeBusinessId };
     pending.current = true; setBusyBookingId(booking.id);
     try {
-      if (!await confirmAppointmentCancellation(locale)) return;
+      if (!await confirmAppointmentCancellation()) return;
       if (!canContinueAppointmentAction(scope, useAuthStore.getState(), mounted.current)) return;
       setError(null);
       await apiRequest(`/v1/bookings/${encodeURIComponent(booking.id)}/cancel`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expectedRevision: current.revision }) });

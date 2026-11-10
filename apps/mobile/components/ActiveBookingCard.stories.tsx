@@ -18,6 +18,11 @@ export const Upcoming: Story = { args: { onReschedule: fn(), onCancel: fn() }, p
 // The summary opens the appointment's details; the actions stay separate controls beside it, never inside it.
 export const OpensDetails: Story = { args: { onOpen: fn(), onReschedule: fn(), onCancel: fn() }, play: async ({ canvas, args }) => {
   const link = canvas.getByRole('link', { name: /Initial consultation/ });
+  // The date is a sentence in the summary, not a control of its own, and the link says it.
+  await expect(link).toHaveAccessibleName(expect.stringContaining(translate('en', 'ui.when', { date: 'Tuesday, October 27', time: '10:30' })));
+  // The whole card is the link: a tap on the date's text, away from the buttons, lands on it.
+  const date = canvas.getByText(translate('en', 'ui.when', { date: 'Tuesday, October 27', time: '10:30' })).getBoundingClientRect();
+  await expect(link.contains(link.ownerDocument.elementFromPoint(date.x + date.width / 2, date.y + date.height / 2))).toBe(true);
   await expect(link).not.toContainElement(canvas.getByRole('button', { name: 'Cancel' }));
   await userEvent.click(link); await expect(args.onOpen).toHaveBeenCalledOnce();
   await expect(args.onCancel).not.toHaveBeenCalled();
@@ -27,12 +32,11 @@ export const PendingHomeActions: Story = { args: { actionsPending: true }, play:
 
 const booking = { id: 'one', startsAt: '2026-11-02T10:30:00Z', service: { id: 'service', name: 'Consultation' }, business: { id: 'business', name: 'North Studio', timezone: 'UTC' }, staff: { displayName: 'Alex' } };
 const stackedBelow = (upper: HTMLElement, lower: HTMLElement) => lower.getBoundingClientRect().top >= upper.getBoundingClientRect().bottom;
-export const MultipleBookings: Story = { args: { onReschedule: fn() }, render: (args) => <ActiveBookings bookings={[booking, { ...booking, id: 'two', service: { id: 'second', name: 'Follow-up visit' } }]} onReschedule={args.onReschedule} footer={item => <span>{`footer ${item.id}`}</span>}/>, play: async ({ canvas, args }) => {
+export const MultipleBookings: Story = { args: { onReschedule: fn() }, render: (args) => <ActiveBookings bookings={[booking, { ...booking, id: 'two', service: { id: 'second', name: 'Follow-up visit' } }]} onReschedule={args.onReschedule}/>, play: async ({ canvas, args }) => {
   const first = canvas.getByTestId('active-booking-one'), second = canvas.getByTestId('active-booking-two');
   await expect(stackedBelow(first, second)).toBe(true);
   await expect(canvas.getAllByText(translate('en', 'ui.nextVisit'))).toHaveLength(1);
   await expect(first).toHaveTextContent(translate('en', 'ui.nextVisit'));
-  await expect(second).toHaveTextContent('footer two');
   await userEvent.click(canvas.getAllByRole('button', { name: 'Reschedule' })[1]!); await expect(args.onReschedule).toHaveBeenCalledOnce();
 } };
 export const HebrewMultipleBookings: Story = { globals: { locale: 'he' }, render: () => <ActiveBookings bookings={[booking, { ...booking, id: 'two' }, { ...booking, id: 'three' }]} onReschedule={fn()} onCancel={fn()}/>, play: async ({ canvas }) => {

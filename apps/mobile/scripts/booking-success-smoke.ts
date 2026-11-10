@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import type { Browser } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
 import { translate } from '../src/i18n/messages';
+import { answerCancellation } from './cancellation-prompt';
 
 export async function bookingSuccessSmoke({ browser, webUrl, apiUrl, prisma, run, businessIds, identityIds }: { browser: Browser; webUrl: string; apiUrl: string; prisma: typeof Prisma; run: string; businessIds: string[]; identityIds: string[] }) {
   const business = await prisma.business.create({ data: { name: `Success studio ${run.slice(0, 6)}`, slug: `success-web-${run}`, timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED', publishedAt: new Date() } });
@@ -75,7 +76,7 @@ export async function bookingSuccessSmoke({ browser, webUrl, apiUrl, prisma, run
     await page.goto(`${webUrl}/confirmation/${focusBooking.id}`);
     await detailsView.getByRole('button', { name: 'Add to calendar (.ics)', exact: true }).waitFor();
     await page.getByTestId('app-footer').getByRole('button', { name: 'My appointments', exact: true }).click();
-    await page.getByTestId('appointments-history-toggle').filter({ visible: true }).waitFor();
+    await page.getByTestId('appointments-history-link').filter({ visible: true }).waitFor();
     const cancelledWhileAway = await context.request.post(`${apiUrl}/v1/bookings/${focusBooking.id}/cancel`, { headers: { origin: webUrl }, data: { expectedRevision: focusBooking.revision } });
     assert.equal(cancelledWhileAway.status(), 200, await cancelledWhileAway.text());
     const focusDetailsUrl = `${apiUrl}/v1/bookings/${focusBooking.id}/details`;
@@ -100,8 +101,7 @@ export async function bookingSuccessSmoke({ browser, webUrl, apiUrl, prisma, run
     await detailsView.getByRole('button', { name: 'Back', exact: true }).click(); await page.waitForURL(`${webUrl}/`);
     await page.goto(`${webUrl}/appointment/${owned.id}`);
     await detailsView.getByRole('button', { name: 'Cancel appointment', exact: true }).waitFor();
-    page.once('dialog', dialog => dialog.accept());
-    await detailsView.getByRole('button', { name: 'Cancel appointment', exact: true }).click();
+    await detailsView.getByRole('button', { name: 'Cancel appointment', exact: true }).click(); await answerCancellation(page, true);
     await detailsView.getByText('Cancelled', { exact: true }).waitFor();
     await page.goto(`${webUrl}/confirmation/${owned.id}`);
     await detailsView.getByText('Cancelled', { exact: true }).waitFor();

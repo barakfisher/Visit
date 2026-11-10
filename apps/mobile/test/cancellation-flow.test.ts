@@ -1,20 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { translate, type Locale } from '../src/i18n/messages';
-import { appointmentCancellationCopy, webCancellationPrompt } from '../src/i18n/cancellationConfirm';
+import { appointmentCancellationCopy } from '../src/i18n/cancellationConfirm';
 import { MINUTES_PER_HOUR } from '../src/i18n/cancellationCutoff';
 import { appointmentCancelFailureKey, appointmentLockedKey, bookingWindowWarningKey, CANCELLATION_CUTOFF, RESCHEDULE_CUTOFF } from '../src/lib/AppointmentLifecycle.utils';
 
 const locales: Locale[] = ['he', 'en'];
 const MINUTE_MS = 60000, DAY_MINUTES = 24 * MINUTES_PER_HOUR;
 
-test('the cancel confirmation speaks the screen language, title and message together on the web', () => {
+test('the cancel confirmation speaks the screen language', () => {
   for (const locale of locales) {
     const copy = appointmentCancellationCopy(locale);
     assert.deepEqual(copy, { title: translate(locale, 'upcoming.cancelTitle'), message: translate(locale, 'upcoming.cancelMessage'), keep: translate(locale, 'upcoming.keep'), cancel: translate(locale, 'details.cancel') });
-    assert.equal(webCancellationPrompt(locale), `${copy.title}\n${copy.message}`);
   }
-  assert.notEqual(webCancellationPrompt('he'), webCancellationPrompt('en'));
+  assert.notDeepEqual(appointmentCancellationCopy('he'), appointmentCancellationCopy('en'));
 });
 
 test('an Appointments cancel failure says why for a cutoff and falls back to the general failure otherwise', () => {

@@ -4,6 +4,7 @@ import { tokens } from '@/src/design/tokens';
 import { AppText } from './AppText';
 import { ActionButton } from './ActionButton';
 import { Control } from './Control';
+import { CardLink } from './CardLink.component';
 import { DirectionalChevron } from './DirectionalChevron.component';
 import { CalendarIcon, SmsIcon } from './AppointmentActionIcons.component';
 import { InfoIcon, PlusIcon } from './NavigationIcons.component';
@@ -22,7 +23,7 @@ export function ProviderHome(view: ProviderHomeView) {
     {view.state === 'error' ? <ActionButton secondary label={t('common.retry')} onPress={view.onRetry} /> : null}
   </ScrollView>;
   const tiles: Tile[] = [
-    { key: 'book', title: t('providerHome.book'), summary: '', Icon: PlusIcon, onPress: view.onBook },
+    { key: 'book', title: t('providerHome.book'), summary: t('providerHome.bookSummary'), Icon: PlusIcon, onPress: view.onBook },
     ...(view.appointmentsState === 'hidden' ? [] : [{ key: 'mine', title: t('providerHome.mine'), summary: view.appointmentsState === 'ready' ? view.mineSummary : '', Icon: CalendarIcon, onPress: view.onMine }]),
     ...(view.contacts ? [{ key: 'contact', title: t('providerHome.contact'), summary: view.contactSummary, Icon: SmsIcon, onPress: () => view.onPanel('contact'), panel: 'contact' as const }] : []),
     { key: 'about', title: t('providerHome.about'), summary: t('providerHome.aboutSummary'), Icon: InfoIcon, onPress: () => view.onPanel('about'), panel: 'about' },
@@ -35,23 +36,23 @@ export function ProviderHome(view: ProviderHomeView) {
     </View>
     {view.appointmentsState === 'error' ? <View className="gap-3 rounded-card border border-line bg-surface p-4"><AppText accessibilityRole="alert">{t('providerHome.appointmentsFailed')}</AppText><ActionButton secondary label={t('common.retry')} onPress={view.onRetryAppointments} /></View> : null}
     {/* The appointments arrive after the business; the card grows into place instead of pushing the tiles down in one jump. */}
-    <View className="-mt-5"><SmoothReveal>{next ? <View className="pt-5"><View testID={`provider-next-${next.id}`} className="gap-3 rounded-card border border-line bg-surface p-4">
-      {/* A sibling of the buttons, not their parent: a button inside a button is invalid on web. */}
-      <Control accessibilityRole="button" onPress={next.onOpen} className="flex-row items-center gap-3 rounded-control active:bg-brand-soft">
+    <View className="-mt-5"><SmoothReveal>{next ? <View className="pt-5"><CardLink testID={`provider-next-${next.id}`} label={[t('providerHome.next'), next.when, next.what].join(', ')} onPress={next.onOpen} contentClassName="gap-3 p-4">
+      {/* The whole card opens the appointment; its buttons sit above that link, not inside it (a button inside a button is invalid on web). */}
+      <CardLink.Passive hidden className="flex-row items-center gap-3">
         <View className="flex-1 gap-0.5">
           <AppText className="text-sm font-semibold text-brand">{t('providerHome.next')}</AppText>
           <AppText className="text-lg font-semibold text-ink">{next.when}</AppText>
           <AppText className="text-sm text-body">{next.what}</AppText>
         </View>
         <DirectionalChevron pointing="forward" color={tokens.color.muted} />
-      </Control>
+      </CardLink.Passive>
       {next.onReschedule || next.onCancel ? <View className="flex-row gap-3">
         {next.onReschedule ? <View className="flex-1"><ActionButton secondary label={t('ui.reschedule')} disabled={next.busy} onPress={next.onReschedule} /></View> : null}
         {next.onCancel ? <View className="flex-1"><ActionButton secondary label={t('ui.cancel')} busy={next.busy} onPress={next.onCancel} /></View> : null}
       </View> : null}
-      {next.note ? <AppText className="text-sm text-muted">{next.note}</AppText> : null}
-      {next.error ? <AppText accessibilityRole="alert" accessibilityLiveRegion="assertive" className="rounded-control bg-red-50 p-3 text-danger">{next.error}</AppText> : null}
-    </View></View> : null}</SmoothReveal></View>
+      {next.note ? <CardLink.Passive><AppText className="text-sm text-muted">{next.note}</AppText></CardLink.Passive> : null}
+      {next.error ? <CardLink.Passive><AppText accessibilityRole="alert" accessibilityLiveRegion="assertive" className="rounded-control bg-red-50 p-3 text-danger">{next.error}</AppText></CardLink.Passive> : null}
+    </CardLink></View> : null}</SmoothReveal></View>
     <View className="gap-3">
       {/* Rows of two at every width; the spacer keeps a lone last tile the same width as the others. */}
       {pairs(tiles).map(([first, second]) => <View key={first.key} className="flex-row gap-3">

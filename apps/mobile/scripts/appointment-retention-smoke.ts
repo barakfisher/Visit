@@ -5,7 +5,8 @@ import type { Browser, Locator, Page } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
 import type { redis as Redis } from '../../api/src/infra/redis.js';
 import { translate, type Locale } from '../src/i18n/messages';
-import { webCancellationPrompt } from '../src/i18n/cancellationConfirm';
+import { appointmentCancellationCopy } from '../src/i18n/cancellationConfirm';
+import { answerCancellation } from './cancellation-prompt';
 import { SETUP_SERVICE } from './business-setup-smoke';
 import { showBookingTime } from './booking-controls.utils';
 import { CANCELLATION_CUTOFF, RESCHEDULE_CUTOFF } from '../src/lib/AppointmentLifecycle.utils';
@@ -88,14 +89,14 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     assert.equal(await prisma.booking.count({ where: { businessId: business.businessId, customerId: owner.id, status: 'CONFIRMED' } }), 1);
     return row;
   }
-  // window.confirm on web, in the customer's language; the app cancels only after the customer accepts it.
+  // The cancellation sheet, in the customer's language; the app cancels only after the customer confirms in it.
   async function cancelWith(page: Page, button: ReturnType<Page['getByRole']>, bookingId: string, locale: Locale) {
-    let prompt = '';
-    page.once('dialog', dialog => { prompt = dialog.message(); void dialog.accept(); });
     const reply = cancelResponse(page, bookingId);
     await button.click();
+    const prompt = await answerCancellation(page, true, locale);
     const response = await reply;
-    assert.equal(prompt, webCancellationPrompt(locale));
+    const copy = appointmentCancellationCopy(locale);
+    assert.ok(prompt.includes(copy.title) && prompt.includes(copy.message), `the cancel sheet said: ${prompt}`);
     return response;
   }
   // The provider's agenda for one date: which appointments it lists and the day's count and revenue tiles.
@@ -185,22 +186,24 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     await homeCard(he.page, h1).waitFor();
     assert.equal(await homeCard(he.page, h2).count(), 0);
     // On a narrow phone the Appointments page stacks the upcoming cards whole, labels only the first as the next visit,
-    // links each summary to its details, and does not list them again under the past appointments it shows on request.
+    // links each card to its details, and the past appointments screen does not list them again.
     for (const [owner, ids, locale] of [[he, [h1, h2], 'he'], [en, [e1], 'en']] as const) {
       const page = await newPage(owner.context); await page.setViewportSize(NARROW_PHONE);
       await page.goto(`${webUrl}/appointments`);
       const cards = ids.map(id => homeCard(page, id)); for (const card of cards) await card.waitFor();
-      await page.getByTestId('appointments-history-toggle').filter({ visible: true }).click();
-      await page.getByRole('heading', { name: owner.t('lifecycle.history'), exact: true }).waitFor();
-      await page.getByText(owner.t('common.loading'), { exact: true }).filter({ visible: true }).waitFor({ state: 'detached' }); // history has settled
       const boxes = await Promise.all(cards.map(card => card.boundingBox()));
       for (const box of boxes) assert.ok(box && box.x >= 0 && box.x + box.width <= NARROW_PHONE.width, `a card leaves the screen: ${JSON.stringify(box)}`);
       for (let index = 1; index < boxes.length; index++) assert.ok(boxes[index]!.y >= boxes[index - 1]!.y + boxes[index - 1]!.height, 'cards are not stacked');
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'the page scrolls sideways');
       assert.equal(await page.getByText(owner.t('ui.nextVisit'), { exact: true }).filter({ visible: true }).count(), 1);
       assert.equal(await cards[0]!.getByText(owner.t('ui.nextVisit'), { exact: true }).count(), 1);
-      for (const id of ids) { await homeCard(page, id).getByRole('link').waitFor(); assert.equal(await page.getByTestId(`history-booking-${id}`).count(), 0); }
+      for (const id of ids) await homeCard(page, id).getByRole('link').waitFor();
       await page.screenshot({ path: path.join(evidence, `appointments-upcoming-${locale}-narrow.png`), fullPage: true });
+      // The past appointments screen does not list them again.
+      await page.getByTestId('appointments-history-link').filter({ visible: true }).click();
+      await page.getByRole('heading', { name: owner.t('lifecycle.history'), exact: true }).waitFor();
+      await page.getByText(owner.t('common.loading'), { exact: true }).filter({ visible: true }).waitFor({ state: 'detached' }); // history has settled
+      for (const id of ids) assert.equal(await page.getByTestId(`history-booking-${id}`).count(), 0);
       await page.close();
     }
     await he.page.goto(`${webUrl}/appointment/${h2}`);
@@ -348,8 +351,9 @@ export async function appointmentRetentionSmoke(deps: Deps) {
       await listCard.getByRole('alert').filter({ hasText: owner.t('lifecycle.cancelCutoff') }).waitFor();
       // The refetched card stops offering changes the server refuses, and says so.
       await listCard.getByText(owner.t('lifecycle.lockedBoth'), { exact: true }).waitFor();
-      // Its only button left is the change history, which never changes the appointment.
-      assert.deepEqual((await listCard.getByRole('button').allInnerTexts()).map(text => text.trim()), [owner.t('lifecycle.show')]);
+      // It has no buttons left: the change history lives on the details screen, which its summary link still opens.
+      assert.deepEqual((await listCard.getByRole('button').allInnerTexts()).map(text => text.trim()), []);
+      await listCard.getByRole('link').waitFor();
       await listPage.screenshot({ path: path.join(evidence, `cutoff-appointments-refused-${locale}-mobile.png`), fullPage: true });
       const moveRefused = rescheduleResponse(move, id);
       await rescheduleButton(owner, move).click();

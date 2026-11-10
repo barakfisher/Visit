@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CALENDAR_MIN_WIDTH, compactBookingStyles as styles } from './CompactBookingControls.styles';
-import { ActivityIndicator, Modal, Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
+import { FormDialog } from './FormDialog';
 import { AppText } from './AppText';
 import { ActionButton } from './ActionButton';
 import { SmoothHeight } from './SmoothHeight.component';
@@ -26,10 +27,8 @@ export function CompactBookingControls({ controls: c, t, disabled, date, selecte
       </>}
       {c.searchNotice ? <AppText role="status">{c.searchNotice}</AppText> : null}
     </View> : null}
-    <Modal transparent visible={c.sheet !== null} animationType="none" accessibilityLabel={t(c.sheet === 'service' ? 'compact.chooseService' : 'compact.chooseDate')} onRequestClose={c.close}>
-      <View style={[styles.overlay, { direction: c.direction }]}>
-        <ScrollView accessibilityViewIsModal style={styles.panel} contentContainerStyle={styles.panelContent}>
-          <AppText accessibilityRole="header" className="text-xl font-bold text-ink">{t(c.sheet === 'service' ? 'compact.chooseService' : 'compact.chooseDate')}</AppText>
+    {/* The same sheet as every other choice over a screen: it slides in, and the backdrop closes it. */}
+    <FormDialog testID="booking-choice-sheet" title={t(c.sheet === 'service' ? 'compact.chooseService' : 'compact.chooseDate')} open={c.sheet !== null} onClose={c.close}>
           <ActionButton secondary label={t('compact.close')} onPress={c.close} />
           {c.sheet === 'service' ? <ScrollView contentContainerStyle={styles.choices}>{c.choices.map(choice => <Pressable key={choice.id} accessibilityRole="button" accessibilityState={{ selected: choice.selected }} aria-pressed={choice.selected} onPress={() => c.selectService(choice.id)} className={`min-h-14 gap-1 rounded-control border px-4 py-3 ${choice.selected ? 'border-brand bg-brand-soft' : 'border-line'}`}><AppText className="font-semibold text-ink">{choice.label}</AppText><AppText className="text-sm text-body">{choice.summary}</AppText></Pressable>)}</ScrollView> : <>
             <View className="flex-row items-center gap-2"><View className="flex-1"><ActionButton secondary label={t('compact.previousMonth')} disabled={c.calendarLoading || !c.canPreviousMonth} onPress={c.previousMonth} /></View><AppText testID="booking-calendar-month" accessibilityLabel={c.month} className="flex-1 text-center font-semibold text-ink">{c.monthTitle}</AppText><View className="flex-1"><ActionButton secondary label={t('compact.nextMonth')} disabled={c.calendarLoading || !c.canNextMonth} onPress={c.nextMonth} /></View></View>
@@ -40,8 +39,6 @@ export function CompactBookingControls({ controls: c, t, disabled, date, selecte
             </View></ScrollView></View>}
             <AppText className="text-sm text-muted">{t('compact.calendarHelp')}</AppText>
           </>}
-        </ScrollView>
-      </View>
-    </Modal>
+    </FormDialog>
   </View>;
 }

@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Browser } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
 import { openConfirmation, selectBookingDate, showBookingTime } from './booking-controls.utils';
+import { answerCancellation } from './cancellation-prompt';
 export async function upcomingAppointmentsSmoke({ browser, webUrl, apiUrl, prisma, run, businessIds, identityIds }: { browser: Browser; webUrl: string; apiUrl: string; prisma: typeof Prisma; run: string; businessIds: string[]; identityIds: string[] }) {
   const business = await prisma.business.create({ data: { name: 'Upcoming studio with a long accessible business name — סטודיו לפגישות ייעוץ ושירות אישי', slug: `upcoming-${run}`, timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED', publishedAt: new Date() } }); businessIds.push(business.id);
   const customer = await prisma.identity.create({ data: { email: `upcoming-${run}@example.test`, preferredLocale: 'en' } }), foreign = await prisma.identity.create({ data: { email: `upcoming-foreign-${run}@example.test` } }); identityIds.push(customer.id, foreign.id);
@@ -46,7 +47,7 @@ export async function upcomingAppointmentsSmoke({ browser, webUrl, apiUrl, prism
     // An upcoming appointment is listed once, with the upcoming cards, and not again under history.
     // Its summary is the link to its details.
     await page.getByTestId(`active-booking-${third.id}`).filter({ visible: true }).getByRole('link').waitFor();
-    await page.getByTestId('appointments-history-toggle').filter({ visible: true }).click();
+    await page.getByTestId('appointments-history-link').filter({ visible: true }).click(); await page.waitForURL(`${webUrl}/appointments/history`);
     await page.getByRole('heading', { name: 'Appointment history', exact: true }).waitFor();
     await page.getByText('Loading…', { exact: true }).filter({ visible: true }).waitFor({ state: 'detached' });
     assert.equal(await page.getByTestId(`history-booking-${third.id}`).count(), 0);
@@ -69,17 +70,17 @@ export async function upcomingAppointmentsSmoke({ browser, webUrl, apiUrl, prism
     // Cancelling starts from the card's details screen: declined, failed, then pending and successful.
     await secondCard.click(); await page.waitForURL(`${webUrl}/appointment/${second.id}`);
     const cancelButton = page.getByRole('button', { name: 'Cancel appointment', exact: true }).filter({ visible: true });
-    page.once('dialog', dialog => dialog.dismiss()); await cancelButton.click();
+    await cancelButton.click(); await answerCancellation(page, false);
     assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: second.id } })).status, 'CONFIRMED');
     const cancelUrl = `${apiUrl}/v1/bookings/${second.id}/cancel`;
     await page.route(cancelUrl, route => route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":{"code":"UNAVAILABLE"}}' }));
-    page.once('dialog', dialog => dialog.accept()); await cancelButton.click();
+    await cancelButton.click(); await answerCancellation(page, true);
     await page.getByRole('alert').filter({ visible: true }).first().waitFor(); assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: second.id } })).status, 'CONFIRMED');
     await page.unroute(cancelUrl);
     const cancelGate = new Promise<void>(resolve => { releaseCancel = resolve; });
     await page.route(cancelUrl, async route => { const response = await route.fetch(); await cancelGate; await route.fulfill({ response }); });
     const cancelled = page.waitForResponse(cancelUrl);
-    page.once('dialog', dialog => dialog.accept()); await cancelButton.click();
+    await cancelButton.click(); await answerCancellation(page, true);
     assert.equal(await cancelButton.isDisabled(), true);
     releaseCancel?.(); await cancelled; await page.unroute(cancelUrl);
     await page.goto(webUrl); const thirdCard = page.getByTestId(`active-booking-${third.id}`); await thirdCard.waitFor();

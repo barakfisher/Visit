@@ -16,7 +16,7 @@ export function useAppFooter(): FooterTab[] | null {
   if (!identity || footerHidden(pathname)) return null;
   if (!providerMode) return [
     { key: 'home', label: t('nav.home'), active: pathname === '/', onPress: () => router.dismissTo('/') },
-    { key: 'appointments', label: t('nav.appointments'), active: pathname === '/appointments', onPress: () => router.navigate('/appointments') },
+    { key: 'appointments', label: t('nav.appointments'), active: pathname === '/appointments' || pathname.startsWith('/appointments/'), onPress: () => router.navigate('/appointments') },
   ];
   if (!business) return null;
   // Back to the agenda in the stack rather than piling up another one; when none is there this opens it.
