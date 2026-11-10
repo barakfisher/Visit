@@ -1,4 +1,4 @@
-# Visit handoff — 2026-11-10, ended appointments count as attended, and past cards open their changes
+# Visit handoff — 2026-11-10, ended appointments count as attended, and past cards open their changes (PR #55)
 
 Supersedes `2026-11-10-appointments-cards-history.md` for current state. Its lessons and debt still hold unless corrected below.
 
