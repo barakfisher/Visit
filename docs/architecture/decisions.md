@@ -506,6 +506,8 @@ Second review on Android, same day:
 
 ## Profile: a contact phone, the admin card last, and a sign-out button — 2026-11-10
 
+PR #56.
+
 The user asked for three changes to the Account screen: the system administration card at the bottom, sign-out as a button with an icon, and a place to enter a phone number. They chose the phone options: unverified, and seen only by its owner. The sign-out style was a recommendation they did not overrule; they have not yet seen it. Phone and email verification come after the current round of UI fixes.
 
 - **Choice: the profile phone is a new column, `Identity.contactPhone`, unverified and seen only by its owner** (`PUT /api/account/contact-phone`, returned by `/v1/me`). It is not a sign-in method. It does not satisfy a business's verified-phone requirement, and the booking contact trigger never reads it, so businesses never receive it. *Rejected:* writing it into `Identity.phone` without a code. That column is unique and is a sign-in method, so whoever types a number first would block its real owner from adding it once SMS exists. *Rejected:* waiting for SMS verification, because SMS is off in the MVP. *Rejected for now:* sending it to the businesses the customer books with. Today a business receives only verified contacts, and the database enforces that. An unverified number would reach a business with nothing to say whether it is right.

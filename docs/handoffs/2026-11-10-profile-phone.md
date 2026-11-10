@@ -1,10 +1,10 @@
-# Visit handoff — 2026-11-10, a contact phone on the profile, the admin card last, and a sign-out button
+# Visit handoff — 2026-11-10, a contact phone on the profile, the admin card last, and a sign-out button (PR #56)
 
 Supersedes `2026-11-10-appointments-cards-history.md` for current state. Its lessons and debt still hold unless corrected below. This work was done alongside the past-outcomes work (PR #55) on its own branch. Whichever merges second should check this file and `2026-11-10-past-outcomes.md` together.
 
 ## Authorization
 
-The user's global working agreement governs. The user asked for the three Account changes, chose an unverified phone seen only by its owner, and chose a separate worktree. The sign-out style was a recommendation they did not overrule. They have not seen it yet.
+The user's global working agreement governs. The user asked for the three Account changes, chose an unverified phone seen only by its owner, and chose a separate worktree, and asked for the PR (#56); merging was not asked for. The sign-out style was a recommendation they did not overrule. They have not seen it yet.
 
 ## Where things stand
 
