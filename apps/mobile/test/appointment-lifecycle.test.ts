@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { appointmentOutcomeDelay, appointmentRefusalKey, bookingLoadRefusalKey, bookingRefusalKey, canContinueAppointmentAction, canRecordAppointmentOutcome, CANCELLATION_CUTOFF, isPassingBookingRefusal, RESCHEDULE_CUTOFF } from '../src/lib/AppointmentLifecycle.utils';
+import { appointmentOutcomeDelay, appointmentRefusalKey, bookingLoadRefusalKey, bookingRefusalKey, canContinueAppointmentAction, canMarkNoShow, CANCELLATION_CUTOFF, isPassingBookingRefusal, RESCHEDULE_CUTOFF } from '../src/lib/AppointmentLifecycle.utils';
 import { translate } from '../src/i18n/messages';
 import type { AppointmentActionScope, LifecycleAppointment } from '../src/types/AppointmentLifecycle.types';
 test('only a time that is gone may fade away; a cutoff, a contact requirement or an uncertain result stays on screen', () => {
@@ -11,28 +11,34 @@ test('only a time that is gone may fade away; a cutoff, a contact requirement or
 const booking: LifecycleAppointment = { id: 'booking', status: 'CONFIRMED', revision: 0, startsAt: '2026-10-26T07:00:00Z', endsAt: '2026-10-26T07:30:00Z' };
 test('outcome controls require a scheduled appointment that has ended at the exact absolute instant', () => {
   const end = Date.parse(booking.endsAt);
-  assert.equal(canRecordAppointmentOutcome(booking, end - 1), false);
-  assert.equal(canRecordAppointmentOutcome(booking, end), true);
-  assert.equal(canRecordAppointmentOutcome(booking, end + 1), true);
-  for (const status of ['CANCELLED', 'COMPLETED', 'NO_SHOW'] as const) assert.equal(canRecordAppointmentOutcome({ ...booking, status }, end + 1), false);
+  assert.equal(canMarkNoShow(booking, end - 1), false);
+  assert.equal(canMarkNoShow(booking, end), true);
+  assert.equal(canMarkNoShow(booking, end + 1), true);
+  for (const status of ['CANCELLED', 'COMPLETED', 'NO_SHOW'] as const) assert.equal(canMarkNoShow({ ...booking, status }, end + 1), false);
+});
+test('the server can keep a no-show open on an appointment it already reads as completed', () => {
+  const end = Date.parse(booking.endsAt);
+  assert.equal(canMarkNoShow({ ...booking, status: 'COMPLETED', canMarkNoShow: true }, end + 1), true);
+  assert.equal(canMarkNoShow({ ...booking, status: 'COMPLETED', canMarkNoShow: false }, end + 1), false);
+  assert.equal(canMarkNoShow({ ...booking, status: 'NO_SHOW', canMarkNoShow: false }, end + 1), false);
 });
 test('invalid appointment or clock boundaries never expose outcome actions', () => {
-  assert.equal(canRecordAppointmentOutcome({ ...booking, endsAt: '' }), false);
-  assert.equal(canRecordAppointmentOutcome({ ...booking, endsAt: 'invalid' }), false);
-  assert.equal(canRecordAppointmentOutcome(booking, Number.NaN), false);
-  assert.equal(canRecordAppointmentOutcome(booking, Number.POSITIVE_INFINITY), false);
+  assert.equal(canMarkNoShow({ ...booking, endsAt: '' }), false);
+  assert.equal(canMarkNoShow({ ...booking, endsAt: 'invalid' }), false);
+  assert.equal(canMarkNoShow(booking, Number.NaN), false);
+  assert.equal(canMarkNoShow(booking, Number.POSITIVE_INFINITY), false);
 });
 test('outcome eligibility compares instants across offsets and leaves input unchanged', () => {
   const offsetBooking = { ...booking, endsAt: '2026-10-26T09:30:00+02:00' };
   const original = { ...offsetBooking };
-  assert.equal(canRecordAppointmentOutcome(offsetBooking, Date.parse('2026-10-26T07:29:59.999Z')), false);
-  assert.equal(canRecordAppointmentOutcome(offsetBooking, Date.parse('2026-10-26T07:30:00Z')), true);
+  assert.equal(canMarkNoShow(offsetBooking, Date.parse('2026-10-26T07:29:59.999Z')), false);
+  assert.equal(canMarkNoShow(offsetBooking, Date.parse('2026-10-26T07:30:00Z')), true);
   assert.deepEqual(offsetBooking, original);
 });
 test('terminal statuses remain ineligible with invalid, future, and already-ended times', () => {
   for (const status of ['CANCELLED', 'COMPLETED', 'NO_SHOW'] as const) {
     for (const endsAt of ['', 'invalid', '2026-10-26T07:30:00Z', '2027-01-01T00:00:00Z']) {
-      assert.equal(canRecordAppointmentOutcome({ ...booking, status, endsAt }, Date.parse('2026-10-27T00:00:00Z')), false);
+      assert.equal(canMarkNoShow({ ...booking, status, endsAt }, Date.parse('2026-10-27T00:00:00Z')), false);
     }
   }
 });

@@ -2,6 +2,7 @@ import { prisma } from '../db/client.js';
 import { AppError } from '../http/errors.js';
 import { validateAuthenticatedSession, type AuthenticatedSession } from '../security/sessions.js';
 import { bookingServiceSnapshot } from './bookings.js';
+import { presentedStatus } from './AppointmentOutcome.utils.js';
 
 /** How many past appointments one page carries: a phone screen and a half, so the next page loads before it is needed. */
 export const HISTORY_PAGE_SIZE = 20;
@@ -27,7 +28,7 @@ export function decodeHistoryCursor(cursor: string): HistoryCursor {
  */
 export async function listCustomerHistory(session: AuthenticatedSession, { cursor, businessId }: { cursor?: string | undefined; businessId?: string | undefined }) {
   await validateAuthenticatedSession(session);
-  const after = cursor ? decodeHistoryCursor(cursor) : null;
+  const after = cursor ? decodeHistoryCursor(cursor) : null, now = new Date();
   const rows = await prisma.booking.findMany({
     where: {
       customerId: session.identity.id,
@@ -35,7 +36,7 @@ export async function listCustomerHistory(session: AuthenticatedSession, { curso
       events: { some: {} },
       ...(businessId ? { businessId } : {}),
       AND: [
-        { NOT: { status: 'CONFIRMED', startsAt: { gte: new Date() } } },
+        { NOT: { status: 'CONFIRMED', startsAt: { gte: now } } },
         ...(after ? [{ OR: [{ startsAt: { lt: after.startsAt } }, { startsAt: after.startsAt, id: { lt: after.id } }] }] : []),
       ],
     },
@@ -45,7 +46,7 @@ export async function listCustomerHistory(session: AuthenticatedSession, { curso
   });
   const page = rows.slice(0, HISTORY_PAGE_SIZE), last = page.at(-1);
   return {
-    bookings: page.map(booking => ({ ...booking, service: bookingServiceSnapshot(booking) })),
+    bookings: page.map(booking => ({ ...booking, status: presentedStatus(booking, +now), service: bookingServiceSnapshot(booking) })),
     nextCursor: rows.length > HISTORY_PAGE_SIZE && last ? encodeHistoryCursor(last) : null,
   };
 }

@@ -12,6 +12,7 @@ export type PastAppointmentsView = {
   state: 'loading' | 'error' | 'ready';
   appointments: PastAppointmentItem[];
   hasMore: boolean; loadingMore: boolean; moreFailed: boolean;
-  filter: { name: string; onClear: () => void } | null;
-  onMore: () => void; onRetry: () => void; onOpen: (id: string) => void; onBack: () => void;
+  /** Opened from one business, the list is that business's only; the footer's My appointments is the way back to all of them. */
+  filter: { name: string } | null;
+  onMore: () => void; onRetry: () => void; onBack: () => void;
 };
