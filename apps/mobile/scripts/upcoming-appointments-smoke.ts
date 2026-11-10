@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Browser } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
-import { selectBookingDate, showBookingTime } from './booking-controls.utils';
+import { openConfirmation, selectBookingDate, showBookingTime } from './booking-controls.utils';
 export async function upcomingAppointmentsSmoke({ browser, webUrl, apiUrl, prisma, run, businessIds, identityIds }: { browser: Browser; webUrl: string; apiUrl: string; prisma: typeof Prisma; run: string; businessIds: string[]; identityIds: string[] }) {
   const business = await prisma.business.create({ data: { name: 'Upcoming studio with a long accessible business name — סטודיו לפגישות ייעוץ ושירות אישי', slug: `upcoming-${run}`, timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED', publishedAt: new Date() } }); businessIds.push(business.id);
   const customer = await prisma.identity.create({ data: { email: `upcoming-${run}@example.test`, preferredLocale: 'en' } }), foreign = await prisma.identity.create({ data: { email: `upcoming-foreign-${run}@example.test` } }); identityIds.push(customer.id, foreign.id);
@@ -44,7 +44,11 @@ export async function upcomingAppointmentsSmoke({ browser, webUrl, apiUrl, prism
     // The other appointments are one menu item away.
     await page.getByTestId('app-footer').getByRole('button', { name: 'My appointments', exact: true }).click(); await page.waitForURL(`${webUrl}/appointments`);
     // An upcoming appointment is listed once, with the upcoming cards, and not again under history.
-    await page.getByTestId(`active-booking-${third.id}`).filter({ visible: true }).getByRole('link', { name: 'View appointment details', exact: true }).waitFor();
+    // Its summary is the link to its details.
+    await page.getByTestId(`active-booking-${third.id}`).filter({ visible: true }).getByRole('link').waitFor();
+    await page.getByTestId('appointments-history-toggle').filter({ visible: true }).click();
+    await page.getByRole('heading', { name: 'Appointment history', exact: true }).waitFor();
+    await page.getByText('Loading…', { exact: true }).filter({ visible: true }).waitFor({ state: 'detached' });
     assert.equal(await page.getByTestId(`history-booking-${third.id}`).count(), 0);
     await page.goto(webUrl); await firstCard.waitFor();
     failRead = true; await page.reload();
@@ -56,7 +60,7 @@ export async function upcomingAppointmentsSmoke({ browser, webUrl, apiUrl, prism
     await page.waitForURL(url => url.pathname === `/booking/${business.id}` && url.searchParams.get('fromBookingId') === first.id);
     await selectBookingDate(page, date); await showBookingTime(page, '12:00');
     await page.getByRole('button', { name: /12:00 · Upcoming expert/ }).click();
-    await page.getByRole('button', { name: 'Confirm reschedule', exact: true }).click(); await page.getByTestId('app-toast').getByText('The new time is confirmed and saved.', { exact: true }).waitFor();
+    await (await openConfirmation(page)).getByRole('button', { name: 'Confirm reschedule', exact: true }).click(); await page.getByTestId('app-toast').getByText('The new time is confirmed and saved.', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Back', exact: true }).filter({ visible: true }).click(); await page.waitForURL(`${webUrl}/`);
     const secondCard = page.getByTestId(`active-booking-${second.id}`); await secondCard.waitFor();
     // The business page shows the next appointment there; the booking screen no longer does.

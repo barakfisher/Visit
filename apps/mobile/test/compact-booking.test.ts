@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { addBookingDays, availableBookingSlots, bookingMonthCells, shiftBookingMonth, validBookingDate } from '../src/lib/CompactBooking.utils';
+import { addBookingDays, availableBookingSlots, bookingMonthCells, bookingOpeningDate, shiftBookingMonth, validBookingDate } from '../src/lib/CompactBooking.utils';
 import type { Slot } from '../src/types/flows';
 const slot = (time: string, staffId = 'staff'): Slot => ({ startsAt: `2026-11-01T${time}:00Z`, localTime: time, staffId, staffName: staffId, utcOffset: '+02:00', available: true, locked: false });
 test('calendar is timezone-independent, leap-aware and obeys server-provided date availability', () => {
@@ -82,4 +82,13 @@ test('calendar renders the final four-digit year without overflowing into an inv
   assert.ok(days.every(cell => validBookingDate(cell.date)));
   assert.deepEqual(days.filter(cell => cell.available).map(cell => cell.date), ['9999-12-31']);
   assert.equal(days[30]?.selected, true);
+});
+test('a reschedule opens on the appointment\'s own business-local day; a new booking on today; a URL date wins', () => {
+  const now = new Date('2026-11-10T08:00:00Z');
+  // 23:30 UTC is already the next day in Jerusalem.
+  assert.equal(bookingOpeningDate({ requested: '', timezone: 'Asia/Jerusalem', reschedule: true, rescheduledStartsAt: '2026-12-06T23:30:00Z', now }), '2026-12-07');
+  assert.equal(bookingOpeningDate({ requested: '', timezone: 'Asia/Jerusalem', reschedule: true, now }), '');
+  assert.equal(bookingOpeningDate({ requested: '', timezone: 'Asia/Jerusalem', reschedule: false, now }), '2026-11-10');
+  assert.equal(bookingOpeningDate({ requested: '2026-12-20', timezone: 'Asia/Jerusalem', reschedule: true, rescheduledStartsAt: '2026-12-06T09:00:00Z', now }), '2026-12-20');
+  assert.equal(bookingOpeningDate({ requested: '2026-02-30', timezone: null, reschedule: false, now }), '');
 });

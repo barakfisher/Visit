@@ -1,4 +1,4 @@
-import { selectedBookingDate, showBookingTime } from './booking-controls.utils';
+import { openConfirmation, selectedBookingDate, showBookingTime } from './booking-controls.utils';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import type { Browser } from 'playwright';
@@ -58,7 +58,7 @@ export async function customerContactSmoke({ browser, webUrl, apiUrl, prisma, ru
       const response = await route.fetch(); assert.equal(response.status(), 200);
       await route.abort('failed'); // The worker committed; the browser never receives its response.
     });
-    await page.getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).filter({ visible: true }).click();
+    await (await openConfirmation(page)).getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).click();
     await page.locator('[data-testid="booking-confirmation"]:visible').waitFor();
     const booked = await prisma.booking.findFirstOrThrow({ where: { customerId: person.id, status: 'CONFIRMED' } });
     assert.equal(finalRequests, 1);
@@ -77,7 +77,7 @@ export async function customerContactSmoke({ browser, webUrl, apiUrl, prisma, ru
       const response = await route.fetch(); assert.equal(response.status(), 200); committedId = (await response.json()).id;
       entered(); await gate; await route.fulfill({ response });
     });
-    await page.getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).filter({ visible: true }).click();
+    await (await openConfirmation(page)).getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).click();
     await ready;
     await page.getByTestId('app-footer').getByRole('button', { name: 'Home', exact: true }).click();
     await page.waitForURL(webUrl + '/');

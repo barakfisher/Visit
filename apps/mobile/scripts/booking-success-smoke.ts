@@ -75,7 +75,7 @@ export async function bookingSuccessSmoke({ browser, webUrl, apiUrl, prisma, run
     await page.goto(`${webUrl}/confirmation/${focusBooking.id}`);
     await detailsView.getByRole('button', { name: 'Add to calendar (.ics)', exact: true }).waitFor();
     await page.getByTestId('app-footer').getByRole('button', { name: 'My appointments', exact: true }).click();
-    await page.getByRole('heading', { name: 'Appointment history', exact: true }).waitFor();
+    await page.getByTestId('appointments-history-toggle').filter({ visible: true }).waitFor();
     const cancelledWhileAway = await context.request.post(`${apiUrl}/v1/bookings/${focusBooking.id}/cancel`, { headers: { origin: webUrl }, data: { expectedRevision: focusBooking.revision } });
     assert.equal(cancelledWhileAway.status(), 200, await cancelledWhileAway.text());
     const focusDetailsUrl = `${apiUrl}/v1/bookings/${focusBooking.id}/details`;

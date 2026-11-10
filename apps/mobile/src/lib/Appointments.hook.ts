@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuthStore } from '../state/auth';
@@ -15,11 +16,14 @@ export function useAppointments() {
   const params = useLocalSearchParams<{ businessId?: string }>();
   const businessId = typeof params.businessId === 'string' && params.businessId ? params.businessId : undefined;
   const { identity, error, busyBookingId, bookings, cancel, reschedule } = useActiveAppointments();
-  const history = useQuery({ queryKey: ['me', 'bookings', identity, contextVersion], queryFn: () => apiRequest<{ bookings: HistoricalAppointment[] }>('/v1/me/bookings'), enabled: Boolean(identity) });
+  // Past appointments are rarely what the customer came for, so they load only when asked for.
+  const [showHistory, setShowHistory] = useState(false);
+  const history = useQuery({ queryKey: ['me', 'bookings', identity, contextVersion], queryFn: () => apiRequest<{ bookings: HistoricalAppointment[] }>('/v1/me/bookings'), enabled: Boolean(identity) && showHistory });
   const historyList = history.data ? historyEntries(history.data.bookings, { status: bookings.status, ids: bookings.data?.bookings.map(booking => booking.id) ?? [] }) : null;
   const provider = useProviderDetail(businessId ?? '', Boolean(businessId));
   const upcoming = bookings.data ? appointmentsAt(bookings.data.bookings, businessId) : undefined;
   const businessName = businessId ? provider.data?.provider.name ?? upcoming?.[0]?.business.name ?? history.data?.bookings.find(booking => booking.business.id === businessId)?.business.name ?? '' : '';
-  return { t, locale, identity, error, busyBookingId, bookings, upcoming, history, historyList: historyList ? appointmentsAt(historyList, businessId) : null, cancel, reschedule,
+  return { t, locale, identity, error, busyBookingId, bookings, upcoming, history, historyList: historyList ? appointmentsAt(historyList, businessId) : null, cancel, reschedule, showHistory, toggleHistory: () => setShowHistory(value => !value),
+    open: (booking: { id: string }) => router.push({ pathname: '/appointment/[bookingId]', params: { bookingId: booking.id } }),
     filter: businessId ? { name: businessName, onClear: () => router.setParams({ businessId: undefined }) } : null };
 }

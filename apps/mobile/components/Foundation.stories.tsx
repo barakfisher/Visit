@@ -90,7 +90,8 @@ const check: NonNullable<Story['play']> = async ({ canvas, args }) => {
   const slot = canvas.getByRole('button', { name: /09:00/ });
   await userEvent.click(slot);
   await expect(slot).toHaveAttribute('aria-pressed', 'true');
-  await expect(slot).toHaveTextContent(t('ui.selected'));
+  await expect(slot).toHaveTextContent('✓');
+  await expect(slot).not.toHaveTextContent(t('ui.selected'));
   const locked = canvas.getByRole('button', { name: /10:00/ });
   await expect(locked).toHaveAttribute('aria-disabled', 'true');
   await expect(locked).toHaveTextContent(t('ui.held'));

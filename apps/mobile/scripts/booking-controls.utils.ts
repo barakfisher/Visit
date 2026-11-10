@@ -10,6 +10,13 @@ export async function selectBookingDate(page: Page, date: string) {
   await page.getByTestId(`booking-day-${date}`).click();
   await page.getByRole('dialog', { name: 'Choose a date', exact: true }).waitFor({ state: 'hidden' });
 }
+/** "Continue" opens the confirmation sheet, which holds the review and the only button that books; returns the sheet. */
+export async function openConfirmation(page: Page) {
+  await page.getByTestId('booking-continue').filter({ visible: true }).click();
+  const sheet = page.getByTestId('booking-review-sheet').filter({ visible: true });
+  await sheet.waitFor();
+  return sheet;
+}
 export async function selectedBookingDate(page: Page) { return (await page.getByTestId('booking-date-trigger').filter({ visible: true }).getAttribute('aria-label'))?.match(/\d{4}-\d{2}-\d{2}$/)?.[0] ?? null; }
 /** How many times a page of them settles on. Times that left stay in the page until their fade-out ends, so counting straight after a change sees both pages. */
 export async function settledTimeCount(page: Page, name: RegExp, expected: number) {
@@ -37,6 +44,8 @@ export async function showBookingTime(page: Page, time: string | RegExp) {
   for (let pages = 0; pages < 50; pages++) {
     // The summary can render before its times do; checking then would page past the group that holds the time.
     await chips.first().waitFor();
+    // Times of a previous date or group fade out while the new ones arrive; a match among the leaving ones is gone a moment later.
+    await page.waitForFunction(() => !document.getAnimations().some(animation => animation.playState === 'running' && animation.effect instanceof KeyframeEffect && animation.effect.target instanceof Element && animation.effect.target.closest('[data-testid="booking-time-chips"]')));
     if (await target.count()) return;
     if (await later.getAttribute('aria-disabled') === 'true') break;
     await turn(later);

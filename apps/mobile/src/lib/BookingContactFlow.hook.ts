@@ -16,9 +16,9 @@ import { useEffect, useRef, useState } from 'react';
 import { apiRequest, ApiError } from '@/src/lib/api';
 import { bookingLoadRefusalKey, bookingRefusalKey, bookingWindowWarningKey, isPassingBookingRefusal } from './AppointmentLifecycle.utils';
 import { useScreenReturn } from './ScreenReturn.hook';
-import { appointmentDate, appointmentTime, localDate } from './appointmentTime';
+import { appointmentDate, appointmentTime } from './appointmentTime';
 import { useCompactBooking } from './CompactBooking.hook';
-import { bookingSlotId, validBookingDate } from './CompactBooking.utils';
+import { bookingOpeningDate, bookingSlotId, validBookingDate } from './CompactBooking.utils';
 import type { AdvisorySelection } from '../types/CompactBooking.types';
 import { useAuthStore } from '@/src/state/auth';
 import { cancellationCutoffText } from '@/src/i18n/cancellationCutoff';
@@ -36,6 +36,9 @@ export function useBookingContactFlow() {
   const [selection, setSelection] = useState<AdvisorySelection | null>(null);
   // When the customer picked the time; the review's change-window warning is judged against it.
   const [chosenAt, setChosenAt] = useState(Date.now);
+  // The final consent happens in a sheet over the screen, so the exact time and the cancellation terms are read
+  // before the press that books. It shows only while there is a reviewed time to consent to.
+  const [reviewRequested, setReviewRequested] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -83,7 +86,9 @@ export function useBookingContactFlow() {
   const provider = details.data?.provider;
   useProviderActivation(provider && !fromBookingId ? { businessId: provider.id } : undefined);
   const chosenService = provider?.services.some(service => service.id === serviceId) ? serviceId : !serviceId && provider?.services.length === 1 ? provider.services[0]?.id ?? '' : '';
-  const chosenDate = validBookingDate(date) ? date : provider ? localDate(provider.timezone) : '';
+  // A reschedule opens on the appointment's own day, where the nearby times are the likeliest moves; it waits for the
+  // appointment instead of first asking for today's times. A new booking opens on today.
+  const chosenDate = bookingOpeningDate({ requested: date, timezone: provider?.timezone ?? null, reschedule: Boolean(fromBookingId), rescheduledStartsAt: details.data?.startsAt });
   const selected = selection?.providerId === providerId && selection.serviceId === chosenService && selection.date === chosenDate ? selection.slot : null;
   function changeService(id: string) { if (operation.current || pendingAttempt) return; sequence.current += 1; setSelection(null); setConflictSlot(null); setError(''); hideToast(); setServiceId(id); }
   function changeDate(value: string) { if (operation.current || pendingAttempt || !validBookingDate(value)) return; sequence.current += 1; setSelection(null); setConflictSlot(null); setError(''); hideToast(); setDate(value); }
@@ -100,6 +105,8 @@ export function useBookingContactFlow() {
   async function choose(slot: Slot) {
     if (operation.current || pendingAttempt) return;
     if (!slot.available || slot.locked || slotId(slot) === conflictSlot) return;
+    // `choose` runs on a press, never during render; the compiler cannot see that once the hook no longer bails out on the opening date.
+    // eslint-disable-next-line react-hooks/purity
     sequence.current += 1; setSelection({ providerId, serviceId: chosenService, date: chosenDate, slot }); setChosenAt(Date.now()); setError(''); setNotice(''); hideToast();
     // A slot taken since the list loaded clears this selection before the customer reaches the final step.
     void slots.refetch();
@@ -185,10 +192,18 @@ export function useBookingContactFlow() {
     durationAndPrice: `${reviewedService.durationMinutes} ${t('bookingCommit.minutes')} · ${formatMoney(reviewedService.priceMinor, reviewedService.currency)}`,
     ...reviewWindow(selected.startsAt, provider),
   } : null;
-  const movingFrom = fromBookingId && provider && details.data?.startsAt ? t('compact.movingFrom', { when: `${appointmentDate(details.data.startsAt, provider.timezone, locale)} · ${appointmentTime(details.data.startsAt, provider.timezone, locale)}` }) : '';
+  const movingFrom = fromBookingId && provider && details.data?.startsAt ? `${appointmentDate(details.data.startsAt, provider.timezone, locale)} · ${appointmentTime(details.data.startsAt, provider.timezone, locale)}` : '';
   const detailsFailure = details.error instanceof ApiError ? details.error : null;
   const detailsError = details.isError ? t(bookingLoadRefusalKey(detailsFailure?.code, detailsFailure?.status)) : '';
   const reauthReturnTo = `/booking/${providerId}?${new URLSearchParams({ serviceId: chosenService, date: chosenDate })}`;
   function saveReauthDraft() { if (identityId) useBookingContactDraft.getState().save({ identityId, providerId, serviceId: chosenService, date: chosenDate, selected }); }
-  return { controls, review, movingFrom, reauthReturnTo, saveReauthDraft, locale, t, providerId, fromBookingId, serviceId, date, selected, busy, editingDisabled: busy || Boolean(pendingAttempt), pendingAttempt, pendingElsewhere, notice, error, detailsError, conflictSlot, identityId, details, provider, chosenService, chosenDate, slots, contacts, name, setName, setServiceId, setDate, setNotice, reset, choose, confirm, saveName };
+  const canReview = Boolean(review && identityId && !pendingAttempt && !pendingElsewhere && (fromBookingId || contacts.data?.ready));
+  // Only on this screen: on web a screen left in the stack stays mounted, and its sheet would cover the next one.
+  const reviewOpen = focused && reviewRequested && canReview;
+  function openReview() { if (canReview && !operation.current) setReviewRequested(true); }
+  function closeReview() { if (!operation.current) setReviewRequested(false); }
+  // Consent given, the sheet closes and the bottom bar shows the commit's progress, as for a retry: the customer can
+  // still leave the screen while it runs, and any refusal appears in the bar.
+  function confirmReviewed() { if (!canReview || operation.current) return; setReviewRequested(false); void confirm(); }
+  return { controls, review, reviewOpen, canReview, openReview, closeReview, confirmReviewed, movingFrom, reauthReturnTo, saveReauthDraft, locale, t, providerId, fromBookingId, serviceId, date, selected, busy, editingDisabled: busy || Boolean(pendingAttempt), pendingAttempt, pendingElsewhere, notice, error, detailsError, conflictSlot, identityId, details, provider, chosenService, chosenDate, slots, contacts, name, setName, setServiceId, setDate, setNotice, reset, choose, confirm, saveName };
 }

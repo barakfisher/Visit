@@ -1,5 +1,6 @@
 import type { CalendarCell } from '../types/CompactBooking.types';
 import type { Slot } from '../types/flows';
+import { localDate } from './appointmentTime';
 export function validBookingDate(date: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
   const value = new Date(`${date}T12:00:00Z`);
@@ -32,4 +33,15 @@ export const BOOKING_PAGE_SIZE = 6;
 export const bookingSlotId = (slot: Slot) => `${slot.staffId}:${slot.startsAt}`;
 export function availableBookingSlots(slots: readonly Slot[], excluded: string | null) {
   return slots.filter(slot => slot.available && !slot.locked && bookingSlotId(slot) !== excluded).sort((a, b) => a.startsAt.localeCompare(b.startsAt) || a.staffId.localeCompare(b.staffId));
+}
+
+/**
+ * The day the booking screen opens on, in the business's timezone: the date in the URL when there is one, else the
+ * appointment's own day on a reschedule (empty until that appointment has loaded), else today.
+ */
+export function bookingOpeningDate({ requested, timezone, reschedule, rescheduledStartsAt, now = new Date() }: { requested: string; timezone: string | null; reschedule: boolean; rescheduledStartsAt?: string; now?: Date }) {
+  if (validBookingDate(requested)) return requested;
+  if (!timezone) return '';
+  if (reschedule) return rescheduledStartsAt ? localDate(timezone, new Date(rescheduledStartsAt)) : '';
+  return localDate(timezone, now);
 }

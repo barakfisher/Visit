@@ -15,6 +15,13 @@ export const Upcoming: Story = { args: { onReschedule: fn(), onCancel: fn() }, p
   await expect(args.onCancel).toHaveBeenCalledOnce();
 } };
 
+// The summary opens the appointment's details; the actions stay separate controls beside it, never inside it.
+export const OpensDetails: Story = { args: { onOpen: fn(), onReschedule: fn(), onCancel: fn() }, play: async ({ canvas, args }) => {
+  const link = canvas.getByRole('link', { name: /Initial consultation/ });
+  await expect(link).not.toContainElement(canvas.getByRole('button', { name: 'Cancel' }));
+  await userEvent.click(link); await expect(args.onOpen).toHaveBeenCalledOnce();
+  await expect(args.onCancel).not.toHaveBeenCalled();
+} };
 export const SingleActiveBooking: Story = { args: { onReschedule: fn(), onCancel: fn() } };
 export const PendingHomeActions: Story = { args: { actionsPending: true }, play: async ({ canvas }) => { await expect(canvas.getByRole('button', { name: 'Reschedule (coming soon)' })).toBeDisabled(); await expect(canvas.getByRole('button', { name: 'Cancel (coming soon)' })).toBeDisabled(); } };
 
@@ -50,4 +57,8 @@ export const CancelRefusedOnItsCard: Story = { args: { onCancel: fn() }, render:
 export const HebrewInsideChangeWindow: Story = { globals: { locale: 'he' }, render: () => <ActiveBookings bookings={[{ ...booking, actions: locked }]} onCancel={fn()} onReschedule={fn()} error={{ bookingId: 'one', message: translate('he', 'lifecycle.cancelCutoff') }}/>, play: async ({ canvas }) => {
   await expect(canvas.getByText(translate('he', 'lifecycle.lockedBoth'))).toBeVisible();
   await expect(canvas.queryAllByRole('button')).toHaveLength(0);
+} };
+// At a 375px phone's card width the two actions keep their labels on one line.
+export const HebrewNarrowActions: Story = { globals: { locale: 'he' }, args: { onOpen: fn(), onReschedule: fn(), onCancel: fn() }, decorators: [Story => <div style={{ width: 295 }}><Story /></div>], play: async ({ canvas }) => {
+  for (const name of [translate('he', 'ui.reschedule'), translate('he', 'ui.cancel')]) { const label = canvas.getByText(name); await expect(label.getBoundingClientRect().height).toBeLessThan(30); }
 } };

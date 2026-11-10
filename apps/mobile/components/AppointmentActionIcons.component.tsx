@@ -30,3 +30,10 @@ export function WhatsappIcon({ color }: { color: string }) {
     <View style={{ position: 'absolute', bottom: 0, left: 1, width: 2, height: 6, backgroundColor: color, transform: [{ rotate: '40deg' }] }} />
   </View>;
 }
+
+/** An X drawn from two crossed bars, for cancelling. */
+export function CancelIcon({ color }: { color: string }) {
+  return <View {...hidden} style={{ ...physicalDrawing, width: 18, height: 18, alignItems: 'center', justifyContent: 'center' }}>
+    {['45deg', '-45deg'].map(rotate => <View key={rotate} style={{ position: 'absolute', width: 18, height: 2.5, borderRadius: 2, backgroundColor: color, transform: [{ rotate }] }} />)}
+  </View>;
+}
