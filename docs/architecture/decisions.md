@@ -506,6 +506,8 @@ Second review on Android, same day:
 
 ## Add appointment is its own screen — 2026-11-10
 
+PR #57.
+
 The user's review of business mode: pressing Add appointment in the footer showed the form above the agenda, with Home marked in the footer, and read as broken. The form had stayed inline in the agenda when its button moved to the footer (2026-11-08), so the tab opened the agenda.
 
 - **Choice: `/provider/[businessId]/add` is the form's own screen, and the footer marks Add appointment there (the user's call).** The agenda no longer renders the form or scrolls to it. `openManualBooking` (`src/lib/ManualBookingEntry.ts`) prepares the draft and the footer navigates; reached directly, as after a reload, the screen starts a form itself. Pressing Add again keeps a form in progress and starts an empty one after a save, as before. *Rejected:* a sheet over the agenda, which keeps the agenda behind a long form with many fields, and keeping the form inline with Add marked, which would mark a tab whose screen is Home.

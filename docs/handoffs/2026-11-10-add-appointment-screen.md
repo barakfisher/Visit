@@ -1,10 +1,10 @@
-# Visit handoff — 2026-11-10, Add appointment is its own screen
+# Visit handoff — 2026-11-10, Add appointment is its own screen (PR #57)
 
 Built on `main` after PR #54, beside PR #55 (still open when this branch was cut). Read `2026-11-10-past-outcomes.md` for #55's state; its lessons and debt hold.
 
 ## Authorization
 
-The user's global working agreement governs. The user reported that the business footer's Add appointment showed the form and the agenda together with Home marked, and chose a separate screen over a sheet.
+The user's global working agreement governs. The user reported that the business footer's Add appointment showed the form and the agenda together with Home marked, and chose a separate screen over a sheet, and asked for the PR (#57); merging was not asked for.
 
 ## Where things stand
 
