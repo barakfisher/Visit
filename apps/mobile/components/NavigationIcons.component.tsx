@@ -63,6 +63,15 @@ export function GlobeIcon({ color }: IconProps) {
   </View>;
 }
 
+/** An open door with an arrow leaving it. The arrow points the way the reading direction goes forward. */
+export function SignOutIcon({ color, pointsRight }: IconProps & { pointsRight: boolean }) {
+  return <View {...hidden} style={{ ...physicalDrawing, width: 20, height: 20, transform: [{ scaleX: pointsRight ? 1 : -1 }] }}>
+    <View style={{ ...physicalDrawing, position: 'absolute', left: 1, top: 2, width: 9, height: 16, borderLeftWidth: 2, borderTopWidth: 2, borderBottomWidth: 2, borderColor: color, borderTopLeftRadius: 2, borderBottomLeftRadius: 2 }} />
+    <View style={{ position: 'absolute', left: 6, top: 9, width: 12, height: 2, borderRadius: 1, backgroundColor: color }} />
+    <View style={{ ...physicalDrawing, position: 'absolute', left: 11, top: 6.5, width: 7, height: 7, borderTopWidth: 2, borderRightWidth: 2, borderColor: color, transform: [{ rotate: '45deg' }] }} />
+  </View>;
+}
+
 export function InfoIcon({ color }: IconProps) {
   return <View {...hidden} style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: color, alignItems: 'center', paddingTop: 4, gap: 2 }}>
     <View style={{ width: 3, height: 3, borderRadius: 2, backgroundColor: color }} />

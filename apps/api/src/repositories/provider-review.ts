@@ -12,7 +12,7 @@ export async function reviewProviderApplication(actor: AuthenticatedSession, app
     await lockIdentitySecurity(tx, adminId);
     if ((await tx.identity.findUnique({ where: { id: adminId } }))?.platformRole !== 'ADMIN') throw forbidden();
     await tx.$queryRaw`SELECT id FROM "ProviderApplication" WHERE id = ${applicationId} FOR UPDATE`;
-    const application = await tx.providerApplication.findUnique({ where: { id: applicationId }, include: { identity: true, business: true } });
+    const application = await tx.providerApplication.findUnique({ where: { id: applicationId }, include: { identity: { select: { email: true, emailVerifiedAt: true, preferredLocale: true } }, business: true } });
     if (!application) throw notFound();
     if (application.status !== 'PENDING') {
       if (application.status === decision && application.reviewReason === reason) return { id: application.id, status: application.status };

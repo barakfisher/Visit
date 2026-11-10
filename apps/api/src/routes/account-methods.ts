@@ -7,11 +7,19 @@ import { env } from '../env.js';
 import { AppError } from '../http/errors.js';
 import { authenticate, issueSessionToken } from '../security/sessions.js';
 import { accountMethodsService } from '../security/account-methods.js';
+export const E164_PHONE = /^\+[1-9]\d{7,14}$/;
 export async function registerAccountMethods(app: FastifyInstance, { account = accountMethodsService }: { account?: typeof accountMethodsService } = {}) {
   app.patch('/api/account/profile', async request => {
     const { identity } = await authenticate(request);
     const input = z.strictObject({ displayName: z.string().trim().min(2).max(120) }).parse(request.body);
     return prisma.identity.update({ where: { id: identity.id }, data: input, select: { displayName: true } });
+  });
+  // An unverified phone only its owner sees. It is not the sign-in `phone`, so it needs no proof and no recent sign-in;
+  // the app sends E.164 and null clears it.
+  app.put('/api/account/contact-phone', async request => {
+    const { identity } = await authenticate(request);
+    const input = z.strictObject({ contactPhone: z.string().regex(E164_PHONE).nullable() }).parse(request.body);
+    return prisma.identity.update({ where: { id: identity.id }, data: input, select: { contactPhone: true } });
   });
   app.get('/api/providers/:businessId/contact-readiness', async request => {
     const { identity } = await authenticate(request);

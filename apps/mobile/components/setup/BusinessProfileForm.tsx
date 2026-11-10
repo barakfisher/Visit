@@ -6,7 +6,7 @@ import { TextField } from '../TextField';
 import { ActionButton } from '../ActionButton';
 import { useAppLocale } from '@/src/i18n/LocaleContext';
 import { apiRequest } from '@/src/lib/api';
-import { internationalBusinessPhone } from '@/src/lib/BusinessPhone';
+import { internationalPhone as toInternationalPhone } from '@/src/lib/PhoneNumber';
 import { businessTimezoneLabel } from '@/src/lib/appointmentTime';
 import { businessListingLine } from '@/src/lib/BusinessListing';
 export type BusinessProfile = { id: string; name: string; slug: string; timezone: string; location: string | null; category: string | null; description: string | null; contactPhone: string | null; contactEmail: string | null; approvalStatus: string; publishedAt: string | null };
@@ -15,7 +15,7 @@ export function BusinessProfileForm({ business, onSaved }: { business: BusinessP
   const [name, setName] = useState(business.name), [location, setLocation] = useState(business.location ?? ''), [category, setCategory] = useState(business.category ?? '');
   const [description, setDescription] = useState(business.description ?? ''), [phone, setPhone] = useState(business.contactPhone ?? ''), [email, setEmail] = useState(business.contactEmail ?? '');
   const [busy, setBusy] = useState(false), [feedback, setFeedback] = useState<'saved' | 'error' | ''>('');
-  const internationalPhone = phone.trim() ? internationalBusinessPhone(phone) : null, validPhone = !phone.trim() || !!internationalPhone, validEmail = !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const internationalPhone = phone.trim() ? toInternationalPhone(phone) : null, validPhone = !phone.trim() || !!internationalPhone, validEmail = !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   async function save() {
     if (busy) return; setBusy(true); setFeedback('');
     try { await apiRequest(`/v1/provider/businesses/${business.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim(), location: location.trim(), category: category.trim(), description: description.trim() || null, contactPhone: internationalPhone, contactEmail: email.trim() || null }) }); setFeedback('saved'); await client.invalidateQueries({ queryKey: ['provider', business.id] }); onSaved?.(); }
