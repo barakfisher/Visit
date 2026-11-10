@@ -4,7 +4,7 @@ Supersedes `2026-11-09-booking-rereads.md` for current state. Its lessons and de
 
 ## Authorization
 
-The user's global working agreement governs. The user asked for this slice and chose the layout and the filtered list; committing, a PR and merging were not asked for yet.
+The user's global working agreement governs. The user asked for this slice and chose the layout and the filtered list; the user asked for the PR (#52); merging was not asked for.
 
 ## Where things stand
 

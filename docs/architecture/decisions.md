@@ -453,7 +453,7 @@ An Android run showed the refusal message and a time leaving the list making the
 
 ## A business page for the customer — 2026-11-09
 
-PR pending.
+PR #52.
 
 The user's review of the booking screen: it had no footer, a "Back to Home" link the footer would replace, a "your appointment with this business" card above the form, a preferred-time field, and a contact section that said only that the customer's details met the business's requirements. The user asked for a business page in front of booking.
 
