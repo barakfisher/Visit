@@ -4,7 +4,7 @@ Supersedes `2026-11-10-appointments-consent.md` for current state. Its lessons a
 
 ## Authorization
 
-The user's global working agreement governs. The user reviewed My appointments and the business page twice on an Android phone, chose each option below (chevron by the title, whole card tappable, server paging with infinite scroll), approved the history screen's scope and acceptance criteria, and asked for the PR; merging was not asked for.
+The user's global working agreement governs. The user reviewed My appointments and the business page twice on an Android phone, chose each option below (chevron by the title, whole card tappable, server paging with infinite scroll), approved the history screen's scope and acceptance criteria, and asked for the PR (#54); merging was not asked for.
 
 ## Where things stand
 

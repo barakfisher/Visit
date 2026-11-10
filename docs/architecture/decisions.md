@@ -484,6 +484,8 @@ The user's review of My appointments and the booking screen on Android: a redund
 
 ## My appointments, second pass, and sheets that move — 2026-11-10
 
+PR #54.
+
 The user's review of My appointments on Android, after PR #53: too much space above and below the list, a date that looked like a button, a change history that did not belong on the card, a Cancel that was too red, a cancel confirmation in the middle of the screen, and sheets that appeared with no motion and ignored a tap outside them.
 
 - **Choice: the date is a sentence, "on {date} at {time}" (`ui.when`), styled like "with …"; the chevron moves beside the service name (the user's call).** The summary is still the link to the details. *Rejected:* a text link "Appointment details" (one more line on every card) and no marker at all (the details screen, which now holds the change history, would be hard to find).
