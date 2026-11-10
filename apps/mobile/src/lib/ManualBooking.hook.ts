@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useIsFocused } from 'expo-router';
+import { router, useIsFocused } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import { formatPrice } from '../i18n/messages';
 import { useAppLocale } from '../i18n/LocaleContext';
 import { useSessionStore } from '../state/session';
 import { useManualDraft, emptyManualDraft } from '../state/ManualBooking.store';
+import { agendaDraftScope, useAgendaDraft } from '../state/ProviderAgenda.store';
+import { useProviderWorkspace } from '../../components/ProviderAccess';
 import { readManualOptions, submitManualBooking } from './ManualBooking.service';
+import { openManualBooking } from './ManualBookingEntry';
+import { todayInTimezone } from './calendar';
 import { manualDraftScope, manualInput } from './ManualBooking.utils';
 import { canContinueAppointmentAction } from './AppointmentLifecycle.utils';
 import { isBookingQuery } from './BookingQueries.utils';
@@ -56,4 +60,19 @@ export function useManualBooking(business: { id: string; timezone: string }, dat
   const reviewed = (attempt ?? prepared)?.reviewedService;
   const serviceSummary = reviewed ? t('manual.summary', { name: reviewed.name, minutes: reviewed.durationMinutes, price: reviewed.priceMinor !== null && reviewed.currency ? formatPrice(locale, reviewed.priceMinor, reviewed.currency) : t('manual.priceUnknown') }) : '';
   return { serviceSummary, t, draft, options: options.data, loading: options.isLoading, loadError: options.isError, busy: state.scope === scope && state.busy, locked: Boolean(attempt), feedback: result ? t(result.status === 'CONFIRMED' ? 'manual.saved' : 'manual.changed') : state.scope === scope ? state.feedback : '', success: Boolean(result), update, retry: () => { void options.refetch(); }, review, confirm: () => void confirm(), close: () => { if (!operation.current && !attempt) { setState({ scope, busy: false, feedback: '' }); useManualDraft.getState().clear(); } } };
+}
+/** The Add appointment screen (decisions.md, 2026-11-10). Reached directly, as after a reload, it starts a form; Close returns to the agenda, on the saved appointment's day after a save. */
+export function useManualBookingScreen(): ManualBookingView {
+  const business = useProviderWorkspace(), identity = useSessionStore(state => state.identityId), version = useSessionStore(state => state.contextVersion);
+  const view = useManualBooking(business, todayInTimezone(business.timezone));
+  // Only on arrival: after Close the form is cleared while the screen is still leaving, and must stay cleared.
+  useEffect(() => { const manual = useManualDraft.getState(); if (manual.scope !== manualDraftScope(identity, version, business.id) || !manual.draft.open) openManualBooking(business.id); }, [identity, version, business.id]);
+  function close() {
+    if (view.busy || view.locked) return;
+    const savedDay = view.success ? view.draft.localDate : '';
+    view.close();
+    if (savedDay) useAgendaDraft.getState().update(agendaDraftScope(identity, version, business.id), { date: savedDay });
+    router.dismissTo({ pathname: '/provider/dashboard', params: { businessId: business.id } });
+  }
+  return { ...view, close };
 }

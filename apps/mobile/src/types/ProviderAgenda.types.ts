@@ -1,4 +1,3 @@
-import type { ManualBookingView } from './ManualBooking.types';
 import type { AppointmentStatus } from './AppointmentLifecycle.types';
 import type { AuthProfile } from './flows';
 import type { MessageKey } from '../i18n/messages';
@@ -12,7 +11,6 @@ export type ProviderAgenda = {
 };
 export type AgendaDraft = { date: string; mode: 'day' | 'week' };
 export type ProviderAgendaView = {
-  manual: ManualBookingView;
   business: { id: string; name: string; timezone: string }; profile: AuthProfile | null;
   t: (key: MessageKey, values?: Record<string, string | number>) => string;
   day: string; validDate: boolean; draft: Readonly<AgendaDraft>; agenda: { data: ProviderAgenda | undefined; isError: boolean; isLoading: boolean };

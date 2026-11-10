@@ -21,13 +21,16 @@ export async function manualBookingSmoke({ browser, webUrl, apiUrl, prisma, run,
   await page.getByLabel('Agenda date', { exact: true }).waitFor();
   const optionsUrl = `${apiUrl}/v1/provider/businesses/${business.id}/manual-booking-options`, saveUrl = `${apiUrl}/v1/provider/businesses/${business.id}/manual-bookings`;
   await page.route(optionsUrl, route => route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":{"code":"UNAVAILABLE"}}' }));
-  // The footer opens the form from any business screen, here Account.
-  await page.getByRole('button', { name: 'Account', exact: true }).click(); await page.waitForURL(url => url.pathname === '/account');
-  await page.getByTestId('app-footer').getByRole('button', { name: 'Add appointment', exact: true }).click();
-  const form = page.getByTestId('manual-booking-form'); await form.getByText('Appointment options could not load.', { exact: true }).waitFor();
-  // Leaving a business screen unmounts it and its date, so choose the date once back on the agenda; the form follows it.
+  // The agenda's day is where a form opened on the agenda starts.
   await page.getByLabel('Agenda date', { exact: true }).fill(date);
+  const footer = page.getByTestId('app-footer'), addTab = footer.getByRole('button', { name: 'Add appointment', exact: true });
+  await addTab.click(); await page.waitForURL(url => url.pathname === `/provider/${business.id}/add`);
+  const form = page.getByTestId('manual-booking-form'); await form.getByText('Appointment options could not load.', { exact: true }).waitFor();
+  // Its own screen: the agenda is not behind it, and the footer marks Add appointment, not Home.
+  assert.equal(await page.getByLabel('Agenda date', { exact: true }).count(), 0);
+  assert.equal(await addTab.getAttribute('aria-current'), 'page'); assert.equal(await footer.getByRole('button', { name: 'Home', exact: true }).getAttribute('aria-current'), null);
   await page.unroute(optionsUrl); await form.getByRole('button', { name: 'Try again', exact: true }).click();
+  assert.equal(await form.getByLabel('Appointment date (YYYY-MM-DD)', { exact: true }).inputValue(), date);
   await form.getByRole('button', { name: 'Phone consultation', exact: true }).click(); await form.getByRole('button', { name: /Phone specialist/ }).click();
   await form.getByLabel('Customer name', { exact: true }).fill('לקוחה חדשה — ללא חשבון'); await form.getByLabel('Customer phone (international format)', { exact: true }).fill('+972501234567');
   await form.getByLabel('Appointment time (HH:mm)', { exact: true }).fill('10:00');
@@ -36,7 +39,7 @@ export async function manualBookingSmoke({ browser, webUrl, apiUrl, prisma, run,
   await form.getByLabel('Reason for using unverified contact details', { exact: true }).fill('Telephone request from a new customer without an account.');
   await form.getByRole('button', { name: 'Review appointment', exact: true }).click(); await form.getByRole('button', { name: 'Confirm manual appointment', exact: true }).waitFor();
   // Add appointment while reviewing leaves the review alone.
-  await page.getByTestId('app-footer').getByRole('button', { name: 'Add appointment', exact: true }).click(); await form.getByRole('button', { name: 'Confirm manual appointment', exact: true }).waitFor();
+  await addTab.click(); await form.getByRole('button', { name: 'Confirm manual appointment', exact: true }).waitFor();
   assert.equal(await prisma.booking.count({ where: { businessId: business.id } }), 0);
   // Lose the response after the real server commits; retry must recover this exact attempt.
   let posts = 0, key = '';
@@ -56,12 +59,15 @@ export async function manualBookingSmoke({ browser, webUrl, apiUrl, prisma, run,
   assert.equal(await prisma.bookingNotification.count({ where: { businessId: business.id } }), 0);
   assert.equal(await prisma.identity.count({ where: { phone: '+972501234567' } }), 0);
   assert.equal((await prisma.bookingEvent.findFirstOrThrow({ where: { bookingId: saved.id } })).source, 'MANUAL');
+  // Close goes back to the agenda on the saved appointment's day.
+  await form.getByRole('button', { name: 'Close appointment form', exact: true }).click(); await page.waitForURL(url => url.pathname === '/provider/dashboard');
+  assert.equal(await page.getByLabel('Agenda date', { exact: true }).inputValue(), date);
   const card = page.getByTestId(`agenda-booking-${saved.id}`); await card.getByText(/Manually entered · contact unverified/).waitFor();
-  // Add appointment right after a save starts an empty form, with no trace of the last customer or message.
-  await page.getByTestId('app-footer').getByRole('button', { name: 'Add appointment', exact: true }).click(); await form.getByRole('button', { name: 'Review appointment', exact: true }).waitFor();
+  // Add appointment after a save starts an empty form, with no trace of the last customer or message.
+  await addTab.click(); await form.getByRole('button', { name: 'Review appointment', exact: true }).waitFor();
   assert.equal(await form.getByLabel('Customer name', { exact: true }).inputValue(), ''); assert.equal(await form.getByRole('alert').count() + await form.getByRole('status').count(), 0);
-  await form.getByRole('button', { name: 'Close appointment form', exact: true }).click(); await form.waitFor({ state: 'detached' });
-  await page.getByTestId('app-footer').getByRole('button', { name: 'Add appointment', exact: true }).click();
+  await form.getByRole('button', { name: 'Close appointment form', exact: true }).click(); await form.waitFor({ state: 'detached' }); await page.waitForURL(url => url.pathname === '/provider/dashboard');
+  await addTab.click();
   await form.getByRole('button', { name: 'Phone consultation', exact: true }).click(); await form.getByRole('button', { name: /Phone specialist/ }).click();
   await form.getByLabel('Customer name', { exact: true }).fill('Another caller'); await form.getByLabel('Customer phone (international format)', { exact: true }).fill('+972501234568'); await form.getByLabel('Appointment time (HH:mm)', { exact: true }).fill('10:00'); await form.getByLabel('Reason for using unverified contact details', { exact: true }).fill('Caller requested this appointment.');
   await form.getByRole('button', { name: 'Review appointment', exact: true }).click(); await form.getByRole('button', { name: 'Confirm manual appointment', exact: true }).click(); await form.getByRole('alert').filter({ hasText: 'The appointment could not be saved.' }).waitFor();

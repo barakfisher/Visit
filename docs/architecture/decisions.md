@@ -531,3 +531,14 @@ The user asked for three changes to the Account screen: the system administratio
 - **Choice: an empty field and Save means "remove", and the button says so (`contactPhone.remove`, in the danger style).**
 - **Choice: sign-out is the secondary danger `ActionButton` (danger-colour border, text and icon, the style PR #55 restored) with a door-and-arrow icon (`SignOutIcon`), at the bottom of the page.** The user suggested a solid red fill with white text. *Rejected:* solid red. On this app it marks the press that does something irreversible (the confirming Cancel in the sheet). Signing out is undone by signing in, and a solid red block at the bottom would be the loudest thing on the page. The arrow points the way the reading direction goes forward.
 - **Choice: the system administration card is the last card, above sign-out.** Only administrators see it, and they rarely need it.
+
+## Add appointment is its own screen — 2026-11-10
+
+PR #57.
+
+The user's review of business mode: pressing Add appointment in the footer showed the form above the agenda, with Home marked in the footer, and read as broken. The form had stayed inline in the agenda when its button moved to the footer (2026-11-08), so the tab opened the agenda.
+
+- **Choice: `/provider/[businessId]/add` is the form's own screen, and the footer marks Add appointment there (the user's call).** The agenda no longer renders the form or scrolls to it. `openManualBooking` (`src/lib/ManualBookingEntry.ts`) prepares the draft and the footer navigates; reached directly, as after a reload, the screen starts a form itself. Pressing Add again keeps a form in progress and starts an empty one after a save, as before. *Rejected:* a sheet over the agenda, which keeps the agenda behind a long form with many fields, and keeping the form inline with Add marked, which would mark a tab whose screen is Home.
+- **Choice: a form opened from the agenda starts on the agenda's day; from anywhere else on today.** The footer passes the day when it opens a new form. This keeps the 2026-11-08 behaviour without the agenda staying mounted.
+- **Choice: Close returns to the agenda (`dismissTo`), on the saved appointment's day after a save,** by setting the agenda's draft day before it mounts. The saved message stays on the add screen until Close, because it says that no message was sent and the contact is unverified.
+- `openManualBooking` moved out of `ManualBooking.service.ts`: the service imports the API client and React Native, which the node unit tests cannot load, and opening a draft is not API access.

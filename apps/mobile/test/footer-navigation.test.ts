@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { accountBusiness, footerHidden, isProviderPath } from '../src/lib/navigation';
+import { accountBusiness, footerHidden, isProviderPath, manualBookingPath } from '../src/lib/navigation';
 
 test('the footer leaves flows and signed-out screens alone', () => {
   for (const path of ['/auth/login', '/register/provider', '/invite']) assert.equal(footerHidden(path), true, path);
@@ -10,6 +10,11 @@ test('the footer leaves flows and signed-out screens alone', () => {
 test('provider mode is decided by the path', () => {
   assert.equal(isProviderPath('/provider/dashboard'), true);
   assert.equal(isProviderPath('/appointments'), false);
+});
+
+test('Add appointment is a business screen with the footer under it', () => {
+  assert.equal(isProviderPath(manualBookingPath('business-1')), true);
+  assert.equal(footerHidden(manualBookingPath('business-1')), false);
 });
 
 test('Account keeps the business it was opened from, only if it is the person\'s own', () => {
