@@ -69,6 +69,8 @@ model Identity {
   email                 String?            @unique
   emailVerifiedAt       DateTime?
   phone                 String?            @unique
+  /// Unverified phone the person typed on their profile; only they see it. Not a sign-in method (that is `phone`).
+  contactPhone          String?
   preferredLocale       String?
   platformRole          PlatformRole       @default(USER)
   createdAt             DateTime           @default(now())

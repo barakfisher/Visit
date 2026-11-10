@@ -87,7 +87,7 @@ export async function customerContactSmoke({ browser, webUrl, apiUrl, prisma, ru
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     assert.equal(new URL(page.url()).pathname, '/');
     await page.unrouteAll({ behavior: 'wait' });
-    await page.getByRole('button', { name: /Book appointment$/ }).filter({ visible: true }).click();
+    await page.getByTestId(`saved-provider-${businessId}`).filter({ visible: true }).getByRole('button', { disabled: false }).first().click();
     await page.getByTestId('provider-tile-book').filter({ visible: true }).click();
     await page.getByRole('button', { name: 'Check or retry this booking', exact: true }).filter({ visible: true }).click();
     await page.waitForURL(url => url.pathname === `/confirmation/${committedId}`);

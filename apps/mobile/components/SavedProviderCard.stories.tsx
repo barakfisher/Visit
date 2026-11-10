@@ -6,7 +6,7 @@ const meta = { title: 'Home/SavedProviderCard', component: SavedProviderCard, ar
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Available: Story = { play: async ({ canvas, args }) => {
-  await userEvent.click(canvas.getByRole('button', { name: /^Noa Studio.*Book appointment$/ })); await expect(args.onBook).toHaveBeenCalledOnce();
+  await userEvent.click(canvas.getByRole('button', { name: /^Noa Studio.*Wellness$/ })); await expect(args.onBook).toHaveBeenCalledOnce();
   await userEvent.click(canvas.getByRole('button', { name: 'Remove Noa Studio from my list' })); await expect(args.onRemove).toHaveBeenCalledOnce(); await expect(args.onBook).toHaveBeenCalledOnce();
 } };
 export const Unavailable: Story = { args: { item: { ...item, available: false, provider: { id: 'business', name: 'Previously saved studio' } } }, play: async ({ canvas, args }) => {

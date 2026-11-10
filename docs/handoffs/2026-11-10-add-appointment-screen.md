@@ -1,6 +1,6 @@
 # Visit handoff — 2026-11-10, Add appointment is its own screen (PR #57)
 
-Built on `main` after PR #54, beside PR #55 (still open when this branch was cut). Read `2026-11-10-past-outcomes.md` for #55's state; its lessons and debt hold.
+Supersedes `2026-11-10-profile-phone.md` for current state (PR #56, which came after #55). Its lessons and debt, and those it carries forward, still hold unless corrected below.
 
 ## Authorization
 
@@ -23,5 +23,4 @@ Reasoning: `docs/architecture/decisions.md`, "Add appointment is its own screen 
 ## Debt worth knowing
 
 - **Not run on a phone.** Checked by unit tests and the web browser suite only.
-- **PR #55 and this branch both touch `VERSION`, `decisions.md` and `ProviderAgenda.types.ts`.** Whichever merges second needs its `VERSION` recomputed from `origin/main` and a small rebase.
 - The smoke now opens the form from the agenda, not from Account; opening from Account (today's date) is covered by reasoning, not a browser check.

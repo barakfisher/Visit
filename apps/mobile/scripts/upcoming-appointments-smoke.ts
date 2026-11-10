@@ -78,7 +78,9 @@ export async function upcomingAppointmentsSmoke({ browser, webUrl, apiUrl, prism
     await page.getByRole('alert').filter({ visible: true }).first().waitFor(); assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: second.id } })).status, 'CONFIRMED');
     await page.unroute(cancelUrl);
     const cancelGate = new Promise<void>(resolve => { releaseCancel = resolve; });
-    await page.route(cancelUrl, async route => { const response = await route.fetch(); await cancelGate; await route.fulfill({ response }); });
+    // Hold the request before it reaches the server: a cancel the server has already made sends a live update, the
+    // details refetch, and the Cancel button disappears before the test can see it disabled.
+    await page.route(cancelUrl, async route => { await cancelGate; await route.continue(); });
     const cancelled = page.waitForResponse(cancelUrl);
     await cancelButton.click(); await answerCancellation(page, true);
     assert.equal(await cancelButton.isDisabled(), true);

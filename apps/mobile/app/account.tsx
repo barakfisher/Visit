@@ -7,7 +7,8 @@ import { AppText as Text } from '@/components/AppText';
 import { LanguageSettings } from '@/components/LanguageSettings';
 import { useAppLocale } from '@/src/i18n/LocaleContext';
 import { ActionButton } from '@/components/ActionButton';
-import { Control } from '@/components/Control';
+import { ContactPhone } from '@/components/ContactPhone.component';
+import { SignOutIcon } from '@/components/NavigationIcons.component';
 import { tokens } from '@/src/design/tokens';
 import { signOut } from '@/src/lib/auth';
 import { apiRequest } from '@/src/lib/api';
@@ -17,11 +18,11 @@ import { accountBusiness, menuCapabilities } from '@/src/lib/navigation';
 
 
 export default function AccountScreen() {
-  const { t } = useAppLocale();
+  const { t, direction } = useAppLocale();
   const business = accountBusiness('/account', useLocalSearchParams<{ businessId?: string }>().businessId, useSessionStore(state => state.profile?.businesses));
   const identityId = useSessionStore((state) => state.identityId);
   const bootstrap = useSessionStore(state => state.bootstrapStatus);
-  const account = useQuery({ queryKey: ['me', identityId], queryFn: () => apiRequest<{ identity: { platformRole: string }; memberships: { role: string; status: string; business: { id: string; name: string; approvalStatus: string } }[]; providerApplications: { id: string; status: string; business: { name: string } }[] }>('/v1/me'), enabled: Boolean(identityId) });
+  const account = useQuery({ queryKey: ['me', identityId], queryFn: () => apiRequest<{ identity: { platformRole: string; contactPhone: string | null }; memberships: { role: string; status: string; business: { id: string; name: string; approvalStatus: string } }[]; providerApplications: { id: string; status: string; business: { name: string } }[] }>('/v1/me'), enabled: Boolean(identityId) });
   const [signingOut, setSigningOut] = useState(false);
   const [methodsBusy, setMethodsBusy] = useState(false);
   const [signOutError, setSignOutError] = useState('');
@@ -33,24 +34,23 @@ export default function AccountScreen() {
   }
   const { applicationStatus, becomeProvider, reviewApplications } = menuCapabilities(account.data);
   if (!identityId && bootstrap !== 'ready') return <SessionLoading />;
-  return <ScrollView testID="account-screen" className="flex-1 bg-canvas" contentContainerClassName="mx-auto w-full max-w-2xl gap-4 px-5 py-3 md:px-8">
+  return <ScrollView testID="account-screen" className="flex-1 bg-canvas" contentContainerClassName="mx-auto w-full max-w-2xl gap-4 px-5 pb-8 pt-3 md:px-8">
+    <LanguageSettings />
+    {/* The settings left the footer for this entry, so it shows only when Account was opened from a business. */}
+    {business ? <ActionButton secondary label={t('nav.businessSettings')} onPress={() => router.push({ pathname: '/provider/[businessId]', params: { businessId: business } })} /> : null}
+    {identityId && account.data ? <ContactPhone saved={account.data.identity.contactPhone} /> : null}
+    {identityId ? <AccountMethods onBusyChange={setMethodsBusy} /> : null}
+    {!identityId ? <View className="gap-3 rounded-card border border-line bg-surface p-card"><Text className="font-semibold text-ink">{t('account.title')}</Text><Text className="leading-6 text-body">{t('account.guestHelp')}</Text><Link href="/auth/login" className="self-start rounded-control bg-brand px-5 py-4 font-semibold text-white">{t('common.signIn')}</Link></View> : account.isLoading ? <View className="flex-row items-center gap-2"><ActivityIndicator color="#0f766e"/><Text className="text-body">{t('account.loading')}</Text></View> : account.isError ? <View className="gap-3 rounded-card border border-line bg-surface p-card"><Text accessibilityRole="alert" className="text-warning">{t('account.failure')}</Text><Pressable onPress={() => void account.refetch()} className="self-start rounded-control border border-line px-4 py-3"><Text className="font-semibold text-brand">{t('common.retry')}</Text></Pressable></View> : <>
+      {applicationStatus || becomeProvider ? <Link href="/register/provider" className="min-h-action rounded-control border border-line px-4 py-4 font-semibold text-brand">{t(applicationStatus ? 'account.applicationStatus' : 'account.becomeProvider')}</Link> : null}
+    </>}
     {reviewApplications ? <View testID="system-admin" style={{ borderColor: tokens.color.warning }} className="gap-2 rounded-card border-2 p-4">
       <Text accessibilityRole="header" style={{ color: tokens.color.warning }} className="font-bold">{t('account.systemAdmin')}</Text>
       <Text className="text-sm text-body">{t('account.systemAdminNote')}</Text>
       <ActionButton secondary label={t('review.admin')} onPress={() => router.push('/admin/applications')} />
     </View> : null}
-    <LanguageSettings />
-    {/* The settings left the footer for this entry, so it shows only when Account was opened from a business. */}
-    {business ? <ActionButton secondary label={t('nav.businessSettings')} onPress={() => router.push({ pathname: '/provider/[businessId]', params: { businessId: business } })} /> : null}
-    {identityId ? <AccountMethods onBusyChange={setMethodsBusy} /> : null}
-    {!identityId ? <View className="gap-3 rounded-card border border-line bg-surface p-card"><Text className="font-semibold text-ink">{t('account.title')}</Text><Text className="leading-6 text-body">{t('account.guestHelp')}</Text><Link href="/auth/login" className="self-start rounded-control bg-brand px-5 py-4 font-semibold text-white">{t('common.signIn')}</Link></View> : account.isLoading ? <View className="flex-row items-center gap-2"><ActivityIndicator color="#0f766e"/><Text className="text-body">{t('account.loading')}</Text></View> : account.isError ? <View className="gap-3 rounded-card border border-line bg-surface p-card"><Text accessibilityRole="alert" className="text-warning">{t('account.failure')}</Text><Pressable onPress={() => void account.refetch()} className="self-start rounded-control border border-line px-4 py-3"><Text className="font-semibold text-brand">{t('common.retry')}</Text></Pressable></View> : <>
-      {applicationStatus || becomeProvider ? <Link href="/register/provider" className="min-h-action rounded-control border border-line px-4 py-4 font-semibold text-brand">{t(applicationStatus ? 'account.applicationStatus' : 'account.becomeProvider')}</Link> : null}
-    </>}
-    {identityId ? <View className="gap-2 border-t border-line pt-2">
+    {identityId ? <View className="gap-2 pt-2">
       {signOutError ? <Text accessibilityRole="alert" className="text-danger">{signOutError}</Text> : null}
-      <Control accessibilityRole="button" accessibilityLabel={t('account.signOut')} aria-busy={signingOut} accessibilityState={{ disabled: methodsBusy || signingOut, busy: signingOut }} disabled={methodsBusy || signingOut} onPress={() => void logout()} className="justify-center rounded-control">
-        {signingOut ? <ActivityIndicator accessibilityLabel={t('account.signOut')} color={tokens.color.danger} /> : <Text className="font-semibold text-danger">{t('account.signOut')}</Text>}
-      </Control>
+      <ActionButton testID="sign-out" secondary danger busy={signingOut} disabled={methodsBusy} label={t('account.signOut')} icon={color => <SignOutIcon color={color} pointsRight={direction === 'ltr'} />} onPress={() => void logout()} />
     </View> : null}
   </ScrollView>;
 }

@@ -1,5 +1,8 @@
 import type { AppointmentActionScope, LifecycleAppointment } from '../types/AppointmentLifecycle.types';
-export function canRecordAppointmentOutcome(booking: LifecycleAppointment, now = Date.now()) {
+// An ended appointment counts as attended; the business only records a no-show. The server says when that is still
+// possible (`canMarkNoShow`); a row loaded before its end still says CONFIRMED, so the device clock covers that gap.
+export function canMarkNoShow(booking: LifecycleAppointment, now = Date.now()) {
+  if (booking.canMarkNoShow) return true;
   const endsAt = Date.parse(booking.endsAt);
   return booking.status === 'CONFIRMED' && Number.isFinite(endsAt) && Number.isFinite(now) && endsAt <= now;
 }
