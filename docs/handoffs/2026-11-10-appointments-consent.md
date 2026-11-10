@@ -4,7 +4,7 @@ Supersedes `2026-11-09-business-page.md` for current state. Its lessons and debt
 
 ## Authorization
 
-The user's global working agreement governs. The user reviewed My appointments and the booking screen on an Android phone, accepted the recommendations and asked for past appointments behind a link; the user asked for the PR (#PR_NUMBER); merging was not asked for.
+The user's global working agreement governs. The user reviewed My appointments and the booking screen on an Android phone, accepted the recommendations and asked for past appointments behind a link; the user asked for the PR (#53); merging was not asked for.
 
 ## Where things stand
 

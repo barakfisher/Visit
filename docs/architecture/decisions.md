@@ -469,7 +469,7 @@ The user's review of the booking screen: it had no footer, a "Back to Home" link
 
 ## My appointments and final consent, tidied — 2026-11-10
 
-PR pending.
+PR #53.
 
 The user's review of My appointments and the booking screen on Android: a redundant screen title, a status ("Scheduled") that every upcoming card shares, a "View appointment details" link plus three buttons of different sizes on each card, past appointments always listed below, a reschedule screen that opened on today, a "being moved:" line, a time chip that grew when chosen, and a review card the customer could book past without reading.
 
