@@ -7,5 +7,6 @@ export type AppointmentHistory = { id: string; status: AppointmentStatus; revisi
 export type LifecycleView = { status: string; toggleLabel: string; expanded: boolean; loading: boolean; loadingLabel: string; error: string; busy: boolean; events: { id: string; action: string; recorded: string; detail: string; source: string }[]; empty: string; retryLabel: string; completeLabel: string; noShowLabel: string; cancelLabel: string; onToggle: () => void; onRetry: () => void; onComplete?: () => void; onNoShow?: () => void; onCancel?: () => void };
 export type AppointmentActionScope = { identityId: string | null; contextVersion: number; activeBusinessId: string | null };
 
-export type AppointmentAuditProps = { booking: LifecycleAppointment; timezone: string; businessId?: string };
+// `quiet` opens the change history from a text link instead of a button; `hideStatus` leaves out a status every card in the list shares.
+export type AppointmentAuditProps = { booking: LifecycleAppointment; timezone: string; businessId?: string; quiet?: boolean; hideStatus?: boolean };
 export type ActiveAppointment = HistoricalAppointment & { actions: { canCancel: boolean; canReschedule: boolean } };

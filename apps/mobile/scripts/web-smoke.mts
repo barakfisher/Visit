@@ -1,5 +1,5 @@
 import { manualBookingSmoke } from './manual-booking-smoke';
-import { selectBookingDate, showBookingTime } from './booking-controls.utils';
+import { openConfirmation, selectBookingDate, showBookingTime } from './booking-controls.utils';
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID, randomInt, createHash } from 'node:crypto';
@@ -205,12 +205,13 @@ try {
     await selectBookingDate(page, date);
     const beforeReview = await prisma.booking.count({ where: { customerId: identities[0]!.id } });
     await page.getByRole('button', { name: /09:00 · Alex North/ }).click();
-    await page.getByRole('heading', { name: 'Review your appointment' }).waitFor();
+    const reviewSheet = await openConfirmation(page);
+    await page.getByRole('heading', { name: 'Confirm your appointment' }).waitFor();
     assert.equal(await prisma.booking.count({ where: { customerId: identities[0]!.id } }), beforeReview);
     assert.equal(await page.getByText(/Slot held for/).count(), 0);
     await page.screenshot({ path: path.join(diagnostics, 'booking-review-mobile.png'), fullPage: true });
     const commitResponse = page.waitForResponse(response => response.url().endsWith('/api/bookings/commit'));
-    await page.getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).click();
+    await reviewSheet.getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).click();
     const committed = await commitResponse; assert.equal(committed.status(), 200);
     const hold = { holdId: (await committed.json()).id };
     await page.getByTestId('app-toast').getByText('Your appointment is confirmed and saved.', { exact: true }).waitFor();
@@ -410,7 +411,7 @@ try {
     const replies = [page, pageB].map((contestant) => contestant.waitForResponse((response) => response.url().endsWith('/api/bookings/commit')));
     await Promise.all([page, pageB].map((contestant) => contestant.getByRole('button', { name: /11:00 · Alex North/ }).click()));
     assert.equal(await prisma.booking.count({ where: { businessId: businessIds[0]!, startsAt: new Date(`${date}T11:00:00Z`) } }), 0);
-    await Promise.all([page, pageB].map(contestant => contestant.getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).click()));
+    await Promise.all([page, pageB].map(contestant => openConfirmation(contestant).then(sheet => sheet.getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).click())));
     const results = await Promise.all(replies); clearTimeout(barrierTimeout);
     assert.equal(arrived, 2); assert.deepEqual(results.map((response) => response.status()).sort(), [200, 409]);
     const winnerIndex = results.findIndex((response) => response.status() === 200), winner = [page, pageB][winnerIndex]!, loser = [page, pageB][1 - winnerIndex]!;
@@ -442,7 +443,7 @@ try {
         await route.abort();
       } else await route.continue();
     });
-    await page.getByRole('button', { name: 'Confirm reschedule' }).click();
+    await (await openConfirmation(page)).getByRole('button', { name: 'Confirm reschedule' }).click();
     await page.getByRole('alert').waitFor();
     assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: hold.holdId } })).startsAt.toISOString(), `${date}T14:00:00.000Z`);
     await page.getByRole('button', { name: 'Check or retry this booking', exact: true }).click();
@@ -544,7 +545,7 @@ try {
     await prisma.bookingPolicy.create({ data: { businessId: foldBusiness.id, minimumNoticeMinutes: 0, maximumAdvanceDays: 730, cancellationCutoffMinutes: 0, rescheduleCutoffMinutes: 0 } });
     capture = providerPage;
     await providerPage.goto(`${webUrl}/booking/${foldBusiness.id}?serviceId=${foldService.id}&date=${foldDate}`);
-    await providerPage.getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).waitFor();
+    await providerPage.getByTestId('booking-continue').filter({ visible: true }).waitFor();
     await showBookingTime(providerPage, '01:30');
     await providerPage.getByRole('button', { name: /01:30 \(first occurrence\) · Fold specialist/ }).waitFor();
     // The repeated hour's second pass may sit in this group of six or a later one.
@@ -553,7 +554,7 @@ try {
     await providerPage.getByRole('button', { name: /01:30 \(second occurrence\) · Fold specialist/ }).click();
     const previousDay = new Date(`${foldDate}T00:00:00Z`); previousDay.setUTCDate(previousDay.getUTCDate() - 1);
     const expectedInstant = zone === 'Asia/Jerusalem' ? `${previousDay.toISOString().slice(0, 10)}T23:30:00.000Z` : `${foldDate}T06:30:00.000Z`;
-    await providerPage.getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).click();
+    await (await openConfirmation(providerPage)).getByRole('button', { name: 'Confirm & Book Appointment', exact: true }).click();
     const foldHold = await (await foldHoldResponse).json();
     await providerPage.getByRole('button', { name: 'Add to calendar (.ics)' }).filter({ visible: true }).waitFor();
     assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: foldHold.id } })).startsAt.toISOString(), expectedInstant);

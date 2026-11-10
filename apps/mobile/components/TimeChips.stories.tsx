@@ -18,3 +18,9 @@ export const RepeatedClockTime: Story = { args: { slots: foldLabels.map((label, 
   await userEvent.click(canvas.getByRole('button', { name: /second occurrence/ }));
   await expect(args.onSelect).toHaveBeenCalledWith('fold-1');
 } };
+// Time-and-staff labels in a Hebrew layout at phone width: every chip stays clickable, none covers another.
+const staffed = ['10:00', '10:15', '10:30', '10:45', '11:00', '11:15'].map(time => ({ id: time, label: `${time} · Pilot expert edited` }));
+export const HebrewStaffedLabels: Story = { globals: { locale: 'he' }, args: { slots: staffed, onSelect: fn() }, decorators: [Story => <div style={{ width: 343 }}><Story /></div>], play: async ({ canvas, args }) => {
+  for (const slot of staffed) { const chip = canvas.getByRole('button', { name: new RegExp(slot.label) }); const box = chip.getBoundingClientRect(); const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2); await expect(chip.contains(hit)).toBe(true); }
+  await userEvent.click(canvas.getByRole('button', { name: /11:00/ })); await expect(args.onSelect).toHaveBeenCalledWith('11:00');
+} };

@@ -65,7 +65,11 @@ export function pilotCustomers({ browser, webUrl, apiUrl, prisma, redis, identit
   }
   const slotButton = (page: Page, slot: Slot) => page.getByRole('button', { name: new RegExp(`^${slot.localTime} · ${SETUP_STAFF_NAME}`) }).filter({ visible: true });
   const reviewCard = (page: Page) => page.getByText(`${business.businessName} · ${SETUP_SERVICE.name}`, { exact: true }).filter({ visible: true });
-  const confirmButton = (page: Page, t: (key: 'compact.confirm') => string) => page.getByRole('button', { name: t('compact.confirm'), exact: true }).filter({ visible: true });
+  // Choosing a time enables "Continue"; the review and the button that books are in the confirmation sheet it opens.
+  const continueButton = (page: Page) => page.getByTestId('booking-continue').filter({ visible: true });
+  const chosen = (page: Page) => page.locator('[data-testid="booking-continue"]:not([aria-disabled="true"])').filter({ visible: true });
+  async function openReview(page: Page) { await continueButton(page).click(); await page.getByTestId('booking-review-sheet').filter({ visible: true }).waitFor(); await reviewCard(page).waitFor(); }
+  const confirmButton = (page: Page, t: (key: 'compact.confirm') => string) => page.getByTestId('booking-review-sheet').getByRole('button', { name: t('compact.confirm'), exact: true }).filter({ visible: true });
   // Opens the booking screen on a date with one slot in view, not yet chosen.
   async function showSlot(page: Page, t: (key: Parameters<typeof translate>[1]) => string, date: string, slot: Slot) {
     await page.goto(bookingUrl(date));
@@ -74,11 +78,11 @@ export function pilotCustomers({ browser, webUrl, apiUrl, prisma, redis, identit
     await showBookingTime(page, slot.localTime);
     await slotButton(page, slot).first().waitFor();
   }
-  // Opens the booking screen on a date and reviews one slot. Review is advisory: nothing is written yet.
+  // Opens the booking screen on a date, chooses one slot and opens its confirmation sheet. Nothing is written yet.
   async function review(page: Page, t: (key: Parameters<typeof translate>[1]) => string, date: string, slot: Slot) {
     await showSlot(page, t, date, slot);
     await slotButton(page, slot).first().click();
-    await reviewCard(page).waitFor();
+    await openReview(page);
   }
   // A second, real customer takes a slot through the same final-consent endpoint the app uses.
   async function bookThroughApi(context: BrowserContext, slot: Slot, idempotencyKey = randomUUID()) {
@@ -111,5 +115,5 @@ export function pilotCustomers({ browser, webUrl, apiUrl, prisma, redis, identit
       assert.equal(await redis.exists(`visit:hold:${id}`), 0, `hold record remains for ${id}`);
     }
   }
-  return { contexts, errors, bookingUrl, newContext, newPage, customer, resume, freeSlots, slotButton, reviewCard, confirmButton, showSlot, review, bookThroughApi, fillSlot, assertNothingHeld };
+  return { contexts, errors, bookingUrl, newContext, newPage, customer, resume, freeSlots, slotButton, reviewCard, continueButton, chosen, openReview, confirmButton, showSlot, review, bookThroughApi, fillSlot, assertNothingHeld };
 }

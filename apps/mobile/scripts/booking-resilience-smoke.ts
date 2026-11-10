@@ -27,7 +27,7 @@ export async function bookingResilienceSmoke({ browser, webUrl, apiUrl, prisma, 
   let dateOffset = 0;
   // Dates after the lifecycle's own booking date and its closed staff date.
   const scenarioDate = () => new Date(Date.parse(`${business.bookableDate}T12:00:00Z`) + ++dateOffset * 86400000).toISOString().slice(0, 10);
-  const { contexts, errors, newPage, customer, freeSlots, slotButton, reviewCard, confirmButton, showSlot, review, fillSlot, assertNothingHeld } = pilotCustomers({ browser, webUrl, apiUrl, prisma, redis, identityIds, business, resetSignInLimits });
+  const { contexts, errors, newPage, customer, freeSlots, slotButton, reviewCard, chosen, openReview, confirmButton, showSlot, review, fillSlot, assertNothingHeld } = pilotCustomers({ browser, webUrl, apiUrl, prisma, redis, identityIds, business, resetSignInLimits });
   // Back at selection: the review is gone and another bookable time is offered on the same screen.
   async function assertBackAtSelection(page: Page, date: string, lost: Slot) {
     await reviewCard(page).waitFor({ state: 'hidden' });
@@ -49,7 +49,7 @@ export async function bookingResilienceSmoke({ browser, webUrl, apiUrl, prisma, 
   // D: after losing, the customer picks another offered time on the same screen and gets exactly one booking for it.
   async function bookAnotherTime(page: Page, t: (key: Parameters<typeof translate>[1]) => string, customerId: string, next: Slot) {
     await slotButton(page, next).first().click();
-    await reviewCard(page).waitFor();
+    await openReview(page);
     await confirmButton(page, t).click();
     await expectConfirmation(page, customerId, next);
     await assertNothingHeld(customerId, 1);
@@ -103,7 +103,7 @@ export async function bookingResilienceSmoke({ browser, webUrl, apiUrl, prisma, 
       if (++reads === READS_PER_FAILURE) allFailed();
     });
     await slotButton(shopper.page, slot).first().click();
-    await reviewCard(shopper.page).waitFor();
+    await chosen(shopper.page).waitFor();
     await failed;
     await shopper.page.waitForTimeout(RENDER_SETTLE_MS);
     assert.equal(await shopper.page.getByText(shopper.t('compact.slotsFailed'), { exact: true }).filter({ visible: true }).count(), 0);

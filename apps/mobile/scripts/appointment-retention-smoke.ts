@@ -33,7 +33,7 @@ type ApiFailure = { error: { code: string } };
 
 export async function appointmentRetentionSmoke(deps: Deps) {
   const { webUrl, apiUrl, prisma, business } = deps;
-  const { contexts, errors, newPage, resume, freeSlots, slotButton, reviewCard, confirmButton, review, bookThroughApi, fillSlot, assertNothingHeld } = pilotCustomers(deps);
+  const { contexts, errors, newPage, resume, freeSlots, slotButton, continueButton, openReview, confirmButton, review, bookThroughApi, fillSlot, assertNothingHeld } = pilotCustomers(deps);
   await mkdir(evidence, { recursive: true });
   const pilot = (locale: 'en' | 'he') => business.customers.find(entry => entry.locale === locale)!;
   const booking = (id: string) => prisma.booking.findUniqueOrThrow({ where: { id } });
@@ -70,9 +70,9 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     await page.getByRole('heading', { name: owner.t('compact.rescheduleTitle'), exact: true }).filter({ visible: true }).waitFor();
     await showBookingTime(page, slot.localTime);
     await slotButton(page, slot).first().click();
-    await reviewCard(page).waitFor();
+    await openReview(page);
   }
-  const rescheduleButton = (owner: PilotCustomer, page: Page) => page.getByRole('button', { name: owner.t('compact.reschedule'), exact: true }).filter({ visible: true });
+  const rescheduleButton = (owner: PilotCustomer, page: Page) => page.getByTestId('booking-review-sheet').getByRole('button', { name: owner.t('compact.reschedule'), exact: true }).filter({ visible: true });
   // A busy action keeps its accessible name on the spinner; only its visible label shows that it has settled.
   const settled = (button: Locator, label: string) => button.getByText(label, { exact: true }).waitFor();
   const rescheduleResponse = (page: Page, bookingId: string) => page.waitForResponse(response => response.url() === `${apiUrl}/v1/bookings/${bookingId}/reschedule` && response.request().method() === 'POST');
@@ -158,8 +158,8 @@ export async function appointmentRetentionSmoke(deps: Deps) {
       await rescheduleButton(owner, owner.page).click();
       const refusal = await refusedMove; assert.equal(refusal.status(), 409); assert.equal(await errorCode(refusal), 'SLOT_TAKEN');
       await owner.page.getByTestId('app-toast').getByText(owner.t('compact.changed'), { exact: true }).waitFor();
-      // The action settles back to its labelled state once the screen has refetched (it shows a spinner meanwhile).
-      await settled(rescheduleButton(owner, owner.page), owner.t('compact.reschedule'));
+      // A refusal closes the confirmation sheet; the screen's own action settles back to its label once it has refetched.
+      await settled(continueButton(owner.page), owner.t('compact.continue'));
       await owner.page.screenshot({ path: path.join(evidence, `reschedule-conflict-${locale}-mobile.png`), fullPage: true });
       await owner.page.unrouteAll({ behavior: 'wait' });
       const kept = await booking(id);
@@ -185,11 +185,12 @@ export async function appointmentRetentionSmoke(deps: Deps) {
     await homeCard(he.page, h1).waitFor();
     assert.equal(await homeCard(he.page, h2).count(), 0);
     // On a narrow phone the Appointments page stacks the upcoming cards whole, labels only the first as the next visit,
-    // and does not list them again under history.
+    // links each summary to its details, and does not list them again under the past appointments it shows on request.
     for (const [owner, ids, locale] of [[he, [h1, h2], 'he'], [en, [e1], 'en']] as const) {
       const page = await newPage(owner.context); await page.setViewportSize(NARROW_PHONE);
       await page.goto(`${webUrl}/appointments`);
       const cards = ids.map(id => homeCard(page, id)); for (const card of cards) await card.waitFor();
+      await page.getByTestId('appointments-history-toggle').filter({ visible: true }).click();
       await page.getByRole('heading', { name: owner.t('lifecycle.history'), exact: true }).waitFor();
       await page.getByText(owner.t('common.loading'), { exact: true }).filter({ visible: true }).waitFor({ state: 'detached' }); // history has settled
       const boxes = await Promise.all(cards.map(card => card.boundingBox()));
@@ -198,7 +199,7 @@ export async function appointmentRetentionSmoke(deps: Deps) {
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'the page scrolls sideways');
       assert.equal(await page.getByText(owner.t('ui.nextVisit'), { exact: true }).filter({ visible: true }).count(), 1);
       assert.equal(await cards[0]!.getByText(owner.t('ui.nextVisit'), { exact: true }).count(), 1);
-      for (const id of ids) { await homeCard(page, id).getByRole('link', { name: owner.t('details.open'), exact: true }).waitFor(); assert.equal(await page.getByTestId(`history-booking-${id}`).count(), 0); }
+      for (const id of ids) { await homeCard(page, id).getByRole('link').waitFor(); assert.equal(await page.getByTestId(`history-booking-${id}`).count(), 0); }
       await page.screenshot({ path: path.join(evidence, `appointments-upcoming-${locale}-narrow.png`), fullPage: true });
       await page.close();
     }
@@ -250,7 +251,7 @@ export async function appointmentRetentionSmoke(deps: Deps) {
       // An unpublished business is not public: the commit answers as for any business that cannot be booked.
       const response = await reply; assert.equal(response.status(), 404); assert.equal(await errorCode(response), 'NOT_FOUND');
       await alert(page, shopper.t('bookingCommit.conflict')).waitFor();
-      await settled(confirmButton(page, shopper.t), shopper.t('compact.confirm'));
+      await settled(continueButton(page), shopper.t('compact.continue'));
       // The refetched business is no longer public, so the screen says it is not accepting bookings.
       await alertsAre(page, [shopper.t('providers.unavailable'), shopper.t('bookingCommit.conflict')]);
       await page.screenshot({ path: path.join(evidence, `unpublished-during-review-${shopper === en ? 'en' : 'he'}-mobile.png`), fullPage: true });
@@ -354,7 +355,7 @@ export async function appointmentRetentionSmoke(deps: Deps) {
       await rescheduleButton(owner, move).click();
       const moveReply = await moveRefused; assert.equal(moveReply.status(), 409); assert.equal(await errorCode(moveReply), RESCHEDULE_CUTOFF);
       await alert(move, owner.t('lifecycle.rescheduleCutoff')).waitFor();
-      await settled(rescheduleButton(owner, move), owner.t('compact.reschedule'));
+      await settled(continueButton(move), owner.t('compact.continue'));
       // The refetched reschedule screen is refused for the same reason, and says so in the customer's language.
       await alertsAre(move, [owner.t('lifecycle.rescheduleCutoff'), owner.t('lifecycle.rescheduleCutoff')]);
       await move.screenshot({ path: path.join(evidence, `cutoff-reschedule-refused-${locale}-mobile.png`), fullPage: true });

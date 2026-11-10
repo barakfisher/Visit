@@ -1,7 +1,7 @@
 export const contactEn = {
   'bookingCommit.processing': 'Booking your appointment…',
   'bookingCommit.resumeOther': 'Finish the pending booking first',
-  'bookingCommit.review': 'Review your appointment',
+  'bookingCommit.review': 'Confirm your appointment',
   'bookingCommit.minutes': 'minutes',
   'bookingCommit.cancelHours.one': 'Cancellation cutoff: 1 hour before the appointment.',
   'bookingCommit.cancelHours.two': 'Cancellation cutoff: {count} hours before the appointment.',
@@ -29,7 +29,7 @@ export const contactEn = {
 export const contactHe: Record<keyof typeof contactEn, string> = {
   'bookingCommit.processing': 'קביעת התור מתבצעת…',
   'bookingCommit.resumeOther': 'השלמת ההזמנה הקודמת תחילה',
-  'bookingCommit.review': 'בדיקת פרטי התור',
+  'bookingCommit.review': 'אישור פרטי התור',
   'bookingCommit.minutes': 'דקות',
   'bookingCommit.cancelHours.one': 'ניתן לבטל עד שעה לפני התור.',
   'bookingCommit.cancelHours.two': 'ניתן לבטל עד שעתיים לפני התור.',

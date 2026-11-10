@@ -7,7 +7,7 @@ export const compactEn = {
   'compact.loadingCalendar': 'Loading available dates', 'compact.calendarFailed': 'Available dates could not load.', 'compact.calendarHelp': 'Only dates with bookable times are enabled. Availability may change before confirmation.',
   'compact.slotsFailed': 'Available times could not load.', 'compact.detailsFailed': 'Booking details could not load.', 'compact.changed': 'That time is no longer available. Choose another time.', 'compact.nameFailed': 'Could not save your name. Try again.',
   'compact.signIn': 'Sign in to reserve this time', 'compact.reschedule': 'Confirm reschedule', 'compact.confirm': 'Confirm & Book Appointment',
-  'compact.movingFrom': 'Appointment being moved: {when}',
+  'compact.continue': 'Continue', 'compact.backToEdit': 'Back to editing', 'compact.replaces': 'Instead of {when}',
 };
 export const compactHe: Record<keyof typeof compactEn, string> = {
   'compact.loadingDetails': 'טעינת פרטי העסק',
@@ -18,5 +18,5 @@ export const compactHe: Record<keyof typeof compactEn, string> = {
   'compact.loadingCalendar': 'טעינת תאריכים פנויים', 'compact.calendarFailed': 'לא ניתן לטעון תאריכים פנויים.', 'compact.calendarHelp': 'אפשר לבחור רק תאריכים עם שעות פנויות. הזמינות עשויה להשתנות עד לאישור הסופי.',
   'compact.slotsFailed': 'לא ניתן לטעון שעות פנויות.', 'compact.detailsFailed': 'לא ניתן לטעון את פרטי ההזמנה.', 'compact.changed': 'השעה הזו אינה פנויה עוד. יש לבחור שעה אחרת.', 'compact.nameFailed': 'לא הצלחנו לשמור את השם. נסו שוב.',
   'compact.signIn': 'כניסה לחשבון לשמירת השעה', 'compact.reschedule': 'אישור שינוי מועד', 'compact.confirm': 'אישור וקביעת התור',
-  'compact.movingFrom': 'התור שמועבר: {when}',
+  'compact.continue': 'המשך', 'compact.backToEdit': 'חזרה לעריכה', 'compact.replaces': 'במקום {when}',
 };

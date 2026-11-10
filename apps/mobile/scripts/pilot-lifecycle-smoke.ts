@@ -201,15 +201,17 @@ export async function pilotLifecycleSmoke({ browser, webUrl, apiUrl, prisma, red
       await showBookingTime(page, time);
       const confirmedBefore = await prisma.booking.count({ where: { businessId: business.id, status: 'CONFIRMED' } });
       await page.getByRole('button', { name: new RegExp(`${time} · ${STAFF_NAME}`) }).filter({ visible: true }).first().click();
+      // "Continue" opens the confirmation sheet: the review and the only button that books.
+      await page.getByTestId('booking-continue').filter({ visible: true }).click();
+      const sheet = page.getByTestId('booking-review-sheet').filter({ visible: true }); await sheet.waitFor();
       // Review shows the exact business-local time even though this browser runs in New York.
       const expected = businessInstant(bookableDate, time);
       const shown = await expectedReviewText(page, locale, expected, PRICE_MINOR);
-      // The review card is the parent of its business/service line; the price also appears under the service picker.
-      const reviewCard = page.getByText(`${businessName} · ${SERVICE_NAME}`, { exact: true }).filter({ visible: true }).locator('..');
+      // The review is the parent of its business/service line; the price also appears under the service picker.
+      const reviewCard = sheet.getByText(`${businessName} · ${SERVICE_NAME}`, { exact: true }).filter({ visible: true }).locator('..');
       await reviewCard.waitFor();
       await reviewCard.getByText(`${shown.when} · ${STAFF_NAME}`, { exact: true }).waitFor();
       await reviewCard.getByText(`${SETUP_SERVICE.durationMinutes} ${t('bookingCommit.minutes')} · ${shown.price}`, { exact: true }).waitFor();
-      await page.getByText(`${businessName} · ${SERVICE_NAME}`, { exact: true }).filter({ visible: true }).scrollIntoViewIfNeeded();
       await page.screenshot({ path: path.join(evidence, `review-${locale}-mobile.png`), fullPage: true });
       // No capacity hold and no booking exist while the customer is only selecting and reviewing.
       assert.equal(await prisma.booking.count({ where: { businessId: business.id, status: { not: 'CONFIRMED' } } }), 0);
@@ -217,7 +219,7 @@ export async function pilotLifecycleSmoke({ browser, webUrl, apiUrl, prisma, red
       assert.deepEqual(await redisKeys(redis, `visit:reservation:${business.id}:*`), []);
       assert.deepEqual(await redisKeys(redis, `visit:slot:${encodeURIComponent(business.id)}:*`), []);
       let commits = 0; page.on('request', request => { if (request.url().endsWith('/api/bookings/commit')) commits++; });
-      await page.getByRole('button', { name: t('compact.confirm'), exact: true }).filter({ visible: true }).click();
+      await sheet.getByRole('button', { name: t('compact.confirm'), exact: true }).click();
       await page.locator('[data-testid="booking-confirmation"]:visible').waitFor();
       await page.screenshot({ path: path.join(evidence, `confirmation-${locale}-mobile.png`), fullPage: true });
       const confirmed = await prisma.booking.findMany({ where: { businessId: business.id, customerId, status: 'CONFIRMED' } });

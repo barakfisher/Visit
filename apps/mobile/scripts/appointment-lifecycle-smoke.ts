@@ -47,21 +47,28 @@ export async function appointmentLifecycleSmoke({ browser, webUrl, apiUrl, prism
     assert.equal(await futureCard.getByRole('button', { name: 'Mark completed', exact: true }).count(), 0);
     const customerPage = await customerContext.newPage();
     await customerPage.goto(`${webUrl}/appointments`);
+    // Past appointments are behind a link, not on the page by default.
+    const showPast = (label: string) => customerPage.getByTestId('appointments-history-toggle').filter({ visible: true }).getByText(label, { exact: true });
+    assert.equal(await customerPage.getByRole('heading', { name: 'Appointment history', exact: true }).count(), 0);
+    await showPast('View past appointments').click();
     await customerPage.getByRole('heading', { name: 'Appointment history', exact: true }).waitFor();
     for (const [booking, status] of [[completed, 'Completed'], [noShow, 'No-show'], [cancelled, 'Cancelled']] as const) {
       const card = customerPage.getByTestId(`history-booking-${booking.id}`); await card.getByText(status, { exact: true }).waitFor();
       await card.getByText('Lifecycle consultation', { exact: true }).waitFor();
       assert.equal(await card.getByRole('button', { name: 'Mark completed', exact: true }).count(), 0);
     }
-    // The scheduled appointment is an upcoming card with its status and change history, not a history entry.
-    await customerPage.getByTestId(`active-booking-${scheduled.id}`).getByText('Scheduled', { exact: true }).waitFor();
+    // The scheduled appointment is an upcoming card with its change history, not a history entry; the status every
+    // upcoming card shares is not repeated on it.
+    const upcomingCard = customerPage.getByTestId(`active-booking-${scheduled.id}`);
+    await upcomingCard.getByRole('button', { name: 'Show audit history', exact: true }).waitFor();
+    assert.equal(await upcomingCard.getByText('Scheduled', { exact: true }).count(), 0);
     assert.equal(await customerPage.getByTestId(`history-booking-${scheduled.id}`).count(), 0);
     const owned = customerPage.getByTestId(`history-booking-${completed.id}`);
     await owned.getByRole('button', { name: 'Show audit history', exact: true }).click();
     await owned.getByText('Business manager · Appointment finished', { exact: true }).waitFor();
-    await customerPage.reload(); await customerPage.getByTestId(`history-booking-${noShow.id}`).getByText('No-show', { exact: true }).waitFor();
+    await customerPage.reload(); await showPast('View past appointments').click(); await customerPage.getByTestId(`history-booking-${noShow.id}`).getByText('No-show', { exact: true }).waitFor();
     await customerPage.goto(`${webUrl}/account`); await customerPage.getByTestId('language-he').click();
-    await customerPage.goto(`${webUrl}/appointments`); await customerPage.getByRole('heading', { name: 'היסטוריית תורים', exact: true }).waitFor();
+    await customerPage.goto(`${webUrl}/appointments`); await showPast('צפייה בהיסטוריית התורים').click(); await customerPage.getByRole('heading', { name: 'היסטוריית תורים', exact: true }).waitFor();
     await customerPage.getByTestId(`history-booking-${completed.id}`).getByText('הושלם', { exact: true }).waitFor();
     assert.equal(await customerPage.locator('html').getAttribute('dir'), 'rtl');
     assert.equal(await prisma.savedProvider.count({ where: { identityId: customer.id } }), 0);
