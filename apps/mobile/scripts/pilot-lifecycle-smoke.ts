@@ -1,3 +1,4 @@
+import { showAgendaAt, unfoldAgendaCard } from './agenda-day';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
@@ -242,11 +243,11 @@ export async function pilotLifecycleSmoke({ browser, webUrl, apiUrl, prisma, red
     const hebrew = await customerJourney('he', '11:00');
 
     // 8. The provider's agenda shows both committed appointments with service and verified contact.
-    await provider.goto(`${webUrl}/provider/dashboard?businessId=${business.id}`);
-    await provider.getByLabel('Agenda date', { exact: true }).fill(bookableDate);
+    // The home shows today only, so the page's clock is set to the start of that day in Israel (00:05 or 01:05 local).
+    await showAgendaAt(provider, `${webUrl}/provider/dashboard?businessId=${business.id}`, `${bookableDate}T00:05:00+02:00`);
     for (const { booking, phone } of [english, hebrew]) {
       const agendaCard = provider.getByTestId(`agenda-booking-${booking.id}`);
-      await agendaCard.waitFor();
+      await unfoldAgendaCard(provider, agendaCard);
       const text = await agendaCard.innerText();
       assert.ok(text.includes(SERVICE_NAME), `agenda card lacks service: ${text}`);
       assert.ok(text.includes(phone), `agenda card lacks customer phone: ${text}`);

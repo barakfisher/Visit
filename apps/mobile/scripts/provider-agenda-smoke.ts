@@ -5,6 +5,7 @@ import type { Browser } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
 import { summaryText } from './business-setup-smoke.js';
 import { answerCancellation } from './cancellation-prompt';
+import { showAgendaAt, unfoldAgendaCard, unfoldEndedToday } from './agenda-day';
 export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run, businessIds, identityIds }: { browser: Browser; webUrl: string; apiUrl: string; prisma: typeof Prisma; run: string; businessIds: string[]; identityIds: string[] }) {
   const business = await prisma.business.create({ data: { name: 'Agenda studio — סטודיו לייעוץ ושירות אישי', slug: `agenda-web-${run}`, timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED', publishedAt: new Date() } }); businessIds.push(business.id);
   const owner = await prisma.identity.create({ data: { email: `agenda-web-${run}@example.test`, preferredLocale: 'en' } }), customer = await prisma.identity.create({ data: { email: `agenda-customer-${run}@example.test` } }); identityIds.push(owner.id, customer.id);
@@ -20,6 +21,10 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     return prisma.booking.create({ data: { businessId: business.id, customerId: customer.id, staffId: staff.id, serviceId: service.id, startsAt, endsAt, occupiedFrom: new Date(+startsAt - 300000), occupiedUntil: new Date(+endsAt + 300000), status, holdExpiresAt: status === 'HELD' ? new Date(Date.now() + 300000) : null, idempotencyKey: randomUUID() } });
   }
   const first = await create(date, 9), second = await create(nextDate, 10), held = await create(date, 12, 'HELD');
+  // Early on `date` (06:00 UTC, 08:00 or 09:00 in Israel) one appointment has ended and a cancelled one is not shown at all.
+  const early = await create(date, 2), dropped = await create(date, 13);
+  await prisma.booking.update({ where: { id: dropped.id }, data: { status: 'CANCELLED' } });
+  const morning = `${date}T06:00:00Z`;
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'Pacific/Auckland' });
   let releaseLoading: (() => void) | undefined, releaseSave: (() => void) | undefined;
   try {
@@ -29,24 +34,31 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     let blockAgenda = true, failAgenda = false;
     const loading = new Promise<void>(resolve => { releaseLoading = resolve; });
     await page.route('**/api/provider/agenda?**', async route => { if (blockAgenda) await loading; if (failAgenda) await route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":{"code":"UNAVAILABLE"}}' }); else await route.continue(); });
-    await page.goto(`${webUrl}/provider/dashboard?businessId=${business.id}`); await page.getByText('Loading agenda…', { exact: true }).waitFor(); blockAgenda = false; releaseLoading?.();
-    await page.getByLabel('Agenda date', { exact: true }).fill(date);
-    const firstCard = page.getByTestId(`agenda-booking-${first.id}`), secondCard = page.getByTestId(`agenda-booking-${second.id}`); await firstCard.waitFor(); assert.equal(await secondCard.count(), 0);
-    await page.getByRole('button', { name: 'Week view', exact: true }).click(); await secondCard.waitFor();
-    await page.getByText('Weekly agenda', { exact: true }).waitFor(); assert.equal(await page.getByTestId(`agenda-booking-${held.id}`).count(), 0);
-    await page.getByRole('button', { name: 'Next period', exact: true }).click(); await page.getByText('No appointments for this week.', { exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Previous period', exact: true }).click(); await firstCard.waitFor();
-    failAgenda = true; await page.getByRole('button', { name: 'Next period', exact: true }).click(); await page.getByRole('alert').filter({ hasText: 'The agenda could not load.' }).waitFor();
-    failAgenda = false; await page.getByRole('button', { name: 'Try again', exact: true }).click(); await page.getByText('No appointments for this week.', { exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Previous period', exact: true }).click(); await firstCard.waitFor();
+    const home = `${webUrl}/provider/dashboard?businessId=${business.id}`;
+    // The home loads, fails, and recovers on Try again, with no day to choose.
+    failAgenda = true;
+    await showAgendaAt(page, home, morning); await page.getByText('Loading agenda…', { exact: true }).waitFor(); blockAgenda = false; releaseLoading?.();
+    await page.getByRole('alert').filter({ hasText: 'The agenda could not load.' }).waitFor();
+    failAgenda = false; await page.getByRole('button', { name: 'Try again', exact: true }).click();
+    const firstCard = page.getByTestId(`agenda-booking-${first.id}`), secondCard = page.getByTestId(`agenda-booking-${second.id}`); await firstCard.waitFor();
+    for (const control of ['Day view', 'Week view', 'Next period', 'Previous period']) assert.equal(await page.getByRole('button', { name: control, exact: true }).count(), 0);
+    assert.equal(await page.getByLabel('Agenda date', { exact: true }).count(), 0);
+    // Today only: not tomorrow's appointment, not a hold, not a cancellation; the ended one waits behind its folded row.
+    assert.equal(await secondCard.count(), 0); assert.equal(await page.getByTestId(`agenda-booking-${held.id}`).count(), 0); assert.equal(await page.getByTestId(`agenda-booking-${dropped.id}`).count(), 0);
+    const earlyCard = page.getByTestId(`agenda-booking-${early.id}`); assert.equal(await earlyCard.count(), 0);
+    await page.getByRole('button', { name: 'Ended today (1)', exact: true }).waitFor(); await unfoldEndedToday(page); await earlyCard.waitFor();
+    await unfoldAgendaCard(page, earlyCard); await earlyCard.getByRole('button', { name: 'Mark no-show', exact: true }).waitFor();
+    // A folded card says when, who and what; the rest opens in place and folds back.
+    assert.equal(await firstCard.getByText('Agenda expert', { exact: false }).count(), 0);
+    await unfoldAgendaCard(page, firstCard); await firstCard.getByText(/Agenda expert/).waitFor();
+    await page.getByTestId(`agenda-booking-${first.id}-toggle`).click(); await page.getByTestId(`agenda-booking-${first.id}-details`).waitFor({ state: 'detached' });
     // The open agenda updates from a live signal alone: time passing fetches nothing, and a change elsewhere appears without a reload.
     const liveBooking = await create(date, 15);
     // The stream belongs to one tab per browser, so the first tab steps away for this one to hold it.
     const agendaUrl = page.url(); await page.goto('about:blank');
-    const livePage = await context.newPage(); await livePage.clock.install();
+    const livePage = await context.newPage(); await livePage.clock.install({ time: new Date(morning) });
     const liveStream = livePage.waitForResponse(response => response.url().startsWith(`${apiUrl}/api/provider/agenda/live?`) && response.status() === 200);
-    await livePage.goto(`${webUrl}/provider/dashboard?businessId=${business.id}`);
-    await livePage.getByLabel('Agenda date', { exact: true }).fill(date);
+    await livePage.goto(home);
     const liveCard = livePage.getByTestId(`agenda-booking-${liveBooking.id}`); await liveCard.waitFor();
     await liveStream; await new Promise(resolve => setTimeout(resolve, 500));
     let agendaReads = 0; livePage.on('request', request => { if (request.url().startsWith(`${apiUrl}/api/provider/agenda?`)) agendaReads++; });
@@ -54,9 +66,10 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     assert.equal(agendaReads, 0);
     const cancelled = await context.request.post(`${apiUrl}/v1/provider/businesses/${business.id}/bookings/${liveBooking.id}/cancel`, { headers: { Origin: webUrl }, data: {} });
     assert.equal(cancelled.status(), 200, await cancelled.text());
-    await liveCard.getByText('Cancelled', { exact: false }).waitFor({ timeout: 5000 });
+    // A cancelled appointment leaves the home.
+    await liveCard.waitFor({ state: 'detached', timeout: 5000 });
     assert.ok(agendaReads >= 1);
-    await livePage.close(); await page.goto(agendaUrl);
+    await livePage.close(); await page.goto(agendaUrl); await firstCard.waitFor();
     // Hours live in business settings (decisions.md, 2026-11-02).
     await page.getByRole('button', { name: 'Account', exact: true }).click(); await page.getByRole('button', { name: 'Business settings', exact: true }).filter({ visible: true }).click();
     await page.getByTestId('setup-guide-hours').filter({ visible: true }).click(); await page.getByRole('heading', { name: 'Business hours', exact: true }).filter({ visible: true }).waitFor();
@@ -70,7 +83,7 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     let writes = 0; await page.route(base, async route => { if (route.request().method() === 'PUT') writes++; await route.continue(); });
     const previewed = page.waitForResponse(response => response.url() === `${base}/preview`); await save.click(); assert.equal((await previewed).status(), 200);
     const impact = dialog.getByTestId('schedule-impact'); await impact.getByText('Active temporary reservation', { exact: true }).waitFor();
-    await impact.getByText('Existing appointment', { exact: true }).waitFor();
+    await impact.getByText('Existing appointment', { exact: true }).first().waitFor();
     assert.equal(writes, 0); await page.unroute(base);
     assert.deepEqual(await prisma.businessWeeklyAvailability.findMany({ where: { businessId: business.id }, orderBy: { id: 'asc' } }), hoursBefore);
     assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: first.id } })).status, 'CONFIRMED');
@@ -99,8 +112,7 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     assert.equal(new URL(page.url()).pathname, `/provider/${business.id}/hours`);
     assert.equal(await summaryText(page, 'hours-group-2'), 'Tue: 00:00–23:00');
     await page.getByTestId('app-footer').getByRole('button', { name: 'Home', exact: true }).click();
-    // Leaving the agenda clears its draft by design, so the date is chosen again.
-    await page.getByLabel('Agenda date', { exact: true }).filter({ visible: true }).fill(date); await firstCard.waitFor();
+    await firstCard.waitFor();
     // Blocking the whole business on a day with an appointment is refused, lists it, and writes nothing.
     const blockUrl = `${apiUrl}/api/provider/block-time`, blockForm = page.getByTestId('block-form');
     await page.getByRole('button', { name: 'Block time / add a break', exact: true }).click();
@@ -119,21 +131,22 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     const blocked = page.waitForResponse(response => response.url() === blockUrl && response.request().method() === 'POST');
     await blockForm.getByRole('button', { name: 'Save block', exact: true }).click(); assert.equal((await blocked).status(), 201); await blockForm.waitFor({ state: 'detached' });
     assert.deepEqual((await prisma.timeBlock.findMany({ where: { businessId: business.id }, select: { staffId: true, allDay: true, reason: true } })), [{ staffId: null, allDay: true, reason: 'Holiday' }]);
-    await page.getByLabel('Agenda date', { exact: true }).filter({ visible: true }).fill(freeDate);
+    await showAgendaAt(page, home, `${freeDate}T06:00:00Z`);
     const agendaBlocks = page.getByTestId('agenda-blocks'); await agendaBlocks.getByText('Whole business · Holiday', { exact: true }).waitFor();
     await agendaBlocks.getByText(/All day/).waitFor();
     await agendaBlocks.getByRole('button', { name: 'Remove block', exact: true }).click(); await agendaBlocks.getByRole('button', { name: 'Confirm', exact: true }).click();
     await agendaBlocks.waitFor({ state: 'detached' }); assert.equal(await prisma.timeBlock.count({ where: { businessId: business.id } }), 0);
-    await page.getByLabel('Agenda date', { exact: true }).filter({ visible: true }).fill(date); await firstCard.waitFor();
+    await showAgendaAt(page, home, morning); await unfoldAgendaCard(page, firstCard);
     await firstCard.getByRole('button', { name: 'Cancel appointment', exact: true }).click(); await answerCancellation(page, false); assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: first.id } })).status, 'CONFIRMED');
     const cancelUrl = `${apiUrl}/v1/provider/businesses/${business.id}/bookings/${first.id}/cancel`;
     await page.route(cancelUrl, route => route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":{"code":"UNAVAILABLE"}}' }));
     await firstCard.getByRole('button', { name: 'Cancel appointment', exact: true }).click(); await answerCancellation(page, true); await firstCard.getByRole('alert').waitFor(); assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: first.id } })).status, 'CONFIRMED');
-    await page.unroute(cancelUrl); await firstCard.getByRole('button', { name: 'Cancel appointment', exact: true }).click(); await answerCancellation(page, true); await firstCard.getByText('Cancelled', { exact: true }).waitFor();
+    await page.unroute(cancelUrl); await firstCard.getByRole('button', { name: 'Cancel appointment', exact: true }).click(); await answerCancellation(page, true); await firstCard.waitFor({ state: 'detached' });
+    assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: first.id } })).status, 'CANCELLED');
     await page.goto(`${webUrl}/account`); const localeSaved = page.waitForResponse(response => response.url() === `${apiUrl}/api/account/preferences` && response.request().method() === 'PUT'); await page.getByTestId('language-he').click(); assert.equal((await localeSaved).status(), 200);
-    await page.goto(`${webUrl}/provider/dashboard?businessId=${business.id}`); await page.getByLabel('תאריך ביומן', { exact: true }).fill(date); await page.getByRole('button', { name: 'תצוגה שבועית', exact: true }).click(); await page.getByText('יומן שבועי', { exact: true }).waitFor();
+    await page.goto(home); await page.getByRole('button', { name: 'הסתיימו היום (1)', exact: true }).waitFor(); await unfoldEndedToday(page); await unfoldAgendaCard(page, earlyCard);
     assert.equal(await page.locator('html').getAttribute('dir'), 'rtl'); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
-    await page.screenshot({ path: 'test-results/agenda-week-he-mobile.png', fullPage: true }); await page.setViewportSize({ width: 1280, height: 900 }); await page.screenshot({ path: 'test-results/agenda-week-he-desktop.png', fullPage: true });
-    console.log('PASS: local daily/weekly agenda, loading/error/retry/empty, hours dialog no-write conflict, block refusal over appointments and a whole-business day block, active hold protection, stale preview refusal, pending commit that stays on the hours screen, declined/failed/successful provider cancellation and Hebrew RTL.');
+    await page.screenshot({ path: 'test-results/agenda-today-he-mobile.png', fullPage: true }); await page.setViewportSize({ width: 1280, height: 900 }); await page.screenshot({ path: 'test-results/agenda-today-he-desktop.png', fullPage: true });
+    console.log('PASS: today-only home with folded cards and an ended-today row, loading/error/retry, hours dialog no-write conflict, block refusal over appointments and a whole-business day block, active hold protection, stale preview refusal, pending commit that stays on the hours screen, declined/failed/successful provider cancellation and Hebrew RTL.');
   } finally { releaseLoading?.(); releaseSave?.(); await context.close(); }
 }
