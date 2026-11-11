@@ -635,7 +635,7 @@ PR #62. Builds the first half of "Saved customers and an invite to the app" (PR 
 
 ## Block time simpler, sheets close with a swipe down, business home actions in one row — 2026-11-11
 
-The user reviewed the Block time sheet and the business home on a phone and asked for seven changes.
+PR #63. The user reviewed the Block time sheet and the business home on a phone and asked for seven changes.
 
 - **Choice: with one active staff member the form does not ask "Who is unavailable".** The block goes to the whole business, which for that business is the same time. A second staff member brings the question back. *Accepted consequence:* a block saved this way stays "whole business", so it also covers a staff member added later. That is the meaning the owner of a one-person business expects of "I am off".
 - **Choice: the reason is a set of checkboxes (Break, Meeting, Errands, Time off, Other), drawn like a staff member's services; the free-text field is gone (the user's call).** "Day off" became "Time off" ("חופש") so it also fits several days. The chosen labels travel as the block's existing `reason` text in the owner's language, in the offered order ("Break, Time off"), so the API, the stored rows and the cards that show a reason are unchanged. Five labels stay far under the 200-character limit, and a test checks that in both languages. *Rejected:* storing reason codes, which needs a migration and an API change for something customers never see; and keeping the free-text field beside the checkboxes, which the user asked to remove.

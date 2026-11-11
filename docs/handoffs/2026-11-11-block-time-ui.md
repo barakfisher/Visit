@@ -1,6 +1,6 @@
 # Visit handoff — 2026-11-11, Block time simpler, swipe-down sheets, home actions in one row
 
-PR #PR_NUMBER, built on `main` after PR #62. Decisions: `decisions.md`, "Block time simpler, sheets close with a swipe down, business home actions in one row".
+PR #63, built on `main` after PR #62. Decisions: `decisions.md`, "Block time simpler, sheets close with a swipe down, business home actions in one row".
 
 ## Where things stand
 
