@@ -1,6 +1,6 @@
 # Visit handoff — 2026-11-11, Add appointment fixes and a working swipe-down
 
-PR #PR_NUMBER, built on `main` after PR #63. Read `2026-11-11-block-time-ui.md` first. Decisions: `decisions.md`, "Add appointment: errors under fields, a closable unknown outcome".
+PR #64, built on `main` after PR #63. Read `2026-11-11-block-time-ui.md` first. Decisions: `decisions.md`, "Add appointment: errors under fields, a closable unknown outcome".
 
 ## Where things stand
 
