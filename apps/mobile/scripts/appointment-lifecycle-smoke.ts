@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import type { Browser } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
+import { showAgendaAt, unfoldAgendaCard, unfoldEndedToday } from './agenda-day';
 import { answerCancellation } from './cancellation-prompt';
 export async function appointmentLifecycleSmoke({ browser, webUrl, apiUrl, prisma, run, businessIds, identityIds }: { browser: Browser; webUrl: string; apiUrl: string; prisma: typeof Prisma; run: string; businessIds: string[]; identityIds: string[] }) {
   const business = await prisma.business.create({ data: { name: `Lifecycle browser ${run.slice(0, 6)}`, slug: `lifecycle-web-${run}`, timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED', publishedAt: new Date() } }); businessIds.push(business.id);
@@ -29,21 +30,23 @@ export async function appointmentLifecycleSmoke({ browser, webUrl, apiUrl, prism
       await context.addCookies([{ name: 'visit_session', value: token, url: apiUrl, httpOnly: true, sameSite: 'Lax' }]);
     }
     const page = await ownerContext.newPage();
-    await page.goto(`${webUrl}/provider/dashboard?businessId=${business.id}`);
-    await page.getByLabel('Agenda date', { exact: true }).fill(past);
-    const completeCard = page.getByTestId(`agenda-booking-${completed.id}`);
+    // The home shows today only: late on `past` (22:00 or 23:00 in Israel) these three have ended and sit behind their folded row.
+    const home = `${webUrl}/provider/dashboard?businessId=${business.id}`;
+    await showAgendaAt(page, home, `${past}T20:00:00Z`); await unfoldEndedToday(page);
+    const completeCard = page.getByTestId(`agenda-booking-${completed.id}`); await unfoldAgendaCard(page, completeCard);
     // An ended appointment reads as completed with nothing recorded; the business can only say the customer did not come.
     await completeCard.getByText('Completed', { exact: true }).waitFor();
     assert.equal(await completeCard.getByRole('button', { name: 'Mark completed', exact: true }).count(), 0);
     await completeCard.getByRole('button', { name: 'Mark no-show', exact: true }).waitFor();
-    const noShowCard = page.getByTestId(`agenda-booking-${noShow.id}`);
+    const noShowCard = page.getByTestId(`agenda-booking-${noShow.id}`); await unfoldAgendaCard(page, noShowCard);
     await noShowCard.getByRole('button', { name: 'Mark no-show', exact: true }).click();
     await noShowCard.getByText('No-show', { exact: true }).waitFor();
-    const cancelCard = page.getByTestId(`agenda-booking-${cancelled.id}`);
+    const cancelCard = page.getByTestId(`agenda-booking-${cancelled.id}`); await unfoldAgendaCard(page, cancelCard);
+    // A cancelled appointment leaves the home.
     await cancelCard.getByRole('button', { name: 'Cancel appointment', exact: true }).click(); await answerCancellation(page, true);
-    await cancelCard.getByText('Cancelled', { exact: true }).waitFor();
-    await page.getByLabel('Agenda date', { exact: true }).fill(future);
-    const futureCard = page.getByTestId(`agenda-booking-${scheduled.id}`); await futureCard.waitFor();
+    await cancelCard.waitFor({ state: 'detached' }); assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: cancelled.id } })).status, 'CANCELLED');
+    await showAgendaAt(page, home, `${future}T05:00:00Z`);
+    const futureCard = page.getByTestId(`agenda-booking-${scheduled.id}`); await unfoldAgendaCard(page, futureCard);
     assert.equal(await futureCard.getByRole('button', { name: 'Mark no-show', exact: true }).count(), 0);
     const customerPage = await customerContext.newPage();
     await customerPage.goto(`${webUrl}/appointments`);

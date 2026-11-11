@@ -1,4 +1,5 @@
 import { manualBookingSmoke } from './manual-booking-smoke';
+import { showAgendaAt, unfoldAgendaCard } from './agenda-day';
 import { openConfirmation, selectBookingDate, showBookingTime } from './booking-controls.utils';
 import { answerCancellation } from './cancellation-prompt';
 import assert from 'node:assert/strict';
@@ -227,16 +228,22 @@ try {
     const providerPage = await owner.newPage(); capture = providerPage; providerPage.on('pageerror', (error) => pageErrors.push(error.message));
     await otpLogin(providerPage, identities[2]!.phone!, true);
     await providerPage.getByRole('button', { name: `Visit QA North ${run.slice(0, 6)}`, exact: true }).click();
-    await providerPage.getByLabel('Agenda date').fill(date);
-    await providerPage.getByText('QA consultation', { exact: true }).waitFor();
-    await providerPage.getByRole('button', { name: 'Call', exact: true }).waitFor();
-    await providerPage.screenshot({ path: path.join(diagnostics, 'provider-agenda-desktop.png'), fullPage: true });
-    await providerPage.getByRole('button', { name: 'Block time / add a break' }).click();
-    const blockForm = providerPage.getByTestId('block-form');
+    await providerPage.getByTestId('agenda-summary').waitFor();
+    // The home shows today only, so the appointment's day is checked on a page of its own whose clock is fixed to that
+    // day (businesses here run on UTC); a fixed clock on the page that goes on to settings would hold up its timers.
+    const agendaPage = await owner.newPage(); agendaPage.on('pageerror', (error) => pageErrors.push(error.message));
+    const northHome = `${webUrl}/provider/dashboard?businessId=${businessIds[0]}`;
+    await showAgendaAt(agendaPage, northHome, `${date}T00:05:00Z`);
+    await agendaPage.getByText('QA consultation', { exact: true }).waitFor();
+    await unfoldAgendaCard(agendaPage, agendaPage.getByTestId(`agenda-booking-${hold.holdId}`));
+    await agendaPage.getByRole('button', { name: 'Call', exact: true }).waitFor();
+    await agendaPage.screenshot({ path: path.join(diagnostics, 'provider-agenda-desktop.png'), fullPage: true });
+    await agendaPage.getByRole('button', { name: 'Block time / add a break' }).click();
+    const blockForm = agendaPage.getByTestId('block-form');
     assert.equal(await blockForm.getByRole('textbox', { name: 'Date', exact: true }).inputValue(), date, 'the agenda opens the block dialog on its date');
     await blockForm.getByRole('textbox', { name: 'From', exact: true }).fill('10:00'); await blockForm.getByRole('textbox', { name: 'Until', exact: true }).fill('10:30');
     await blockForm.getByRole('button', { name: 'Save block' }).click(); await blockForm.waitFor({ state: 'detached' });
-    await providerPage.getByTestId('agenda-blocks').getByRole('button', { name: 'Remove block' }).waitFor();
+    await agendaPage.getByTestId('agenda-blocks').getByRole('button', { name: 'Remove block' }).waitFor(); await agendaPage.close();
     console.log('PASS: provider login lands Home; explicit dashboard navigation, agenda verification and manual break.');
     // The catalog lives in business settings (decisions.md, 2026-11-02). Reach it in-app, through the menu and the
     // settings business switcher, so switching keeps the same page and query cache instead of reloading.
@@ -360,8 +367,10 @@ try {
     await original.getByText('Repriced catalog label', { exact: true }).waitFor();
     // In provider mode Home is the agenda.
     await providerPage.getByTestId('app-footer').getByRole('button', { name: 'Home', exact: true }).click();
-    await providerPage.getByLabel('Agenda date').filter({ visible: true }).fill(date);
-    await providerPage.getByText('QA consultation', { exact: true }).waitFor();
+    await providerPage.getByTestId('agenda-summary').filter({ visible: true }).waitFor();
+    // The appointment keeps its booked service name on its own day after the catalog changed.
+    const repricedPage = await owner.newPage(); await showAgendaAt(repricedPage, northHome, `${date}T00:05:00Z`);
+    await repricedPage.getByTestId(`agenda-booking-${hold.holdId}`).getByText('QA consultation', { exact: true }).waitFor(); await repricedPage.close();
     assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: hold.holdId } })).servicePriceMinor, 6500);
     await catalogOf(`Visit QA North ${run.slice(0, 6)}`);
     await original.getByRole('button', { name: 'Delete', exact: true }).click();

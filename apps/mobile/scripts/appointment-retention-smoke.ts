@@ -1,3 +1,4 @@
+import { showAgendaAt } from './agenda-day';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -101,9 +102,9 @@ export async function appointmentRetentionSmoke(deps: Deps) {
   }
   // The provider's agenda for one date: which appointments it lists and the day's count and revenue tiles.
   async function agenda(provider: Page, date: string) {
-    await provider.goto(`${webUrl}/provider/dashboard?businessId=${business.businessId}`);
-    await provider.getByLabel(translate('en', 'dashboard.date'), { exact: true }).fill(date);
-    // A summary tile's value, waited for: the agenda for the new date loads after the date changes.
+    // The home shows today only, so the page's clock is set to the start of that day in Israel (00:05 or 01:05 local).
+    await showAgendaAt(provider, `${webUrl}/provider/dashboard?businessId=${business.businessId}`, `${date}T00:05:00+02:00`);
+    // A summary tile's value, waited for: the agenda loads after the home opens.
     async function tile(key: 'dashboard.appointments' | 'dashboard.revenue', expected: string) {
       const label = translate('en', key), box = provider.getByText(label, { exact: true }).locator('..');
       await box.filter({ hasText: expected }).waitFor();

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Browser } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
+import { dateRange, localDate } from '../src/lib/appointmentTime';
+import { showAgendaAt, unfoldAgendaCard } from './agenda-day';
 export async function manualBookingSmoke({ browser, webUrl, apiUrl, prisma, run, businessIds, identityIds }: { browser: Browser; webUrl: string; apiUrl: string; prisma: typeof Prisma; run: string; businessIds: string[]; identityIds: string[] }) {
  const business = await prisma.business.create({ data: { name: 'Telephone appointments — תורים טלפוניים', slug: `manual-web-${run}`, timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED', publishedAt: new Date() } }); businessIds.push(business.id);
  const owner = await prisma.identity.create({ data: { email: `manual-web-${run}@example.test`, preferredLocale: 'en' } }); identityIds.push(owner.id);
@@ -17,20 +19,20 @@ export async function manualBookingSmoke({ browser, webUrl, apiUrl, prisma, run,
  let routeFailure: unknown;
  try {
   await context.addCookies([{ name: 'visit_session', value: token, url: apiUrl, httpOnly: true, sameSite: 'Lax' }]); await context.addInitScript(() => localStorage.setItem('visit.locale.v1.guest', 'en'));
-  const page = await context.newPage(); await page.goto(`${webUrl}/provider/dashboard?businessId=${business.id}`);
-  await page.getByLabel('Agenda date', { exact: true }).waitFor();
+  const page = await context.newPage(), home = `${webUrl}/provider/dashboard?businessId=${business.id}`; await page.goto(home);
+  const summary = page.getByTestId('agenda-summary'); await summary.waitFor();
   const optionsUrl = `${apiUrl}/v1/provider/businesses/${business.id}/manual-booking-options`, saveUrl = `${apiUrl}/v1/provider/businesses/${business.id}/manual-bookings`;
   await page.route(optionsUrl, route => route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":{"code":"UNAVAILABLE"}}' }));
-  // The agenda's day is where a form opened on the agenda starts.
-  await page.getByLabel('Agenda date', { exact: true }).fill(date);
   const footer = page.getByTestId('app-footer'), addTab = footer.getByRole('button', { name: 'Add appointment', exact: true });
   await addTab.click(); await page.waitForURL(url => url.pathname === `/provider/${business.id}/add`);
   const form = page.getByTestId('manual-booking-form'); await form.getByText('Appointment options could not load.', { exact: true }).waitFor();
   // Its own screen: the agenda is not behind it, and the footer marks Add appointment, not Home.
-  assert.equal(await page.getByLabel('Agenda date', { exact: true }).count(), 0);
+  assert.equal(await summary.count(), 0);
   assert.equal(await addTab.getAttribute('aria-current'), 'page'); assert.equal(await footer.getByRole('button', { name: 'Home', exact: true }).getAttribute('aria-current'), null);
   await page.unroute(optionsUrl); await form.getByRole('button', { name: 'Try again', exact: true }).click();
-  assert.equal(await form.getByLabel('Appointment date (YYYY-MM-DD)', { exact: true }).inputValue(), date);
+  // A new form starts today in the business's timezone, the only day the home shows; this appointment is for a later day.
+  const dateField = form.getByLabel('Appointment date (YYYY-MM-DD)', { exact: true });
+  assert.equal(await dateField.inputValue(), localDate(business.timezone)); await dateField.fill(date);
   await form.getByRole('button', { name: 'Phone consultation', exact: true }).click(); await form.getByRole('button', { name: /Phone specialist/ }).click();
   await form.getByLabel('Customer name', { exact: true }).fill('לקוחה חדשה — ללא חשבון'); await form.getByLabel('Customer phone (international format)', { exact: true }).fill('+972501234567');
   await form.getByLabel('Appointment time (HH:mm)', { exact: true }).fill('10:00');
@@ -59,19 +61,22 @@ export async function manualBookingSmoke({ browser, webUrl, apiUrl, prisma, run,
   assert.equal(await prisma.bookingNotification.count({ where: { businessId: business.id } }), 0);
   assert.equal(await prisma.identity.count({ where: { phone: '+972501234567' } }), 0);
   assert.equal((await prisma.bookingEvent.findFirstOrThrow({ where: { bookingId: saved.id } })).source, 'MANUAL');
-  // Close goes back to the agenda on the saved appointment's day.
+  // Close goes back to today's home, which says which day the appointment was saved for; it is not today, so no card.
   await form.getByRole('button', { name: 'Close appointment form', exact: true }).click(); await page.waitForURL(url => url.pathname === '/provider/dashboard');
-  assert.equal(await page.getByLabel('Agenda date', { exact: true }).inputValue(), date);
-  const card = page.getByTestId(`agenda-booking-${saved.id}`); await card.getByText(/Manually entered · contact unverified/).waitFor();
+  await page.getByTestId('agenda-notice').filter({ hasText: `Appointment saved for ${dateRange(date, date, 'en')}.` }).waitFor();
+  const card = page.getByTestId(`agenda-booking-${saved.id}`); assert.equal(await card.count(), 0);
   // Add appointment after a save starts an empty form, with no trace of the last customer or message.
   await addTab.click(); await form.getByRole('button', { name: 'Review appointment', exact: true }).waitFor();
   assert.equal(await form.getByLabel('Customer name', { exact: true }).inputValue(), ''); assert.equal(await form.getByRole('alert').count() + await form.getByRole('status').count(), 0);
   await form.getByRole('button', { name: 'Close appointment form', exact: true }).click(); await form.waitFor({ state: 'detached' }); await page.waitForURL(url => url.pathname === '/provider/dashboard');
   await addTab.click();
   await form.getByRole('button', { name: 'Phone consultation', exact: true }).click(); await form.getByRole('button', { name: /Phone specialist/ }).click();
-  await form.getByLabel('Customer name', { exact: true }).fill('Another caller'); await form.getByLabel('Customer phone (international format)', { exact: true }).fill('+972501234568'); await form.getByLabel('Appointment time (HH:mm)', { exact: true }).fill('10:00'); await form.getByLabel('Reason for using unverified contact details', { exact: true }).fill('Caller requested this appointment.');
+  await dateField.fill(date); await form.getByLabel('Customer name', { exact: true }).fill('Another caller'); await form.getByLabel('Customer phone (international format)', { exact: true }).fill('+972501234568'); await form.getByLabel('Appointment time (HH:mm)', { exact: true }).fill('10:00'); await form.getByLabel('Reason for using unverified contact details', { exact: true }).fill('Caller requested this appointment.');
   await form.getByRole('button', { name: 'Review appointment', exact: true }).click(); await form.getByRole('button', { name: 'Confirm manual appointment', exact: true }).click(); await form.getByRole('alert').filter({ hasText: 'The appointment could not be saved.' }).waitFor();
   assert.equal(await form.getByLabel('Customer name', { exact: true }).inputValue(), 'Another caller'); assert.equal(await prisma.booking.count({ where: { businessId: business.id } }), 1);
+  // On its own day the manual appointment's card carries the manual tag; the notice is gone once the home was left.
+  await showAgendaAt(page, home, `${date}T05:00:00Z`); await unfoldAgendaCard(page, card); await card.getByText(/Manually entered · contact unverified/).waitFor();
+  assert.equal(await page.getByTestId('agenda-notice').count(), 0);
   await page.goto(`${webUrl}/account`); const preference = page.waitForResponse(response => response.url() === `${apiUrl}/api/account/preferences` && response.request().method() === 'PUT'); await page.getByTestId('language-he').click(); assert.equal((await preference).status(), 200);
   await page.goto(`${webUrl}/provider/dashboard?businessId=${business.id}`); await page.getByRole('button', { name: 'הוספת תור', exact: true }).click(); await form.getByText('תור בהזנה ידנית', { exact: true }).waitFor();
   await form.getByRole('button', { name: 'Phone consultation', exact: true }).click(); await form.getByRole('button', { name: /Phone specialist/ }).click();

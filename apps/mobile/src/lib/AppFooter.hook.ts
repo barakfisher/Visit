@@ -1,7 +1,6 @@
 import { router, useGlobalSearchParams, usePathname } from 'expo-router';
 import { useAppLocale } from '@/src/i18n/LocaleContext';
 import { useSessionStore } from '@/src/state/session';
-import { agendaDraftScope, useAgendaDraft } from '@/src/state/ProviderAgenda.store';
 import { needsSetupGuide } from './BusinessReadiness';
 import { useBusinessReadiness } from './BusinessReadiness.hook';
 import { openManualBooking } from './ManualBookingEntry';
@@ -10,7 +9,7 @@ import type { FooterTab } from '../types/FooterNavigation.types';
 
 export function useAppFooter(): FooterTab[] | null {
   const { t } = useAppLocale(), pathname = usePathname();
-  const params = useGlobalSearchParams<{ businessId?: string; date?: string }>(), onAccount = accountBusiness(pathname, params.businessId, useSessionStore(state => state.profile?.businesses));
+  const params = useGlobalSearchParams<{ businessId?: string }>(), onAccount = accountBusiness(pathname, params.businessId, useSessionStore(state => state.profile?.businesses));
   const identity = useSessionStore(state => state.identityId), active = useSessionStore(state => state.activeBusinessId);
   const business = onAccount ?? active, providerMode = !!onAccount || isProviderPath(pathname);
   const readiness = useBusinessReadiness(business ?? '', !!identity && providerMode && !!business);
@@ -22,11 +21,9 @@ export function useAppFooter(): FooterTab[] | null {
   if (!business) return null;
   // Back to the agenda in the stack rather than piling up another one; when none is there this opens it.
   const openAgenda = () => router.dismissTo({ pathname: '/provider/dashboard', params: { businessId: business } });
-  // Opened from the agenda, a new form starts on the agenda's day.
+  // A new form starts today, the only day the business home shows.
   const openAdd = (id: string) => {
-    const agenda = useAgendaDraft.getState(), state = useSessionStore.getState();
-    const day = pathname !== '/provider/dashboard' ? '' : (agenda.scope === agendaDraftScope(state.identityId, state.contextVersion, id) && agenda.draft.date) || params.date || '';
-    openManualBooking(id, day);
+    openManualBooking(id);
     router.navigate({ pathname: '/provider/[businessId]/add', params: { businessId: id } });
   };
   return [

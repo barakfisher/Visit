@@ -542,3 +542,18 @@ The user's review of business mode: pressing Add appointment in the footer showe
 - **Choice: a form opened from the agenda starts on the agenda's day; from anywhere else on today.** The footer passes the day when it opens a new form. This keeps the 2026-11-08 behaviour without the agenda staying mounted.
 - **Choice: Close returns to the agenda (`dismissTo`), on the saved appointment's day after a save,** by setting the agenda's draft day before it mounts. The saved message stays on the add screen until Close, because it says that no message was sent and the contact is unverified.
 - `openManualBooking` moved out of `ManualBooking.service.ts`: the service imports the API client and React Native, which the node unit tests cannot load, and opening a draft is not API access.
+
+## The business home shows today — 2026-11-10
+
+PR pending.
+
+The user's review of the business home on Android: day/week buttons, period navigation and a date field above two large summary boxes, a "concurrent capacity" line and a "Daily agenda" heading pushed the appointments below the fold, and each card carried every detail and button at once.
+
+- **Choice: the home shows today only, in the business's timezone (the user's call).** No date field, day/week switch or previous/next; the summary is one compact strip. The API keeps `days=7`. *Rejected:* a compact day stepper (the user asked for none). *Accepted cost:* no screen shows another day's appointments until a calendar screen is built; browser smokes reach other days by fixing the page's clock (`scripts/agenda-day.ts`).
+- **Choice: after saving an appointment, Close returns to today's home with "Appointment saved for {date}."** (the user's call). This replaces PR #57's return to the saved appointment's day; a new form always starts today. The notice lives in the agenda store for the scope and clears when the home unmounts.
+- **Choice: cards fold to time, customer and service; a tap opens the rest in place with a height animation** (`AgendaAppointmentCard`, `SmoothReveal`). Customer falls back to phone, then email, then "Customer". *Rejected:* a details screen per appointment (a tap away from the day for what fits in place).
+- **Choice: cancelled appointments are not shown; appointments that ended today sit behind a folded "Ended today (n)" row at the bottom (the user's call).** An appointment under way stays with those to come until it ends. *Rejected:* hiding ended appointments outright, which the user first asked for: "Mark no-show" exists only once an appointment is over (PR #55) and the home is the only place that offers it, so the business would have lost it entirely.
+- **Choice: the summary counts the whole day, ended appointments included,** with the labels "Appointments today" and "Expected revenue". The list below shows only what is left, so the count can exceed the visible cards.
+- **Choice: concurrent capacity is no longer shown on the home (the user's call).** It still shows where staff are chosen on the Add appointment form.
+- Block time / add a break sits beside Share on one row and opens on today.
+- The clock: the hook keeps `now` in state and sets a timer for the next appointment end, at most `AGENDA_RECHECK_MAX_MS` (15 minutes) away, so a new day replaces the old within that time. A stale clock on return to the screen is read again at once.

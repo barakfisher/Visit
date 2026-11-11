@@ -9,12 +9,17 @@ export type ProviderAgenda = {
   bookings: { source?: string; manualReason?: string | null; id: string; status: AppointmentStatus; canMarkNoShow?: boolean; revision: number; startsAt: string; endsAt: string; customer: { displayName: string | null; phone: string | null; email: string | null }; service: { name: string }; staff: { displayName: string } }[];
   blocks: TimeBlock[];
 };
-export type AgendaDraft = { date: string; mode: 'day' | 'week' };
+/** `savedDate` is the day of an appointment just saved on the Add appointment screen, for the home to confirm on return. */
+export type AgendaDraft = { savedDate: string };
+export type AgendaAppointment = ProviderAgenda['bookings'][number];
 export type ProviderAgendaView = {
   business: { id: string; name: string; timezone: string }; profile: AuthProfile | null;
   t: (key: MessageKey, values?: Record<string, string | number>) => string;
-  day: string; validDate: boolean; draft: Readonly<AgendaDraft>; agenda: { data: ProviderAgenda | undefined; isError: boolean; isLoading: boolean };
-  busy: boolean; feedback: string; update: (patch: Partial<AgendaDraft>) => void;
-  selectBusiness: (id: string) => void; previous: () => void; next: () => void; retry: () => void;
-  span: (startsAt: string, endsAt: string) => string; range: (fromDate: string, toDate: string) => string; blockDialog: TimeBlockDialogState; blockRemoval: BlockRemovalState; contact: (phone: string | null, mode: 'call' | 'whatsapp') => void;
+  /** Today in the business's timezone; the home has no other day. */
+  day: string; agenda: { data: ProviderAgenda | undefined; isError: boolean; isLoading: boolean };
+  /** Today's appointments still to come, and those that ended today; cancelled ones are in neither. */
+  upcoming: AgendaAppointment[]; ended: AgendaAppointment[];
+  busy: boolean; feedback: string; notice: string;
+  selectBusiness: (id: string) => void; retry: () => void;
+  span: (startsAt: string, endsAt: string) => string; blockDialog: TimeBlockDialogState; blockRemoval: BlockRemovalState; contact: (phone: string | null, mode: 'call' | 'whatsapp') => void;
 };

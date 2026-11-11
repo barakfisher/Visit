@@ -61,7 +61,7 @@ export function useManualBooking(business: { id: string; timezone: string }, dat
   const serviceSummary = reviewed ? t('manual.summary', { name: reviewed.name, minutes: reviewed.durationMinutes, price: reviewed.priceMinor !== null && reviewed.currency ? formatPrice(locale, reviewed.priceMinor, reviewed.currency) : t('manual.priceUnknown') }) : '';
   return { serviceSummary, t, draft, options: options.data, loading: options.isLoading, loadError: options.isError, busy: state.scope === scope && state.busy, locked: Boolean(attempt), feedback: result ? t(result.status === 'CONFIRMED' ? 'manual.saved' : 'manual.changed') : state.scope === scope ? state.feedback : '', success: Boolean(result), update, retry: () => { void options.refetch(); }, review, confirm: () => void confirm(), close: () => { if (!operation.current && !attempt) { setState({ scope, busy: false, feedback: '' }); useManualDraft.getState().clear(); } } };
 }
-/** The Add appointment screen (decisions.md, 2026-11-10). Reached directly, as after a reload, it starts a form; Close returns to the agenda, on the saved appointment's day after a save. */
+/** The Add appointment screen (decisions.md, 2026-11-10). Reached directly, as after a reload, it starts a form; Close returns to the business home, which shows today and, after a save, confirms the saved appointment's day. */
 export function useManualBookingScreen(): ManualBookingView {
   const business = useProviderWorkspace(), identity = useSessionStore(state => state.identityId), version = useSessionStore(state => state.contextVersion);
   const view = useManualBooking(business, todayInTimezone(business.timezone));
@@ -71,7 +71,7 @@ export function useManualBookingScreen(): ManualBookingView {
     if (view.busy || view.locked) return;
     const savedDay = view.success ? view.draft.localDate : '';
     view.close();
-    if (savedDay) useAgendaDraft.getState().update(agendaDraftScope(identity, version, business.id), { date: savedDay });
+    if (savedDay) useAgendaDraft.getState().update(agendaDraftScope(identity, version, business.id), { savedDate: savedDay });
     router.dismissTo({ pathname: '/provider/dashboard', params: { businessId: business.id } });
   }
   return { ...view, close };
