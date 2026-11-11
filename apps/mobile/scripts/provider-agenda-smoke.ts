@@ -5,6 +5,7 @@ import type { Browser } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
 import { summaryText } from './business-setup-smoke.js';
 import { answerCancellation } from './cancellation-prompt';
+import { pickDate } from './pickers';
 import { showAgendaAt, unfoldAgendaCard, unfoldEndedToday } from './agenda-day';
 export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run, businessIds, identityIds }: { browser: Browser; webUrl: string; apiUrl: string; prisma: typeof Prisma; run: string; businessIds: string[]; identityIds: string[] }) {
   const business = await prisma.business.create({ data: { name: 'Agenda studio — סטודיו לייעוץ ושירות אישי', slug: `agenda-web-${run}`, timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED', publishedAt: new Date() } }); businessIds.push(business.id);
@@ -116,7 +117,7 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     // Blocking the whole business on a day with an appointment is refused, lists it, and writes nothing.
     const blockUrl = `${apiUrl}/api/provider/block-time`, blockForm = page.getByTestId('block-form');
     await page.getByRole('button', { name: 'Block time / add a break', exact: true }).click();
-    assert.equal(await blockForm.getByRole('textbox', { name: 'Date', exact: true }).inputValue(), date);
+    assert.equal(await blockForm.getByTestId('block-date').getAttribute('aria-label'), `Date · ${new Intl.DateTimeFormat('en-GB', { dateStyle: 'full', timeZone: 'UTC' }).format(new Date(`${date}T12:00Z`))}`);
     await blockForm.getByRole('radio', { name: 'Whole days', exact: true }).click();
     const refused = page.waitForResponse(response => response.url() === blockUrl && response.request().method() === 'POST');
     await blockForm.getByRole('button', { name: 'Save block', exact: true }).click(); assert.equal((await refused).status(), 409);
@@ -126,7 +127,7 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     await page.screenshot({ path: 'test-results/agenda-block-conflict-en-mobile.png' });
     // A free day blocks, shows on that day as the whole business, all day, and removes after a confirmation.
     const freeDate = new Date(+nextTuesday + 2 * 86400000).toISOString().slice(0, 10);
-    await blockForm.getByRole('textbox', { name: 'First day', exact: true }).fill(freeDate); await blockForm.getByRole('textbox', { name: 'Last day', exact: true }).fill(freeDate);
+    await pickDate(page, 'block-from-date', freeDate); await pickDate(page, 'block-to-date', freeDate);
     await blockForm.getByRole('textbox', { name: 'Reason (optional)', exact: true }).fill('Holiday');
     const blocked = page.waitForResponse(response => response.url() === blockUrl && response.request().method() === 'POST');
     await blockForm.getByRole('button', { name: 'Save block', exact: true }).click(); assert.equal((await blocked).status(), 201); await blockForm.waitFor({ state: 'detached' });
@@ -140,8 +141,10 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     await blockCard.waitFor({ state: 'detached' }); assert.equal(await prisma.timeBlock.count({ where: { businessId: business.id } }), 0);
     // Released, the day is free again: one card across the hours, and it opens Add appointment on that day.
     const freeCard = page.locator('[data-testid^="agenda-free-"]').first(); await freeCard.waitFor();
-    await freeCard.click(); await page.waitForURL(/\/add/);
-    assert.equal(await page.getByRole('textbox', { name: 'Appointment date (YYYY-MM-DD)', exact: true }).inputValue(), freeDate);
+    // The sheet rises over the home on that day, with the gap's first time chosen once a service is.
+    await freeCard.click(); const addSheet = page.getByTestId('manual-booking-sheet'); await addSheet.waitFor();
+    assert.match(await addSheet.getByTestId('booking-date-trigger').getAttribute('aria-label') ?? '', new RegExp(freeDate));
+    await addSheet.getByRole('button', { name: 'Close', exact: true }).click(); await addSheet.waitFor({ state: 'detached' });
     await showAgendaAt(page, home, morning); await unfoldAgendaCard(page, firstCard);
     await firstCard.getByRole('button', { name: 'Cancel appointment', exact: true }).click(); await answerCancellation(page, false); assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: first.id } })).status, 'CONFIRMED');
     const cancelUrl = `${apiUrl}/v1/provider/businesses/${business.id}/bookings/${first.id}/cancel`;

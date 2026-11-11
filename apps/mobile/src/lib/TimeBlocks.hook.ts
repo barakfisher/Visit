@@ -72,7 +72,7 @@ export function useTimeBlockDialog(businessId: string, timezone: string | undefi
     } finally { operation.current = false; if (scope.mounted.current) setBusy(false); }
   }
   return {
-    t, locale, direction, timezone, open, form, errors, conflicts, failure, busy, ready: Boolean(timezone),
+    t, locale, direction, timezone, today: timezone ? localDate(timezone) : '', open, form, errors, conflicts, failure, busy, ready: Boolean(timezone),
     openDialog, close, update, save: () => { void submit(); },
     when: (instant: string) => timezone ? `${appointmentDate(instant, timezone, locale)} · ${appointmentTime(instant, timezone, locale)}` : '',
   };

@@ -5,22 +5,23 @@ import { openManualBooking } from '../src/lib/ManualBookingEntry';
 import { useSessionStore } from '../src/state/session';
 import { emptyManualDraft, useManualDraft } from '../src/state/ManualBooking.store';
 import type { ManualDraft, ManualOptions } from '../src/types/ManualBooking.types';
-const options: ManualOptions = { timezone: 'Asia/Jerusalem', bookable: true, requiresException: true, services: [{ id: 'service', name: 'Consultation', durationMinutes: 30, priceMinor: 10000, currency: 'ILS', staff: [{ id: 'staff', displayName: 'Specialist', parallelCapacity: 1 }] }] };
-const draft: ManualDraft = { ...emptyManualDraft, open: true, serviceId: 'service', staffId: 'staff', localDate: '2027-03-15', localTime: '12:00', customerName: ' New customer ', customerPhone: ' +972501234567 ', exceptionReason: ' Phone appointment ' };
+const options: ManualOptions = { timezone: 'Asia/Jerusalem', bookable: true, services: [{ id: 'service', name: 'Consultation', durationMinutes: 30, priceMinor: 10000, currency: 'ILS', staff: [{ id: 'staff', displayName: 'Specialist', parallelCapacity: 1 }] }] };
+const draft: ManualDraft = { ...emptyManualDraft, open: true, serviceId: 'service', staffId: 'staff', localDate: '2027-03-15', localTime: '12:00', customerName: ' New customer ', customerPhone: ' +972501234567 ' };
 test('manual input captures reviewed service and trims contact without inventing verification', () => {
  const before = structuredClone(draft), result = manualInput(draft, options, 'attempt');
  assert.ok(result); assert.equal(result.customerName, 'New customer'); assert.equal(result.customerPhone, '+972501234567');
- assert.equal(result.exceptionReason, 'Phone appointment'); assert.equal(result.finalConsent, true); assert.equal(result.idempotencyKey, 'attempt');
+ assert.equal('exceptionReason' in result, false); assert.equal(result.finalConsent, true); assert.equal(result.idempotencyKey, 'attempt');
  assert.deepEqual(result.reviewedService, { name: 'Consultation', durationMinutes: 30, priceMinor: 10000, currency: 'ILS' });
  assert.equal('customerId' in result, false); assert.equal('customerPhoneVerifiedAt' in result, false); assert.equal('customerEmail' in result, false); assert.deepEqual(draft, before);
 });
-test('manual validation rejects missing options, assignments, malformed boundaries and absent exceptions', () => {
+test('a phone typed the Israeli way is sent in E.164', () => {
+ assert.equal(manualInput({ ...draft, customerPhone: '050-123 4567' }, options, 'attempt')?.customerPhone, '+972501234567');
+});
+test('manual validation rejects missing options, assignments and malformed boundaries', () => {
  assert.equal(manualInput(draft, undefined, 'attempt'), null);
  for (const changed of [{ ...options, bookable: false }, { ...options, services: [] }]) assert.equal(manualInput(draft, changed, 'attempt'), null);
- const invalid: Partial<ManualDraft>[] = [{ serviceId: '' }, { staffId: 'foreign' }, { localDate: '2027-02-30' }, { localTime: '24:00' }, { localTime: '12:60' }, { customerName: ' ' }, { customerName: 'a'.repeat(121) }, { customerPhone: '0501234567' }, { customerPhone: '+123' }, { customerEmail: 'broken' }, { utcOffset: 'Israel' }, { exceptionReason: ' ' }, { exceptionReason: 'a'.repeat(501) }];
+ const invalid: Partial<ManualDraft>[] = [{ serviceId: '' }, { staffId: 'foreign' }, { localDate: '2027-02-30' }, { localTime: '24:00' }, { localTime: '12:60' }, { customerName: ' ' }, { customerName: 'a'.repeat(121) }, { customerPhone: '12345' }, { customerPhone: '+123' }, { customerEmail: 'broken' }, { utcOffset: 'Israel' }];
  for (const patch of invalid) assert.equal(manualInput({ ...draft, ...patch }, options, 'attempt'), null, JSON.stringify(patch));
- assert.ok(manualInput({ ...draft, exceptionReason: '' }, { ...options, requiresException: false }, 'attempt'));
- assert.equal(manualInput({ ...draft, exceptionReason: 'abc' }, { ...options, requiresException: false }, 'attempt'), null);
 });
 test('manual store retains the same uncertain attempt, ignores stale results and clears private data', () => {
  const store = useManualDraft;
@@ -53,5 +54,9 @@ test('Add appointment starts a new form today and leaves a form in progress alon
   openManualBooking(business.id);
   assert.equal(useManualDraft.getState().result, null); assert.equal(useManualDraft.getState().draft.customerName, emptyManualDraft.customerName); assert.equal(useManualDraft.getState().draft.localDate, emptyManualDraft.localDate);
   openManualBooking('foreign-business'); assert.equal(useManualDraft.getState().scope, scope);
+  // A free card names its day, time and staff member.
+  const free = { localDate: chosen, localTime: '10:45', staffId: 'staff' };
+  openManualBooking(business.id, free);
+  assert.deepEqual({ localDate: useManualDraft.getState().draft.localDate, localTime: useManualDraft.getState().draft.localTime, staffId: useManualDraft.getState().draft.staffId }, free);
  } finally { useSessionStore.getState().clear(); useManualDraft.getState().clear(); }
 });
