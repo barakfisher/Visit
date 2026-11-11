@@ -22,7 +22,8 @@ if (!Number.isInteger(webPort) || webPort < 1024 || webPort > 65535) throw new E
 const webUrl = `http://127.0.0.1:${webPort}`;
 // Explicit isolated configuration: the dedicated test database and Redis logical database, never .env (decisions.md).
 const environment = testEnvironment({ apiPort, webUrl });
-Object.assign(process.env, environment, { EXPO_PUBLIC_API_URL: apiUrl });
+// Both addresses: a developer's .env may set a browser-only one, which would otherwise send this suite to the development API.
+Object.assign(process.env, environment, { EXPO_PUBLIC_API_URL: apiUrl, EXPO_PUBLIC_WEB_API_URL: apiUrl });
 migrateTestDatabase(repoRoot, environment.DATABASE_URL);
 const { prisma } = await import('../../api/src/db/client.js');
 const { redis } = await import('../../api/src/infra/redis.js');

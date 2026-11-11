@@ -39,6 +39,7 @@ jobs:
       SESSION_SECRET: ci-only-session-secret-not-for-production-000000
       EMAIL_DELIVERY_MODE: local-inbox
       EXPO_PUBLIC_API_URL: http://127.0.0.1:3001
+      EXPO_PUBLIC_WEB_API_URL: http://127.0.0.1:3001
       WEB_APP_URL: http://127.0.0.1:8082
     steps:
       - uses: actions/checkout@v4
