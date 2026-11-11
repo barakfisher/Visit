@@ -43,6 +43,20 @@ export async function retrySerializable<T>(operation: () => Promise<T>, attempts
   throw conflict('Availability changed. Please retry.');
 }
 
+// Every booking race is decided by a row update, a unique key or the capacity trigger's staff-row write, and
+// Repeatable Read refuses a snapshot taken before any of them. Serializable added predicate locks on index and
+// heap pages that unrelated businesses share, so concurrent bookings in different businesses refused each
+// other (decisions.md, "Booking transactions run at Repeatable Read").
+export const BOOKING_ISOLATION_LEVEL = 'RepeatableRead' as const;
+// A row another transaction only locked (FOR SHARE) and never updated does not refuse a stale snapshot. A step
+// that must see what committed while it waited on such a lock reads at Read Committed instead.
+export const AFTER_LOCK_ISOLATION_LEVEL = 'ReadCommitted' as const;
+
 export function withBookingTransaction<T>(work: (transaction: Prisma.TransactionClient) => Promise<T>) {
-  return retrySerializable(() => prisma.$transaction(work, { isolationLevel: 'Serializable', maxWait: 5000, timeout: 5000 }));
+  return retrySerializable(() => prisma.$transaction(work, { isolationLevel: BOOKING_ISOLATION_LEVEL, maxWait: 5000, timeout: 5000 }));
+}
+
+/** A booking transaction whose every statement after a lock wait reads the rows committed during that wait. */
+export function withAfterLockTransaction<T>(work: (transaction: Prisma.TransactionClient) => Promise<T>) {
+  return retrySerializable(() => prisma.$transaction(work, { isolationLevel: AFTER_LOCK_ISOLATION_LEVEL, maxWait: 5000, timeout: 5000 }));
 }

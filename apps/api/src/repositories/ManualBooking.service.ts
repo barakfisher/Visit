@@ -57,7 +57,7 @@ export async function createManualBooking(session: AuthenticatedSession, busines
       await tx.$queryRaw`SELECT id FROM "Membership" WHERE "businessId" = ${businessId} AND "identityId" = ${session.identity.id} FOR SHARE`;
       if (!await tx.membership.findFirst({ where: { businessId, identityId: session.identity.id, status: 'ACTIVE', role: { in: ['OWNER', 'MANAGER'] }, business: { approvalStatus: 'APPROVED', deletedAt: null } } })) throw notFound();
       // Update the attempt row in the same commit as the booking. A waiting stale
-      // Serializable worker must retry before it can interpret an availability error.
+      // worker must retry before it can interpret an availability error.
       await tx.$queryRaw`SELECT id FROM "ManualBookingAttempt" WHERE id = ${registered.id} FOR UPDATE`;
       const intent = await tx.manualBookingAttempt.findUniqueOrThrow({ where: { id: registered.id } });
       const prior = await tx.booking.findUnique({ where: { businessId_idempotencyKey: { businessId, idempotencyKey: key } } });
