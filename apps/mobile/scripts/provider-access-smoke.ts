@@ -31,11 +31,11 @@ export async function providerAccessSmoke({ browser, webUrl, apiUrl }: { browser
     await prisma.business.updateMany({ where: { id: { in: businesses } }, data: { publishedAt: new Date() } });
     await page.goto(`${webUrl}/provider/dashboard?businessId=${businesses[0]}`); await page.getByRole('heading', { name: 'Protected studio 0', exact: true }).waitFor();
     // A block draft never follows the owner into another business: the dialog starts empty there.
-    const blockReason = () => page.getByTestId('block-form').getByRole('textbox', { name: 'Reason (optional)', exact: true });
-    await page.getByRole('button', { name: 'Block time / add a break', exact: true }).click(); await blockReason().fill('Private draft that must be discarded');
+    const blockReason = () => page.getByTestId('block-form').getByRole('checkbox', { name: 'Break', exact: true });
+    await page.getByRole('button', { name: 'Time off', exact: true }).click(); await blockReason().click(); assert.equal(await blockReason().getAttribute('aria-checked'), 'true');
     await page.getByTestId('block-form').getByRole('button', { name: 'Cancel', exact: true }).click(); await page.getByTestId('block-form').waitFor({ state: 'detached' });
     await page.getByRole('button', { name: 'Protected studio 1', exact: true }).click(); await page.getByRole('heading', { name: 'Protected studio 1', exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Block time / add a break', exact: true }).click(); assert.equal(await blockReason().inputValue(), '');
+    await page.getByRole('button', { name: 'Time off', exact: true }).click(); assert.equal(await blockReason().getAttribute('aria-checked'), 'false');
     await page.getByTestId('block-form').getByRole('button', { name: 'Cancel', exact: true }).click();
     // A foreign business in Account's URL changes nothing: customer mode, no settings entry.
     await page.goto(`${webUrl}/account?businessId=foreign-business`); await page.getByTestId('app-footer').getByRole('button', { name: 'My appointments', exact: true }).waitFor(); assert.equal(await page.getByTestId('provider-mode-strip').count() + await page.getByRole('button', { name: 'Business settings', exact: true }).count(), 0);

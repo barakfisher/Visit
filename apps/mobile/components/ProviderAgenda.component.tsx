@@ -11,8 +11,7 @@ import { BusinessSwitcher } from './BusinessSwitcher.component';
 import { ActionButton } from './ActionButton';
 import { Control } from './Control';
 import { DirectionalChevron } from './DirectionalChevron.component';
-import { ShareIcon } from './NavigationIcons.component';
-import { AddButton } from './AddButton';
+import { PlusIcon, ShareIcon } from './NavigationIcons.component';
 import { TimeBlockRow } from './TimeBlocks';
 import { BlockCard, ClosedDayCard, FreeTimeCard } from './AgendaDayCards.component';
 import { FormDialog } from './FormDialog';
@@ -38,11 +37,12 @@ export function ProviderAgenda({ published, ...view }: ProviderAgendaView & { pu
   return <ScrollView contentContainerClassName="mx-auto w-full max-w-3xl gap-4 px-5 py-5 pb-10" className="flex-1 bg-canvas">
     <Text accessibilityRole="header" className="text-3xl font-bold text-ink">{business.name}</Text>
     <BusinessSwitcher businesses={profile?.businesses ?? []} activeId={business.id} onSelect={view.selectBusiness} />
-    <View className="flex-row flex-wrap gap-2">
+    {/* Share and Block time are one family: the same button, the same size, one row (decisions.md, "Block time simpler, sheets close with a swipe down" — 2026-11-11). */}
+    <View className="flex-row gap-2">
       {/* Publishing lives in business settings; the agenda only points there (decisions.md, 2026-11-02). */}
-      {published ? <ActionButton secondary testID="dashboard-share" label={t('dashboard.share')} icon={color => <ShareIcon color={color} />} onPress={() => router.push({ pathname: '/provider/[businessId]/share', params: { businessId: business.id } })} /> : null}
+      {published ? <View className="flex-1"><ActionButton secondary testID="dashboard-share" label={t('dashboard.share')} icon={color => <ShareIcon color={color} />} onPress={() => router.push({ pathname: '/provider/[businessId]/share', params: { businessId: business.id } })} /></View> : null}
       {/* The same dialog as the hours screen, starting today (decisions.md, "Time blocks with a reason"). */}
-      <AddButton testID="agenda-block" label={t('dashboard.block')} disabled={busy || !agenda.data} onPress={() => blockDialog.openDialog(day)} />
+      <View className="flex-1"><ActionButton secondary testID="agenda-block" label={t('dashboard.block')} icon={color => <PlusIcon color={color} />} disabled={busy || !agenda.data} onPress={() => blockDialog.openDialog(day)} /></View>
     </View>
     {published ? null : <View testID="dashboard-unpublished" className="flex-row flex-wrap items-center gap-x-3 gap-y-1 rounded-control border border-amber-300 bg-amber-50 px-4 py-3"><Text className="flex-1 text-sm text-warning">{t('dashboard.unpublished')}</Text><Link href={{ pathname: '/provider/[businessId]/[section]', params: { businessId: business.id, section: 'publish' } }} className="min-h-touch py-2 font-semibold text-warning underline">{t('dashboard.publishLink')}</Link></View>}
     <TimeBlockDialog staff={agenda.data?.staff ?? []} {...blockDialog} />

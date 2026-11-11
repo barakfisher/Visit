@@ -84,7 +84,7 @@ export const HoursDialog: Story = { args: { dialogOpen: true }, play: async ({ c
   await expect(dialog.getByRole('radio', { name: 'Whole business' })).toHaveAttribute('aria-checked', 'true');
   await expect(dialog.getByRole('radio', { name: 'Hours on one day' })).toHaveAttribute('aria-checked', 'true');
   // Dates and times are picked, never typed (decisions.md, 2026-11-11).
-  await expect(dialog.queryAllByRole('textbox')).toHaveLength(1);
+  await expect(dialog.queryAllByRole('textbox')).toHaveLength(0);
   await expect(dialog.getByTestId('block-date')).toHaveTextContent('24 December 2026');
   await expect(dialog.getByTestId('block-from')).toHaveTextContent('12:00');
   const body = within(canvasElement.ownerDocument.body);
@@ -99,28 +99,39 @@ export const HoursDialog: Story = { args: { dialogOpen: true }, play: async ({ c
   await waitFor(() => expect(canvasElement.ownerDocument.querySelectorAll('[aria-modal="true"]')).toHaveLength(1));
   await userEvent.click(dialog.getByRole('radio', { name: 'Noa' })); await expect(args.update).toHaveBeenCalledWith({ staffId: 'noa' });
   await userEvent.click(dialog.getByRole('radio', { name: 'Whole days' })); await expect(args.update).toHaveBeenCalledWith({ kind: 'days' });
+  // Reasons are checkboxes; a tick adds to what is chosen rather than replacing it.
+  await userEvent.click(dialog.getByRole('checkbox', { name: 'Other' })); await expect(args.update).toHaveBeenCalledWith({ reasons: ['other'] });
   const save = dialog.getByRole('button', { name: 'Save block' }), cancel = dialog.getByRole('button', { name: 'Cancel' });
   await expect(Math.abs(save.getBoundingClientRect().top - cancel.getBoundingClientRect().top)).toBeLessThan(1);
   await userEvent.click(save); await expect(args.save).toHaveBeenCalled();
   await userEvent.click(cancel); await expect(args.close).toHaveBeenCalled();
 } };
-export const DaysDialog: Story = { args: { dialogOpen: true, form: { ...emptyBlockForm('2026-12-24'), kind: 'days', staffId: 'dan', toDate: '2026-12-26', reason: 'Vacation' } }, play: async ({ canvasElement }) => {
+export const DaysDialog: Story = { args: { dialogOpen: true, form: { ...emptyBlockForm('2026-12-24'), kind: 'days', staffId: 'dan', toDate: '2026-12-26', reasons: ['break', 'vacation'] } }, play: async ({ canvasElement }) => {
   const dialog = dialogOf(canvasElement);
   await expect(dialog.getByRole('radio', { name: 'Dan' })).toHaveAttribute('aria-checked', 'true');
   await expect(dialog.getByTestId('block-from-date')).toHaveTextContent('24 December 2026');
   await expect(dialog.getByTestId('block-to-date')).toHaveTextContent('26 December 2026');
   await expect(dialog.queryByTestId('block-from')).toBeNull();
-  await expect(dialog.getByLabelText('Reason (optional)', { exact: true })).toHaveValue('Vacation');
+  await expect(dialog.getByRole('checkbox', { name: 'Vacation' })).toHaveAttribute('aria-checked', 'true');
+  await expect(dialog.getByRole('checkbox', { name: 'Break' })).toHaveAttribute('aria-checked', 'true');
+  await expect(dialog.getByRole('checkbox', { name: 'Meeting' })).toHaveAttribute('aria-checked', 'false');
+} };
+/** With one staff member there is no one to choose between: the block covers the business, which is that person. */
+export const OneStaffDialog: Story = { args: { dialogOpen: true, staff: [staff[0]!] }, play: async ({ canvasElement }) => {
+  const dialog = dialogOf(canvasElement);
+  await expect(dialog.queryByRole('radiogroup', { name: 'Who is unavailable' })).toBeNull();
+  await expect(dialog.queryByRole('radio', { name: 'Whole business' })).toBeNull();
+  await expect(dialog.getByRole('radio', { name: 'Hours on one day' })).toBeVisible();
 } };
 export const HebrewDialog: Story = { args: { locale: 'he', dialogOpen: true }, globals: { locale: 'he' }, play: async ({ canvasElement }) => {
   const dialog = dialogOf(canvasElement);
   await expect(dialog.getByRole('radio', { name: 'כל העסק' })).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'שמירת החסימה' })).toBeVisible();
+  for (const name of ['הפסקה', 'פגישה', 'סידורים', 'חופש', 'אחר']) await expect(dialog.getByRole('checkbox', { name })).toBeVisible();
 } };
-export const ValidationErrors: Story = { args: { dialogOpen: true, form: { ...emptyBlockForm('2026-12-24'), kind: 'days', fromDate: '2026-12-26', toDate: '2026-12-24', reason: 'x'.repeat(201) }, errors: { toDate: 'range', reason: 'reason' } }, play: async ({ canvasElement }) => {
+export const ValidationErrors: Story = { args: { dialogOpen: true, form: { ...emptyBlockForm('2026-12-24'), kind: 'days', fromDate: '2026-12-26', toDate: '2026-12-24' }, errors: { toDate: 'range' } }, play: async ({ canvasElement }) => {
   const dialog = dialogOf(canvasElement);
   await expect(dialog.getByText('The last day cannot come before the first day.')).toBeVisible();
-  await expect(dialog.getByText('Keep the reason to 200 characters.')).toBeVisible();
 } };
 export const Conflicts: Story = { args: { dialogOpen: true, conflicts }, play: async ({ canvasElement }) => {
   const dialog = dialogOf(canvasElement);
@@ -130,13 +141,14 @@ export const Conflicts: Story = { args: { dialogOpen: true, conflicts }, play: a
   await expect(dialog.getByText('And 20 more.')).toBeVisible();
   await expect(dialog.getByTestId('block-date')).toHaveTextContent('24 December 2026');
 } };
-export const SaveFailedKeepsDraft: Story = { args: { dialogOpen: true, failure: 'blocks.saveFailed', form: { ...emptyBlockForm('2026-12-24'), reason: 'Training' } }, play: async ({ canvasElement }) => {
+export const SaveFailedKeepsDraft: Story = { args: { dialogOpen: true, failure: 'blocks.saveFailed', form: { ...emptyBlockForm('2026-12-24'), reasons: ['meeting'] } }, play: async ({ canvasElement }) => {
   const dialog = dialogOf(canvasElement);
   await expect(dialog.getByRole('alert')).toHaveTextContent('Could not save the block.');
-  await expect(dialog.getByLabelText('Reason (optional)', { exact: true })).toHaveValue('Training');
+  await expect(dialog.getByRole('checkbox', { name: 'Meeting' })).toHaveAttribute('aria-checked', 'true');
 } };
 export const Pending: Story = { args: { dialogOpen: true, busy: true }, play: async ({ canvasElement }) => {
   const dialog = dialogOf(canvasElement);
   for (const button of dialog.getAllByRole('button')) await expect(button).toHaveAttribute('aria-disabled', 'true');
   for (const radio of dialog.getAllByRole('radio')) await expect(radio).toHaveAttribute('aria-disabled', 'true');
+  for (const box of dialog.getAllByRole('checkbox')) await expect(box).toHaveAttribute('aria-disabled', 'true');
 } };

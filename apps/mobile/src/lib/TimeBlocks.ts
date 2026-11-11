@@ -12,14 +12,17 @@ export const BLOCK_IN_PAST = 'BLOCK_IN_PAST';
 const TIME = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 
 export type BlockKind = 'hours' | 'days';
+/** The reasons a block can carry, in the order they are offered and written; any number of them, or none. */
+export const BLOCK_REASONS = ['break', 'meeting', 'errands', 'vacation', 'other'] as const;
+export type BlockReason = typeof BLOCK_REASONS[number];
 /** The block dialog. An empty staffId blocks the whole business. */
-export type BlockForm = { staffId: string; kind: BlockKind; date: string; startLocal: string; endLocal: string; fromDate: string; toDate: string; reason: string };
-export type BlockFormError = 'date' | 'format' | 'order' | 'range' | 'tooLong' | 'past' | 'reason';
-export type BlockFormErrors = Partial<Record<'date' | 'startLocal' | 'endLocal' | 'fromDate' | 'toDate' | 'reason', BlockFormError>>;
+export type BlockForm = { staffId: string; kind: BlockKind; date: string; startLocal: string; endLocal: string; fromDate: string; toDate: string; reasons: BlockReason[] };
+export type BlockFormError = 'date' | 'format' | 'order' | 'range' | 'tooLong' | 'past';
+export type BlockFormErrors = Partial<Record<'date' | 'startLocal' | 'endLocal' | 'fromDate' | 'toDate', BlockFormError>>;
 
 /** A new block starts as a midday hour for the whole business on the chosen date. */
 export function emptyBlockForm(date: string): BlockForm {
-  return { staffId: '', kind: 'hours', date, startLocal: '12:00', endLocal: '13:00', fromDate: date, toDate: date, reason: '' };
+  return { staffId: '', kind: 'hours', date, startLocal: '12:00', endLocal: '13:00', fromDate: date, toDate: date, reasons: [] };
 }
 
 const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000);
@@ -40,12 +43,21 @@ export function validateBlockForm(form: BlockForm, today: string): BlockFormErro
     else if (!errors.fromDate && daysBetween(form.fromDate, form.toDate) + 1 > MAX_BLOCK_DAYS) errors.toDate = 'tooLong';
     else if (form.toDate < today) errors.toDate = 'past';
   }
-  if (form.reason.trim().length > MAX_BLOCK_REASON) errors.reason = 'reason';
   return errors;
 }
 
-export function blockInput(form: BlockForm, businessId: string): TimeBlockInput {
-  const reason = form.reason.trim(), who = { businessId, ...(form.staffId ? { staffId: form.staffId } : {}), ...(reason ? { reason } : {}) };
+/** Adds a reason that is not chosen, or takes away one that is, keeping the offered order. */
+export function toggleBlockReason(reasons: readonly BlockReason[], reason: BlockReason): BlockReason[] {
+  const chosen = reasons.includes(reason) ? reasons.filter(row => row !== reason) : [...reasons, reason];
+  return BLOCK_REASONS.filter(row => chosen.includes(row));
+}
+
+/**
+ * The chosen reasons travel as the block's text in the owner's language ("Break, Meeting"), so the API and the
+ * cards that show it stay as they were. Five labels stay far under `MAX_BLOCK_REASON`.
+ */
+export function blockInput(form: BlockForm, businessId: string, label: (reason: BlockReason) => string): TimeBlockInput {
+  const reason = BLOCK_REASONS.filter(row => form.reasons.includes(row)).map(label).join(', '), who = { businessId, ...(form.staffId ? { staffId: form.staffId } : {}), ...(reason ? { reason } : {}) };
   return form.kind === 'hours' ? { ...who, kind: 'hours', date: form.date, startLocal: form.startLocal, endLocal: form.endLocal } : { ...who, kind: 'days', fromDate: form.fromDate, toDate: form.toDate };
 }
 

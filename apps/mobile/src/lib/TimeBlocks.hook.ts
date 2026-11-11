@@ -60,7 +60,7 @@ export function useTimeBlockDialog(businessId: string, timezone: string | undefi
     operation.current = true; setBusy(true);
     const isCurrent = scope.capture();
     try {
-      await createTimeBlock(blockInput(form, businessId));
+      await createTimeBlock(blockInput(form, businessId, reason => t(`blocks.reason.${reason}`)));
       if (!isCurrent()) return;
       // A block changes slots, the agenda and the blocked-time list.
       await Promise.allSettled([client.invalidateQueries({ predicate: query => isBookingQuery(query.queryKey) })]);

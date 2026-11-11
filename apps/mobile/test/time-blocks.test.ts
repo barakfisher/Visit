@@ -1,15 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ApiError } from '../src/lib/apiClient';
-import { BLOCK_CONFLICT, MAX_BLOCK_DAYS, MAX_BLOCK_REASON, blockConflicts, blockDates, blockInput, emptyBlockForm, validateBlockForm, type BlockForm } from '../src/lib/TimeBlocks';
+import { BLOCK_CONFLICT, BLOCK_REASONS, MAX_BLOCK_DAYS, MAX_BLOCK_REASON, blockConflicts, blockDates, blockInput, emptyBlockForm, toggleBlockReason, validateBlockForm, type BlockForm, type BlockReason } from '../src/lib/TimeBlocks';
+import { translate } from '../src/i18n/messages';
 import { addBookingDays } from '../src/lib/CompactBooking.utils';
 
 const today = '2026-11-02';
+const label = (reason: BlockReason) => `<${reason}>`;
 const hours = (patch: Partial<BlockForm> = {}): BlockForm => ({ ...emptyBlockForm('2026-11-05'), ...patch });
 const days = (patch: Partial<BlockForm> = {}): BlockForm => ({ ...emptyBlockForm('2026-11-05'), kind: 'days', fromDate: '2026-12-24', toDate: '2026-12-26', ...patch });
 
 test('a new block is an hour on the chosen date for the whole business', () => {
-  assert.deepEqual(emptyBlockForm('2026-11-05'), { staffId: '', kind: 'hours', date: '2026-11-05', startLocal: '12:00', endLocal: '13:00', fromDate: '2026-11-05', toDate: '2026-11-05', reason: '' });
+  assert.deepEqual(emptyBlockForm('2026-11-05'), { staffId: '', kind: 'hours', date: '2026-11-05', startLocal: '12:00', endLocal: '13:00', fromDate: '2026-11-05', toDate: '2026-11-05', reasons: [] });
   assert.deepEqual(validateBlockForm(hours(), today), {});
   assert.deepEqual(validateBlockForm(days(), today), {});
 });
@@ -33,16 +35,24 @@ test('whole days include both ends, run forward, stay within the API limit and m
   assert.deepEqual(validateBlockForm(days({ fromDate: '2026-10-01', toDate: today }), today), {}, 'a range ending today still blocks the rest of today');
 });
 
-test('the reason is optional, trimmed and bounded', () => {
-  assert.deepEqual(validateBlockForm(hours({ reason: 'x'.repeat(MAX_BLOCK_REASON) }), today), {});
-  assert.deepEqual(validateBlockForm(hours({ reason: 'x'.repeat(MAX_BLOCK_REASON + 1) }), today), { reason: 'reason' });
-  assert.deepEqual(blockInput(hours({ reason: '  Holiday  ' }), 'business-1'), { businessId: 'business-1', reason: 'Holiday', kind: 'hours', date: '2026-11-05', startLocal: '12:00', endLocal: '13:00' });
+test('reasons are several choices, kept and sent in the offered order', () => {
+  assert.deepEqual(toggleBlockReason([], 'other'), ['other']);
+  assert.deepEqual(toggleBlockReason(['other'], 'break'), ['break', 'other'], 'a later tick still lands in the offered order');
+  assert.deepEqual(toggleBlockReason(['break', 'other'], 'break'), ['other'], 'a second tap takes it away');
+  assert.deepEqual(blockInput(hours({ reasons: ['vacation', 'break'] }), 'business-1', label), { businessId: 'business-1', reason: '<break>, <vacation>', kind: 'hours', date: '2026-11-05', startLocal: '12:00', endLocal: '13:00' });
+});
+
+test('every reason at once still fits the server limit, in each language', () => {
+  for (const locale of ['en', 'he'] as const) {
+    const input = blockInput(hours({ reasons: [...BLOCK_REASONS] }), 'business-1', reason => translate(locale, `blocks.reason.${reason}`));
+    assert.ok((input.reason ?? '').length <= MAX_BLOCK_REASON, locale);
+  }
 });
 
 test('the request names a staff member only when one is chosen, and sends only the chosen kind', () => {
-  assert.deepEqual(blockInput(days({ staffId: 'staff-1' }), 'business-1'), { businessId: 'business-1', staffId: 'staff-1', kind: 'days', fromDate: '2026-12-24', toDate: '2026-12-26' });
-  assert.equal('staffId' in blockInput(days(), 'business-1'), false, 'no staff member means the whole business');
-  assert.equal('reason' in blockInput(hours({ reason: '   ' }), 'business-1'), false);
+  assert.deepEqual(blockInput(days({ staffId: 'staff-1' }), 'business-1', label), { businessId: 'business-1', staffId: 'staff-1', kind: 'days', fromDate: '2026-12-24', toDate: '2026-12-26' });
+  assert.equal('staffId' in blockInput(days(), 'business-1', label), false, 'no staff member means the whole business');
+  assert.equal('reason' in blockInput(hours(), 'business-1', label), false, 'no reason chosen sends none');
 });
 
 test('a refused block exposes its conflicts; any other failure does not', () => {

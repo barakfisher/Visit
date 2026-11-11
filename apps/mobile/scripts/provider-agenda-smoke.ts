@@ -116,7 +116,7 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     await firstCard.waitFor();
     // Blocking the whole business on a day with an appointment is refused, lists it, and writes nothing.
     const blockUrl = `${apiUrl}/api/provider/block-time`, blockForm = page.getByTestId('block-form');
-    await page.getByRole('button', { name: 'Block time / add a break', exact: true }).click();
+    await page.getByRole('button', { name: 'Time off', exact: true }).click();
     assert.equal(await blockForm.getByTestId('block-date').getAttribute('aria-label'), `Date · ${new Intl.DateTimeFormat('en-GB', { dateStyle: 'full', timeZone: 'UTC' }).format(new Date(`${date}T12:00Z`))}`);
     await blockForm.getByRole('radio', { name: 'Whole days', exact: true }).click();
     const refused = page.waitForResponse(response => response.url() === blockUrl && response.request().method() === 'POST');
@@ -128,15 +128,16 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     // A free day blocks, shows on that day as the whole business, all day, and removes after a confirmation.
     const freeDate = new Date(+nextTuesday + 2 * 86400000).toISOString().slice(0, 10);
     await pickDate(page, 'block-from-date', freeDate); await pickDate(page, 'block-to-date', freeDate);
-    await blockForm.getByRole('textbox', { name: 'Reason (optional)', exact: true }).fill('Holiday');
+    // Reasons are several checkboxes; they are written in the offered order, whatever order they were ticked in.
+    await blockForm.getByRole('checkbox', { name: 'Vacation', exact: true }).click(); await blockForm.getByRole('checkbox', { name: 'Meeting', exact: true }).click();
     const blocked = page.waitForResponse(response => response.url() === blockUrl && response.request().method() === 'POST');
     await blockForm.getByRole('button', { name: 'Save block', exact: true }).click(); assert.equal((await blocked).status(), 201); await blockForm.waitFor({ state: 'detached' });
-    assert.deepEqual((await prisma.timeBlock.findMany({ where: { businessId: business.id }, select: { staffId: true, allDay: true, reason: true } })), [{ staffId: null, allDay: true, reason: 'Holiday' }]);
+    assert.deepEqual((await prisma.timeBlock.findMany({ where: { businessId: business.id }, select: { staffId: true, allDay: true, reason: true } })), [{ staffId: null, allDay: true, reason: 'Meeting, Vacation' }]);
     await showAgendaAt(page, home, `${freeDate}T06:00:00Z`);
     // The block is a card in the day, the day has no free time, and the card opens its details, where it is released.
-    const blockCard = page.locator('[data-testid^="agenda-blocked-"]').filter({ hasText: 'Holiday' }); await blockCard.getByText(/All day/).waitFor();
+    const blockCard = page.locator('[data-testid^="agenda-blocked-"]').filter({ hasText: 'Meeting, Vacation' }); await blockCard.getByText(/All day/).waitFor();
     assert.equal(await page.locator('[data-testid^="agenda-free-"]').count(), 0);
-    await blockCard.click(); const blockDetails = page.getByTestId('agenda-block-details'); await blockDetails.getByText('Whole business · Holiday', { exact: true }).waitFor();
+    await blockCard.click(); const blockDetails = page.getByTestId('agenda-block-details'); await blockDetails.getByText('Whole business · Meeting, Vacation', { exact: true }).waitFor();
     await blockDetails.getByRole('button', { name: 'Remove block', exact: true }).click(); await blockDetails.getByRole('button', { name: 'Confirm', exact: true }).click();
     await blockCard.waitFor({ state: 'detached' }); assert.equal(await prisma.timeBlock.count({ where: { businessId: business.id } }), 0);
     // Released, the day is free again: one card across the hours, and it opens Add appointment on that day.
