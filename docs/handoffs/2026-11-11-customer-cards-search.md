@@ -1,6 +1,6 @@
 # Visit handoff — 2026-11-11, customer cards and search (PR A of two)
 
-PR #PRNUM, built on `main` after PR #61. Read `2026-11-11-customer-cards-design.md` first; the build brief and per-criterion status are in `docs/architecture/customer-cards.md`.
+PR #62, built on `main` after PR #61. Read `2026-11-11-customer-cards-design.md` first; the build brief and per-criterion status are in `docs/architecture/customer-cards.md`.
 
 ## Where things stand
 
