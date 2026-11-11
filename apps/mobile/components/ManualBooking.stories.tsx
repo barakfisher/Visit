@@ -11,10 +11,10 @@ const draft = { ...emptyManualDraft, open: true, serviceId: 'service', staffId: 
 const options = { timezone: 'Asia/Jerusalem', bookable: true, services: [{ id: 'service', name: 'Consultation', durationMinutes: 30, priceMinor: 10000, currency: 'ILS', staff: [{ id: 'staff', displayName: 'Specialist', parallelCapacity: 1 }, { id: 'second', displayName: 'Second specialist', parallelCapacity: 1 }] }] };
 const picking: ManualSlotPicking = { controls: compactControlsFixture, disabled: false, date: '2027-03-15', selectedId: 'staff:instant', slotLoading: false, slotError: false, onRetrySlots: fn(), onSelectSlot: fn(),
   staff: options.services[0]!.staff, staffFilter: '', onStaffFilter: fn(), slotLabel: '09:00 · Specialist' };
-const customer: ManualCustomerPicking = { suggestions: [], searching: false, searchError: false, searched: false, phoneMatch: null, onRetrySearch: fn(), onPick: fn(), onClearPick: fn() };
+const customer: ManualCustomerPicking = { suggestions: [], searching: false, searchError: false, searched: false, phoneMatch: null, onPick: fn(), onClearPick: fn() };
 const walkIn: CustomerCardSummary = { id: 'walk-in', name: 'Dana Levi', phone: '+972501234567', email: null, linked: false };
 const appCustomer: CustomerCardSummary = { id: 'app', name: 'Dana Cohen', phone: null, email: 'dana@example.test', linked: true };
-const meta = { title: 'Provider/Manual booking', component: ManualBooking, args: { customer, t, draft, options, picking, loading: false, loadError: false, busy: false, locked: false, feedback: '', success: false, serviceSummary: 'Consultation · 30 minutes · ₪100', update: fn(), retry: fn(), review: fn(), confirm: fn(), close: fn() },
+const meta = { title: 'Provider/Manual booking', component: ManualBooking, args: { customer, t, draft, options, picking, loading: false, loadError: false, busy: false, locked: false, feedback: '', success: false, serviceSummary: 'Consultation · 30 minutes · ₪100', reviewDate: 'Monday, 15 March 2027', errors: {}, update: fn(), retry: fn(), review: fn(), confirm: fn(), close: fn() },
   decorators: [Story => <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, bottom: 0, left: 0, right: 0 } }}><Story /></SafeAreaProvider>] } satisfies Meta<typeof ManualBooking>;
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -33,7 +33,12 @@ export const Unpublished: Story = { args: { options: { ...options, bookable: fal
 export const FailedLoad: Story = { args: { loadError: true, picking: null }, play: async ({ canvas, args }) => { await expect(canvas.getByRole('alert')).toHaveTextContent(t('manual.loadError')); await userEvent.click(canvas.getByRole('button', { name: t('common.retry') })); await expect(args.retry).toHaveBeenCalled(); } };
 export const Review: Story = { args: { draft: { ...draft, reviewed: true } }, play: async ({ canvas, args }) => { await userEvent.click(canvas.getByRole('button', { name: t('manual.confirm') })); await expect(args.confirm).toHaveBeenCalled(); await expect(canvas.queryByRole('textbox')).toBeNull(); } };
 export const Pending: Story = { args: { draft: { ...draft, reviewed: true }, busy: true, locked: true }, play: async ({ canvas }) => { for (const button of canvas.getAllByRole('button')) await expect(button).toBeDisabled(); } };
-export const Uncertain: Story = { args: { draft: { ...draft, reviewed: true }, locked: true, feedback: 'Connection interrupted. Retry this same attempt.' }, play: async ({ canvas, args }) => { await expect(canvas.getByRole('button', { name: t('manual.edit') })).toBeDisabled(); await expect(canvas.getByRole('button', { name: t('manual.close') })).toBeDisabled(); await userEvent.click(canvas.getByRole('button', { name: t('manual.retry') })); await expect(args.confirm).toHaveBeenCalled(); } };
+/** An unknown outcome offers Try again (the same attempt, no duplicate) and Close; Edit is not offered, since a retry must send the same details. */
+export const Uncertain: Story = { args: { draft: { ...draft, reviewed: true }, locked: true, feedback: t('manual.uncertain') }, play: async ({ canvas, args }) => {
+  await expect(canvas.queryByRole('button', { name: t('manual.edit') })).toBeNull();
+  await userEvent.click(canvas.getByRole('button', { name: t('manual.close') })); await expect(args.close).toHaveBeenCalled();
+  await userEvent.click(canvas.getByRole('button', { name: t('manual.retry') })); await expect(args.confirm).toHaveBeenCalled();
+} };
 export const FailedSubmission: Story = { args: { feedback: 'Time unavailable. Choose another time.' }, play: async ({ canvas }) => { await expect(canvas.getByRole('alert')).toBeVisible(); await expect(canvas.getByDisplayValue('New customer')).toBeVisible(); } };
 export const Success: Story = { args: { success: true, feedback: 'Appointment created. Contact remains unverified; no notification sent.' }, play: async ({ canvas }) => { await expect(canvas.getByRole('status')).toBeVisible(); await expect(canvas.queryByRole('textbox')).toBeNull(); } };
 export const HebrewReview: Story = { args: { t: (key, values) => translate('he', key, values), draft: { ...draft, reviewed: true, customerName: 'לקוחה חדשה עם שם מלא וארוך במיוחד לצורך בדיקת תצוגה' }, serviceSummary: 'פגישת ייעוץ מקיפה ומעקב ארוך טווח עם צוות המומחים' }, globals: { locale: 'he' } };
@@ -49,11 +54,22 @@ export const NewCustomer: Story = { args: { draft: { ...draft, customerName: 'No
   await expect(canvas.getByText(t('manual.newCustomer'))).toBeVisible();
   await expect(canvas.getByRole('checkbox', { name: t('manual.save') })).toBeChecked();
 } };
-/** A failed search says so and still lets the business type the customer (criterion 12). */
+/** Continue with something missing marks each field under itself, in red, instead of one line guessing at the cause. */
+export const FieldErrors: Story = { args: { draft: { ...draft, customerName: '', customerPhone: '12', customerEmail: 'bad' }, errors: { name: t('manual.error.name'), phone: t('manual.error.phone'), email: t('manual.error.email') } }, play: async ({ canvas }) => {
+  await expect(canvas.getByText(t('manual.error.name'))).toBeVisible();
+  await expect(canvas.getByText(t('manual.error.phone'))).toBeVisible();
+  await expect(canvas.getByText(t('manual.error.email'))).toBeVisible();
+  await expect(canvas.getByLabelText(t('manual.phone'), { exact: true })).toHaveAttribute('aria-invalid', 'true');
+  await expect(canvas.getByLabelText(t('manual.name'), { exact: true })).toHaveAttribute('aria-required', 'true');
+  await expect(canvas.getByLabelText(t('manual.email'), { exact: true })).not.toHaveAttribute('aria-required', 'true');
+  await expect(canvas.queryByText(t('manual.invalid'))).toBeNull();
+} };
+/** A failed search says so, quietly and with no retry button (typing searches again), and still lets the business type the customer (criterion 12). */
 export const SearchFailed: Story = { args: { draft: { ...draft, customerName: 'Dana' }, customer: { ...customer, searched: true, searchError: true } }, play: async ({ canvas, args }) => {
-  await expect(canvas.getByRole('alert')).toHaveTextContent(t('manual.searchError'));
+  await expect(canvas.getByTestId('manual-search-error')).toHaveTextContent(t('manual.searchError'));
+  await expect(canvas.queryByRole('alert')).toBeNull();
   await expect(canvas.getAllByRole('textbox')).toHaveLength(3);
-  await userEvent.click(canvas.getByRole('button', { name: t('common.retry') })); await expect(args.customer.onRetrySearch).toHaveBeenCalled();
+  await expect(canvas.queryByRole('button', { name: t('common.retry') })).toBeNull();
   await userEvent.type(canvas.getByLabelText(t('manual.phone')), '5'); await expect(args.update).toHaveBeenCalled();
 } };
 /** A typed phone that already belongs to a customer offers that customer instead of a second card (criterion 3). */

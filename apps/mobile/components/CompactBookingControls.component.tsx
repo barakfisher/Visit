@@ -8,12 +8,14 @@ import { SmoothHeight } from './SmoothHeight.component';
 import { TimeChips } from './TimeChips';
 import { MonthStep } from './MonthStep.component';
 import type { CompactBookingControlsProps } from './CompactBookingControls.types';
-export function CompactBookingControls({ controls: c, t, disabled, date, selectedId, slotLoading, slotError, onRetrySlots, onSelectSlot, beforeTimes }: CompactBookingControlsProps) {
+import { RequiredMark } from './RequiredMark.component';
+export function CompactBookingControls({ controls: c, t, disabled, date, selectedId, slotLoading, slotError, onRetrySlots, onSelectSlot, beforeTimes, required = false, serviceError, timeError }: CompactBookingControlsProps) {
   // Sheet width measured at layout; the grid takes it, or scrolls horizontally below the minimum touch-target width.
   const [sheetWidth, setSheetWidth] = useState(0);
   return <View className="gap-5">
-    <View className="gap-2"><AppText className="text-sm font-semibold text-body">{t('compact.service')}</AppText>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${t('compact.chooseService')} · ${c.chosen?.label ?? t(c.choices.length ? 'compact.chooseService' : 'compact.noServices')} ⌄`} accessibilityState={{ expanded: c.sheet === 'service', disabled: disabled || !c.choices.length }} disabled={disabled || !c.choices.length} onPress={() => c.open('service')} className="min-h-14 flex-row items-center justify-between gap-3 rounded-control border border-line bg-surface px-4 py-3"><AppText className="flex-1 font-semibold text-ink">{c.chosen?.label ?? t(c.choices.length ? 'compact.chooseService' : 'compact.noServices')}</AppText><AppText>⌄</AppText></Pressable>
+    <View className="gap-2"><AppText className="text-sm font-semibold text-body">{t('compact.service')}{required ? <RequiredMark /> : null}</AppText>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${t('compact.chooseService')} · ${c.chosen?.label ?? t(c.choices.length ? 'compact.chooseService' : 'compact.noServices')} ⌄`} accessibilityState={{ expanded: c.sheet === 'service', disabled: disabled || !c.choices.length }} disabled={disabled || !c.choices.length} onPress={() => c.open('service')} className={`min-h-14 flex-row items-center justify-between gap-3 rounded-control bg-surface px-4 py-3 ${serviceError ? 'border-2 border-danger' : 'border border-line'}`}><AppText className="flex-1 font-semibold text-ink">{c.chosen?.label ?? t(c.choices.length ? 'compact.chooseService' : 'compact.noServices')}</AppText><AppText>⌄</AppText></Pressable>
+      {serviceError ? <AppText testID="booking-service-error" accessibilityRole="alert" className="text-sm text-danger">{serviceError}</AppText> : null}
       {c.chosen ? <AppText className="text-sm text-body">{c.chosen.summary}</AppText> : null}
     </View>
     <View className="gap-2"><AppText className="text-sm font-semibold text-body">{t('compact.date')}</AppText>
@@ -28,6 +30,7 @@ export function CompactBookingControls({ controls: c, t, disabled, date, selecte
         {!slotLoading && !c.page.length ? <ActionButton secondary label={t('compact.nextDate')} disabled={disabled || !c.canSearch} busy={c.searching} onPress={() => void c.nextDate()} /> : null}
       </>}
       {c.searchNotice ? <AppText role="status">{c.searchNotice}</AppText> : null}
+      {timeError ? <AppText testID="booking-time-error" accessibilityRole="alert" className="text-sm text-danger">{timeError}</AppText> : null}
     </View> : null}
     {/* The same sheet as every other choice over a screen: it slides in, and the backdrop closes it. */}
     <FormDialog testID="booking-choice-sheet" title={t(c.sheet === 'service' ? 'compact.chooseService' : 'compact.chooseDate')} open={c.sheet !== null} onClose={c.close}>

@@ -39,11 +39,11 @@ export async function manualBookingSmoke({ browser, webUrl, apiUrl, prisma, run,
   await chooseService(); await selectBookingDate(page, date);
   await form.getByLabel('Customer name', { exact: true }).fill('לקוחה חדשה — ללא חשבון'); await form.getByLabel('Customer phone', { exact: true }).fill('050-1234567');
   // Without a time the review refuses and writes nothing.
-  await form.getByRole('button', { name: 'Review appointment', exact: true }).click(); await form.getByRole('alert').waitFor();
+  await form.getByRole('button', { name: 'Continue', exact: true }).click(); await form.getByRole('alert').waitFor();
   assert.equal(await prisma.booking.count({ where: { businessId: business.id } }), 0);
   // The business requires verified contact, and still no reason is asked for (decisions.md, 2026-11-11).
   await chooseTime('10:00');
-  await form.getByRole('button', { name: 'Review appointment', exact: true }).click(); await form.getByRole('button', { name: 'Confirm manual appointment', exact: true }).waitFor();
+  await form.getByRole('button', { name: 'Continue', exact: true }).click(); await form.getByRole('button', { name: 'Confirm manual appointment', exact: true }).waitFor();
   assert.equal(await prisma.booking.count({ where: { businessId: business.id } }), 0);
   // Lose the response after the real server commits; retry must recover this exact attempt.
   let posts = 0, key = '';
@@ -52,11 +52,13 @@ export async function manualBookingSmoke({ browser, webUrl, apiUrl, prisma, run,
   await form.getByRole('button', { name: 'Confirm manual appointment', exact: true }).click();
   await form.locator('[aria-busy="true"]').waitFor();
   assert.equal(await form.getByRole('button', { name: 'Confirm manual appointment', exact: true }).isDisabled(), true); release?.();
-  await form.getByText(/The result is not confirmed/).waitFor(); assert.equal(posts, 1); assert.equal(routeFailure, undefined);
+  await form.getByText(/We could not confirm that the appointment was saved/).waitFor();
+  // Edit is not offered while the outcome is unknown; Close stays available (checked below, after the retry).
+  assert.equal(await form.getByRole('button', { name: 'Edit appointment details', exact: true }).count(), 0); assert.equal(await form.getByRole('button', { name: 'Close', exact: true }).isDisabled(), false); assert.equal(posts, 1); assert.equal(routeFailure, undefined);
   assert.equal(await prisma.booking.count({ where: { businessId: business.id } }), 1);
   await page.unroute(saveUrl);
   const retry = page.waitForRequest(request => request.url() === saveUrl && request.method() === 'POST');
-  await form.getByRole('button', { name: 'Retry the same appointment', exact: true }).click(); assert.equal((await retry).postDataJSON().idempotencyKey, key);
+  await form.getByRole('button', { name: 'Try again', exact: true }).click(); assert.equal((await retry).postDataJSON().idempotencyKey, key);
   await form.getByText('Appointment saved. Contact details remain unverified; no automatic message was sent.', { exact: true }).waitFor();
   const saved = await prisma.booking.findFirstOrThrow({ where: { businessId: business.id } });
   assert.equal(saved.customerId, null); assert.equal(saved.customerPhoneVerifiedAt, null); assert.equal(saved.customerEmailVerifiedAt, null); assert.equal(saved.manualReason, null);
@@ -70,13 +72,13 @@ export async function manualBookingSmoke({ browser, webUrl, apiUrl, prisma, run,
   await page.getByTestId('agenda-notice').filter({ hasText: `Appointment saved for ${dateRange(date, date, 'en')}.` }).waitFor();
   const card = page.getByTestId(`agenda-booking-${saved.id}`); assert.equal(await card.count(), 0);
   // Add appointment after a save starts an empty form, with no trace of the last customer or message.
-  await addTab.click(); await form.getByRole('button', { name: 'Review appointment', exact: true }).waitFor();
+  await addTab.click(); await form.getByRole('button', { name: 'Continue', exact: true }).waitFor();
   assert.equal(await form.getByLabel('Customer name', { exact: true }).inputValue(), ''); assert.equal(await form.getByRole('alert').count() + await form.getByRole('status').count(), 0);
   // The booked time is no longer offered; a time that becomes blocked between review and confirmation is refused and the details stay.
   await chooseService(); await selectBookingDate(page, date); await chooseTime('11:00');
   assert.equal(await form.getByRole('button', { name: /^10:00/ }).count(), 0);
   await form.getByLabel('Customer name', { exact: true }).fill('Another caller'); await form.getByLabel('Customer phone', { exact: true }).fill('+972501234568');
-  await form.getByRole('button', { name: 'Review appointment', exact: true }).click(); await form.getByRole('button', { name: 'Confirm manual appointment', exact: true }).waitFor();
+  await form.getByRole('button', { name: 'Continue', exact: true }).click(); await form.getByRole('button', { name: 'Confirm manual appointment', exact: true }).waitFor();
   const blockedDay = new Date(`${date}T00:00:00+02:00`);
   await prisma.timeBlock.create({ data: { businessId: business.id, startsAt: blockedDay, endsAt: new Date(+blockedDay + 86400000), reason: 'Smoke conflict' } });
   await form.getByRole('button', { name: 'Confirm manual appointment', exact: true }).click(); await form.getByRole('alert').filter({ hasText: 'The appointment could not be saved.' }).waitFor();

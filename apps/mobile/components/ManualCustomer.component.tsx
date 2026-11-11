@@ -25,7 +25,8 @@ function Suggestion({ t, card, disabled, onPress }: { t: ManualBookingView['t'];
 function SearchResult({ view }: { view: ManualBookingView }) {
   const { t, customer, busy } = view;
   if (!customer.searched) return null;
-  if (customer.searchError) return <View className="gap-2"><Text accessibilityRole="alert" className="text-sm text-body">{t('manual.searchError')}</Text><ActionButton secondary label={t('common.retry')} onPress={customer.onRetrySearch} disabled={busy} /></View>;
+  // No retry button: every letter typed searches again, and a new customer can be typed meanwhile.
+  if (customer.searchError) return <Text role="status" testID="manual-search-error" className="text-sm text-body">{t('manual.searchError')}</Text>;
   if (customer.searching && !customer.suggestions.length) return <Text role="status" className="text-sm text-body">{t('manual.searching')}</Text>;
   if (!customer.suggestions.length) return <Text role="status" testID="manual-new-customer" className="text-sm text-body">{t('manual.newCustomer')}</Text>;
   return <View className="gap-2" testID="manual-suggestions">
@@ -50,21 +51,21 @@ export function ManualCustomer({ view }: { view: ManualBookingView }) {
         {card.linked ? <Text className="text-sm text-brand">{t('manual.linked')}</Text> : null}
       </View>
       {/* An app customer's card may lack a name or phone; this booking still needs them, and they are not saved to the card. */}
-      {card.name ? null : <TextField testID="manual-name" editable={!busy} label={t('manual.name')} value={draft.customerName} maxLength={120} autoCapitalize="words" onChangeText={customerName => update({ customerName })} />}
-      {card.phone ? null : <TextField testID="manual-phone" identifier editable={!busy} label={t('manual.phone')} placeholder="050-1234567" value={draft.customerPhone} maxLength={20} keyboardType="phone-pad" autoComplete="tel" onChangeText={customerPhone => update({ customerPhone })} />}
+      {card.name ? null : <TextField testID="manual-name" editable={!busy} required label={t('manual.name')} error={view.errors.name} value={draft.customerName} maxLength={120} autoCapitalize="words" onChangeText={customerName => update({ customerName })} />}
+      {card.phone ? null : <TextField testID="manual-phone" identifier editable={!busy} required label={t('manual.phone')} error={view.errors.phone} placeholder="050-1234567" value={draft.customerPhone} maxLength={20} keyboardType="phone-pad" autoComplete="tel" onChangeText={customerPhone => update({ customerPhone })} />}
       <ActionButton secondary testID="manual-change-customer" label={t('manual.changeCustomer')} onPress={customer.onClearPick} disabled={busy} />
     </View>;
   }
   const match = customer.phoneMatch;
   return <View className="gap-3">
-    <TextField testID="manual-name" editable={!busy} label={t('manual.name')} value={draft.customerName} maxLength={120} autoCapitalize="words" autoComplete="off" onChangeText={customerName => update({ customerName })} />
+    <TextField testID="manual-name" editable={!busy} required label={t('manual.name')} error={view.errors.name} value={draft.customerName} maxLength={120} autoCapitalize="words" autoComplete="off" onChangeText={customerName => update({ customerName })} />
     <SearchResult view={view} />
-    <TextField testID="manual-phone" identifier editable={!busy} label={t('manual.phone')} placeholder="050-1234567" value={draft.customerPhone} maxLength={20} keyboardType="phone-pad" autoComplete="tel" onChangeText={customerPhone => update({ customerPhone })} />
+    <TextField testID="manual-phone" identifier editable={!busy} required label={t('manual.phone')} error={view.errors.phone} placeholder="050-1234567" value={draft.customerPhone} maxLength={20} keyboardType="phone-pad" autoComplete="tel" onChangeText={customerPhone => update({ customerPhone })} />
     {match ? <View testID="manual-phone-match" className="gap-2">
       <Text role="status" className="text-ink">{t('manual.phoneMatch', { name: cardName(t, match) })}</Text>
       <ActionButton label={t('manual.useCustomer', { name: cardName(t, match) })} onPress={() => customer.onPick(match)} disabled={busy} />
     </View> : null}
-    <TextField testID="manual-email" identifier editable={!busy} label={t('manual.email')} value={draft.customerEmail} maxLength={254} keyboardType="email-address" autoCapitalize="none" onChangeText={customerEmail => update({ customerEmail })} />
+    <TextField testID="manual-email" identifier editable={!busy} label={t('manual.email')} error={view.errors.email} value={draft.customerEmail} maxLength={254} keyboardType="email-address" autoCapitalize="none" onChangeText={customerEmail => update({ customerEmail })} />
     <Control testID="manual-save-customer" accessibilityRole="checkbox" aria-checked={draft.saveCustomer} accessibilityLabel={t('manual.save')} accessibilityHint={t('manual.saveHint')} accessibilityState={{ checked: draft.saveCustomer, disabled: busy }} disabled={busy}
       onPress={() => update({ saveCustomer: !draft.saveCustomer })} className="min-h-touch flex-row items-center gap-3">
       <View className={`h-6 w-6 items-center justify-center rounded border-2 ${draft.saveCustomer ? 'border-brand bg-brand' : 'border-line'}`}>{draft.saveCustomer ? <Text className="font-bold text-surface">✓</Text> : null}</View>

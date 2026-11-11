@@ -1,3 +1,4 @@
+import type { ManualField } from '../lib/ManualBooking.utils';
 import type { MessageKey } from '../i18n/messages';
 import type { CompactBookingControlsProps } from '../../components/CompactBookingControls.types';
 export type ManualService = { id: string; name: string; durationMinutes: number; priceMinor: number | null; currency: string | null; staff: { id: string; displayName: string; parallelCapacity: number }[] };
@@ -12,5 +13,5 @@ export type ManualResult = { customerCard?: { id: string } | null; id: string; s
 /** The service, date and time controls are the customer booking's own (decisions.md, 2026-11-11). */
 export type ManualSlotPicking = Omit<CompactBookingControlsProps, 't'> & { staff: { id: string; displayName: string }[]; staffFilter: string; onStaffFilter: (id: string) => void; slotLabel: string };
 /** The customer field's search over this business's own cards. A failed search never blocks typing a new customer. */
-export type ManualCustomerPicking = { suggestions: CustomerCardSummary[]; searching: boolean; searchError: boolean; searched: boolean; phoneMatch: CustomerCardSummary | null; onRetrySearch: () => void; onPick: (card: CustomerCardSummary) => void; onClearPick: () => void };
-export type ManualBookingView = { customer: ManualCustomerPicking; t: (key: MessageKey, values?: Record<string, string | number>) => string; draft: Readonly<ManualDraft>; options: ManualOptions | undefined; loading: boolean; loadError: boolean; busy: boolean; locked: boolean; feedback: string; success: boolean; serviceSummary: string; picking: ManualSlotPicking | null; update: (patch: Partial<ManualDraft>) => void; retry: () => void; review: () => void; confirm: () => void; close: () => void };
+export type ManualCustomerPicking = { suggestions: CustomerCardSummary[]; searching: boolean; searchError: boolean; searched: boolean; phoneMatch: CustomerCardSummary | null; onPick: (card: CustomerCardSummary) => void; onClearPick: () => void };
+export type ManualBookingView = { customer: ManualCustomerPicking; reviewDate: string; errors: Partial<Record<ManualField, string>>; t: (key: MessageKey, values?: Record<string, string | number>) => string; draft: Readonly<ManualDraft>; options: ManualOptions | undefined; loading: boolean; loadError: boolean; busy: boolean; locked: boolean; feedback: string; success: boolean; serviceSummary: string; picking: ManualSlotPicking | null; update: (patch: Partial<ManualDraft>) => void; retry: () => void; review: () => void; confirm: () => void; close: () => void };

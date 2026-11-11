@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { manualDraftScope, manualInput } from '../src/lib/ManualBooking.utils';
+import { manualDraftScope, manualFieldErrors, manualInput } from '../src/lib/ManualBooking.utils';
 import { openManualBooking } from '../src/lib/ManualBookingEntry';
 import { useSessionStore } from '../src/state/session';
 import { emptyManualDraft, useManualDraft } from '../src/state/ManualBooking.store';
@@ -75,4 +75,17 @@ test('a picked card books on that card with its own contacts; typing fills only 
  const filled = manualInput({ ...draft, customerCard: app, customerName: 'Typed Name', customerPhone: '050-7654321' }, options, 'attempt');
  assert.equal(filled?.customerName, 'Typed Name'); assert.equal(filled?.customerPhone, '+972507654321'); assert.equal(filled?.customerEmail, 'app@example.test');
  assert.equal(manualInput({ ...draft, customerCard: app, customerPhone: '' }, options, 'attempt'), null);
+});
+test('each field that stops the review is named, so its own box can say what is wrong', () => {
+ const empty: ManualDraft = { ...emptyManualDraft, open: true };
+ assert.deepEqual(manualFieldErrors(empty, false), ['service', 'name', 'phone'], 'no time is asked for before a service is chosen');
+ assert.deepEqual(manualFieldErrors({ ...empty, serviceId: 'service' }, false), ['time', 'name', 'phone']);
+ assert.deepEqual(manualFieldErrors(draft, true), [], 'a complete draft has nothing to mark');
+ assert.deepEqual(manualFieldErrors({ ...draft, customerPhone: '0542135101' }, true), [], 'a phone with no dash is valid');
+ assert.deepEqual(manualFieldErrors({ ...draft, customerName: 'a', customerPhone: '12345', customerEmail: 'not-an-email' }, true), ['name', 'phone', 'email']);
+ assert.deepEqual(manualFieldErrors({ ...draft, customerName: '', customerPhone: '', customerCard: { id: 'card', name: 'Dana', phone: '+972501234567', email: null, linked: false } }, true), [], "a picked card's own name and phone count as filled");
+ for (const patch of [{ customerName: 'a' }, { customerPhone: '12345' }, { customerEmail: 'bad' }] as Partial<ManualDraft>[]) {
+  assert.equal(manualInput({ ...draft, ...patch }, options, 'attempt'), null, `the fields and the request agree: ${JSON.stringify(patch)}`);
+  assert.notDeepEqual(manualFieldErrors({ ...draft, ...patch }, true), []);
+ }
 });
