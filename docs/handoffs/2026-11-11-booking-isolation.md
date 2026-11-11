@@ -1,6 +1,6 @@
 # Visit handoff — 2026-11-11, booking transactions at Repeatable Read
 
-Built on `main` after PR #64. Decisions: `decisions.md`, "Booking transactions run at Repeatable Read". Mechanism and guarantees: `booking-capacity.md`, "PostgreSQL guard".
+PR #67, built on `main` after PR #64. Decisions: `decisions.md`, "Booking transactions run at Repeatable Read". Mechanism and guarantees: `booking-capacity.md`, "PostgreSQL guard".
 
 ## Where things stand
 
