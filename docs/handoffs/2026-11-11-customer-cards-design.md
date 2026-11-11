@@ -5,7 +5,7 @@ Built on `main` after PR #59. PR #61. Nothing is implemented; it records an agre
 ## Where things stand
 
 - The user's item 8 from the business-forms review (save the customer, invite them to the app) has an agreed design. The build brief is `docs/architecture/customer-cards.md` (scope, non-goals, acceptance criteria); the reasoning is the "Saved customers and an invite to the app" section in `decisions.md`.
-- The business-forms work (Add appointment as a sheet, no exception reason) was still uncommitted in another worktree when this was written. Its `decisions.md` section also appends at the end; keep both on conflict. The build assumes that sheet, not the removed `/provider/[businessId]/add` screen.
+- Builds on the business-forms work (PR #60, `2026-11-11-business-forms.md`): Add appointment is a sheet and has no exception reason. The build assumes that sheet, not the removed `/provider/[businessId]/add` screen.
 
 ## Lessons
 

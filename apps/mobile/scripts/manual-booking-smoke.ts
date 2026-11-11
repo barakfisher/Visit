@@ -4,6 +4,7 @@ import type { Browser } from 'playwright';
 import type { prisma as Prisma } from '../../api/src/db/client.js';
 import { dateRange, localDate } from '../src/lib/appointmentTime';
 import { showAgendaAt, unfoldAgendaCard } from './agenda-day';
+import { selectBookingDate, showBookingTime } from './booking-controls.utils';
 export async function manualBookingSmoke({ browser, webUrl, apiUrl, prisma, run, businessIds, identityIds }: { browser: Browser; webUrl: string; apiUrl: string; prisma: typeof Prisma; run: string; businessIds: string[]; identityIds: string[] }) {
  const business = await prisma.business.create({ data: { name: 'Telephone appointments — תורים טלפוניים', slug: `manual-web-${run}`, timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED', publishedAt: new Date() } }); businessIds.push(business.id);
  const owner = await prisma.identity.create({ data: { email: `manual-web-${run}@example.test`, preferredLocale: 'en' } }); identityIds.push(owner.id);
@@ -24,24 +25,25 @@ export async function manualBookingSmoke({ browser, webUrl, apiUrl, prisma, run,
   const optionsUrl = `${apiUrl}/v1/provider/businesses/${business.id}/manual-booking-options`, saveUrl = `${apiUrl}/v1/provider/businesses/${business.id}/manual-bookings`;
   await page.route(optionsUrl, route => route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":{"code":"UNAVAILABLE"}}' }));
   const footer = page.getByTestId('app-footer'), addTab = footer.getByRole('button', { name: 'Add appointment', exact: true });
-  await addTab.click(); await page.waitForURL(url => url.pathname === `/provider/${business.id}/add`);
-  const form = page.getByTestId('manual-booking-form'); await form.getByText('Appointment options could not load.', { exact: true }).waitFor();
-  // Its own screen: the agenda is not behind it, and the footer marks Add appointment, not Home.
-  assert.equal(await summary.count(), 0);
-  assert.equal(await addTab.getAttribute('aria-current'), 'page'); assert.equal(await footer.getByRole('button', { name: 'Home', exact: true }).getAttribute('aria-current'), null);
+  // Add appointment rises from the bottom over the home, like Block time (decisions.md, 2026-11-11).
+  await addTab.click(); const sheet = page.getByTestId('manual-booking-sheet'), form = sheet.getByTestId('manual-booking-form');
+  await form.getByText('Appointment options could not load.', { exact: true }).waitFor();
+  assert.equal(await summary.count(), 1); assert.equal(new URL(page.url()).pathname, '/provider/dashboard');
   await page.unroute(optionsUrl); await form.getByRole('button', { name: 'Try again', exact: true }).click();
-  // A new form starts today in the business's timezone, the only day the home shows; this appointment is for a later day.
-  const dateField = form.getByLabel('Appointment date (YYYY-MM-DD)', { exact: true });
-  assert.equal(await dateField.inputValue(), localDate(business.timezone)); await dateField.fill(date);
-  await form.getByRole('button', { name: 'Phone consultation', exact: true }).click(); await form.getByRole('button', { name: /Phone specialist/ }).click();
-  await form.getByLabel('Customer name', { exact: true }).fill('לקוחה חדשה — ללא חשבון'); await form.getByLabel('Customer phone (international format)', { exact: true }).fill('+972501234567');
-  await form.getByLabel('Appointment time (HH:mm)', { exact: true }).fill('10:00');
+  // Nothing is typed but the customer: no date, time, UTC offset or exception reason fields.
+  await form.getByRole('button', { name: /Choose a service/ }).waitFor(); assert.equal(await form.getByRole('textbox').count(), 3);
+  // A new form starts today in the business's timezone; this appointment is for a later day.
+  assert.match(await form.getByTestId('booking-date-trigger').getAttribute('aria-label') ?? '', new RegExp(`${localDate(business.timezone)}$`));
+  const chooseService = async () => { await form.getByRole('button', { name: /Choose a service/ }).click(); await page.getByRole('dialog', { name: 'Choose a service', exact: true }).getByRole('button', { name: /Phone consultation/ }).click(); };
+  const chooseTime = async (time: string) => { await showBookingTime(page, time); await form.getByRole('button', { name: new RegExp(`^${time}`) }).click(); await form.getByTestId('manual-chosen-time').filter({ hasText: time }).waitFor(); };
+  await chooseService(); await selectBookingDate(page, date);
+  await form.getByLabel('Customer name', { exact: true }).fill('לקוחה חדשה — ללא חשבון'); await form.getByLabel('Customer phone', { exact: true }).fill('050-1234567');
+  // Without a time the review refuses and writes nothing.
   await form.getByRole('button', { name: 'Review appointment', exact: true }).click(); await form.getByRole('alert').waitFor();
   assert.equal(await prisma.booking.count({ where: { businessId: business.id } }), 0);
-  await form.getByLabel('Reason for using unverified contact details', { exact: true }).fill('Telephone request from a new customer without an account.');
+  // The business requires verified contact, and still no reason is asked for (decisions.md, 2026-11-11).
+  await chooseTime('10:00');
   await form.getByRole('button', { name: 'Review appointment', exact: true }).click(); await form.getByRole('button', { name: 'Confirm manual appointment', exact: true }).waitFor();
-  // Add appointment while reviewing leaves the review alone.
-  await addTab.click(); await form.getByRole('button', { name: 'Confirm manual appointment', exact: true }).waitFor();
   assert.equal(await prisma.booking.count({ where: { businessId: business.id } }), 0);
   // Lose the response after the real server commits; retry must recover this exact attempt.
   let posts = 0, key = '';
@@ -57,32 +59,38 @@ export async function manualBookingSmoke({ browser, webUrl, apiUrl, prisma, run,
   await form.getByRole('button', { name: 'Retry the same appointment', exact: true }).click(); assert.equal((await retry).postDataJSON().idempotencyKey, key);
   await form.getByText('Appointment saved. Contact details remain unverified; no automatic message was sent.', { exact: true }).waitFor();
   const saved = await prisma.booking.findFirstOrThrow({ where: { businessId: business.id } });
-  assert.equal(saved.customerId, null); assert.equal(saved.customerPhoneVerifiedAt, null); assert.equal(saved.customerEmailVerifiedAt, null);
+  assert.equal(saved.customerId, null); assert.equal(saved.customerPhoneVerifiedAt, null); assert.equal(saved.customerEmailVerifiedAt, null); assert.equal(saved.manualReason, null);
+  // The phone was typed the local way and stored in E.164.
+  assert.equal(saved.customerPhone, '+972501234567');
   assert.equal(await prisma.bookingNotification.count({ where: { businessId: business.id } }), 0);
   assert.equal(await prisma.identity.count({ where: { phone: '+972501234567' } }), 0);
   assert.equal((await prisma.bookingEvent.findFirstOrThrow({ where: { bookingId: saved.id } })).source, 'MANUAL');
-  // Close goes back to today's home, which says which day the appointment was saved for; it is not today, so no card.
-  await form.getByRole('button', { name: 'Close appointment form', exact: true }).click(); await page.waitForURL(url => url.pathname === '/provider/dashboard');
+  // Close lowers the sheet onto today's home, which says which day the appointment was saved for; it is not today, so no card.
+  await form.getByRole('button', { name: 'Close', exact: true }).click(); await sheet.waitFor({ state: 'detached' });
   await page.getByTestId('agenda-notice').filter({ hasText: `Appointment saved for ${dateRange(date, date, 'en')}.` }).waitFor();
   const card = page.getByTestId(`agenda-booking-${saved.id}`); assert.equal(await card.count(), 0);
   // Add appointment after a save starts an empty form, with no trace of the last customer or message.
   await addTab.click(); await form.getByRole('button', { name: 'Review appointment', exact: true }).waitFor();
   assert.equal(await form.getByLabel('Customer name', { exact: true }).inputValue(), ''); assert.equal(await form.getByRole('alert').count() + await form.getByRole('status').count(), 0);
-  await form.getByRole('button', { name: 'Close appointment form', exact: true }).click(); await form.waitFor({ state: 'detached' }); await page.waitForURL(url => url.pathname === '/provider/dashboard');
-  await addTab.click();
-  await form.getByRole('button', { name: 'Phone consultation', exact: true }).click(); await form.getByRole('button', { name: /Phone specialist/ }).click();
-  await dateField.fill(date); await form.getByLabel('Customer name', { exact: true }).fill('Another caller'); await form.getByLabel('Customer phone (international format)', { exact: true }).fill('+972501234568'); await form.getByLabel('Appointment time (HH:mm)', { exact: true }).fill('10:00'); await form.getByLabel('Reason for using unverified contact details', { exact: true }).fill('Caller requested this appointment.');
-  await form.getByRole('button', { name: 'Review appointment', exact: true }).click(); await form.getByRole('button', { name: 'Confirm manual appointment', exact: true }).click(); await form.getByRole('alert').filter({ hasText: 'The appointment could not be saved.' }).waitFor();
+  // The booked time is no longer offered; a time that becomes blocked between review and confirmation is refused and the details stay.
+  await chooseService(); await selectBookingDate(page, date); await chooseTime('11:00');
+  assert.equal(await form.getByRole('button', { name: /^10:00/ }).count(), 0);
+  await form.getByLabel('Customer name', { exact: true }).fill('Another caller'); await form.getByLabel('Customer phone', { exact: true }).fill('+972501234568');
+  await form.getByRole('button', { name: 'Review appointment', exact: true }).click(); await form.getByRole('button', { name: 'Confirm manual appointment', exact: true }).waitFor();
+  const blockedDay = new Date(`${date}T00:00:00+02:00`);
+  await prisma.timeBlock.create({ data: { businessId: business.id, startsAt: blockedDay, endsAt: new Date(+blockedDay + 86400000), reason: 'Smoke conflict' } });
+  await form.getByRole('button', { name: 'Confirm manual appointment', exact: true }).click(); await form.getByRole('alert').filter({ hasText: 'The appointment could not be saved.' }).waitFor();
   assert.equal(await form.getByLabel('Customer name', { exact: true }).inputValue(), 'Another caller'); assert.equal(await prisma.booking.count({ where: { businessId: business.id } }), 1);
+  await prisma.timeBlock.deleteMany({ where: { businessId: business.id } });
+  await form.getByRole('button', { name: 'Close', exact: true }).click(); await sheet.waitFor({ state: 'detached' });
   // On its own day the manual appointment's card carries the manual tag; the notice is gone once the home was left.
   await showAgendaAt(page, home, `${date}T05:00:00Z`); await unfoldAgendaCard(page, card); await card.getByText(/Manually entered · contact unverified/).waitFor();
   assert.equal(await page.getByTestId('agenda-notice').count(), 0);
   await page.goto(`${webUrl}/account`); const preference = page.waitForResponse(response => response.url() === `${apiUrl}/api/account/preferences` && response.request().method() === 'PUT'); await page.getByTestId('language-he').click(); assert.equal((await preference).status(), 200);
-  await page.goto(`${webUrl}/provider/dashboard?businessId=${business.id}`); await page.getByRole('button', { name: 'הוספת תור', exact: true }).click(); await form.getByText('תור בהזנה ידנית', { exact: true }).waitFor();
-  await form.getByRole('button', { name: 'Phone consultation', exact: true }).click(); await form.getByRole('button', { name: /Phone specialist/ }).click();
-  await form.getByLabel('שם הלקוח', { exact: true }).fill('לקוח חדש עם שם ארוך לצורך בדיקת תצוגה בעברית');
+  await page.goto(`${webUrl}/provider/dashboard?businessId=${business.id}`); await page.getByRole('button', { name: 'הוספת תור', exact: true }).click(); await form.getByRole('button', { name: /בחירת שירות/ }).waitFor();
+  await form.getByLabel('שם הלקוח', { exact: true }).fill('לקוח חדש עם שם ארוך לצורך בדיקת תצוגה בעברית'); await form.getByLabel('טלפון הלקוח', { exact: true }).fill('050-1234567');
   assert.equal(await page.locator('html').getAttribute('dir'), 'rtl'); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: 'test-results/manual-booking-he-mobile.png', fullPage: true }); await page.setViewportSize({ width: 1280, height: 900 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await page.screenshot({ path: 'test-results/manual-booking-he-desktop.png', fullPage: true });
-  console.log('PASS: manual guest appointment review, required audited exception, pending guard, committed lost-response recovery without duplicate/identity/notification, capacity conflict with retained details, and Hebrew RTL mobile/desktop.');
+  console.log('PASS: manual guest appointment as a sheet with service, calendar and free-time picking, no exception reason under a verified-contact policy, local phone stored in E.164, pending guard, committed lost-response recovery without duplicate/identity/notification, capacity conflict with retained details, and Hebrew RTL mobile/desktop.');
  } finally { release?.(); await context.close(); }
 }

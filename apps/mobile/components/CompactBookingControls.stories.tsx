@@ -4,11 +4,8 @@ import { bookingMonthCells } from '../src/lib/CompactBooking.utils';
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { CompactBookingControls } from './CompactBookingControls.component';
-import type { useCompactBooking } from '@/src/lib/CompactBooking.hook';
+import { compactControlsFixture as controls } from './CompactBookingControls.fixture';
 import { en } from '@/src/i18n/messages';
-const controls: ReturnType<typeof useCompactBooking> = {
-  direction: 'ltr', sheet: null, open: fn(), close: fn(), choices: [{ id: 'service', label: 'Consultation with a deliberately long service name', summary: '30 min · ₪120', selected: true }], chosen: { id: 'service', label: 'Consultation with a deliberately long service name', summary: '30 min · ₪120', selected: true }, selectService: fn(), month: '2026-10', monthTitle: 'October 2026', dateTitle: 'Tuesday, October 27, 2026', weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], cells: [], selectDate: fn(), previousMonth: fn(), nextMonth: fn(), canPreviousMonth: false, canNextMonth: true, calendarLoading: false, calendarError: false, retryCalendar: fn(), page: [{ id: 'staff:instant', label: '09:00 · Specialist' }], earlier: fn(), later: fn(), hasEarlier: false, hasLater: true, pageSummary: 'Times 1–6 of 12', nextDate: fn(), searching: false, searchNotice: '', canSearch: true,
-};
 const meta = { title: 'Booking/Compact controls', component: CompactBookingControls, args: { controls, t: key => en[key], disabled: false, date: '2026-10-27', selectedId: null, slotLoading: false, slotError: false, onRetrySlots: fn(), onSelectSlot: fn() },
   // The choice sheet keeps clear of the phone's home indicator, so it needs the insets an app root provides.
   decorators: [Story => <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, bottom: 0, left: 0, right: 0 } }}><Story /></SafeAreaProvider>] } satisfies Meta<typeof CompactBookingControls>;

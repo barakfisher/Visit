@@ -12,6 +12,7 @@ import { canContinueAppointmentAction } from './AppointmentLifecycle.utils';
 import { todayInTimezone } from './calendar';
 import { agendaTimeline, nextAgendaRecheck, splitAgendaToday, type FreeGap } from './AgendaToday.utils';
 import { openManualBooking } from './ManualBookingEntry';
+import { useManualBooking } from './ManualBooking.hook';
 import { appointmentSpan, dateRange } from './appointmentTime';
 import type { ProviderAgendaView } from '../types/ProviderAgenda.types';
 /** The business home: today only (decisions.md, "The business home shows today" — 2026-11-10). */
@@ -28,6 +29,7 @@ export function useProviderAgenda(): ProviderAgendaView {
   const [now, setNow] = useState(() => Date.now());
   const day = todayInTimezone(business.timezone, new Date(now));
   const blockDialog = useTimeBlockDialog(business.id, business.timezone), blockRemoval = useBlockRemoval(business.id);
+  const manual = useManualBooking(business, day);
   // A pending block save or removal holds the business, so its result lands where it was made.
   const busy = blockDialog.busy || Boolean(blockRemoval.pending);
   const agenda = useQuery({ queryKey: ['provider', business.id, 'agenda', identity, version, day], queryFn: ({ signal }) => readProviderAgenda(business.id, day, signal), enabled: focused, staleTime: 0 });
@@ -45,8 +47,7 @@ export function useProviderAgenda(): ProviderAgendaView {
   const { upcoming, ended } = splitAgendaToday(bookings ?? [], now);
   const timeline = agendaTimeline(upcoming, agenda.data?.day?.free ?? [], agenda.data?.blocks ?? [], now);
   function addAt(gap: FreeGap) {
-    openManualBooking(business.id, { localDate: day, localTime: gap.bookLocal });
-    router.navigate({ pathname: '/provider/[businessId]/add', params: { businessId: business.id } });
+    openManualBooking(business.id, { localDate: day, localTime: gap.bookLocal, staffId: gap.staffId });
   }
   function capture() {
     const initial = { identityId: identity, contextVersion: version, activeBusinessId: business.id };
@@ -65,6 +66,6 @@ export function useProviderAgenda(): ProviderAgendaView {
     notice: !saved ? '' : saved === day ? t('dashboard.savedToday') : t('dashboard.savedFor', { date: dateRange(saved, saved, locale) }),
     selectBusiness: (id: string) => { if (id !== business.id && !busy) { useSessionStore.getState().selectBusiness(id); router.replace({ pathname: '/provider/dashboard', params: { businessId: id } }); } },
     span: (startsAt: string, endsAt: string) => appointmentSpan(startsAt, endsAt, business.timezone, locale, false),
-    blockDialog, blockRemoval, contact: (phone: string | null, mode: 'call' | 'whatsapp') => void contact(phone, mode),
+    blockDialog, blockRemoval, manual, contact: (phone: string | null, mode: 'call' | 'whatsapp') => void contact(phone, mode),
   };
 }

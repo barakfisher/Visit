@@ -4,7 +4,7 @@ import { useSessionStore } from '@/src/state/session';
 import { needsSetupGuide } from './BusinessReadiness';
 import { useBusinessReadiness } from './BusinessReadiness.hook';
 import { openManualBooking } from './ManualBookingEntry';
-import { accountBusiness, footerHidden, isProviderPath, manualBookingPath } from './navigation';
+import { accountBusiness, footerHidden, isProviderPath } from './navigation';
 import type { FooterTab } from '../types/FooterNavigation.types';
 
 export function useAppFooter(): FooterTab[] | null {
@@ -21,15 +21,15 @@ export function useAppFooter(): FooterTab[] | null {
   if (!business) return null;
   // Back to the agenda in the stack rather than piling up another one; when none is there this opens it.
   const openAgenda = () => router.dismissTo({ pathname: '/provider/dashboard', params: { businessId: business } });
-  // A new form starts today, the only day the business home shows.
+  // The sheet rises over the business home, so another screen first goes back there (decisions.md, 2026-11-11). A new form starts today.
   const openAdd = (id: string) => {
     openManualBooking(id);
-    router.navigate({ pathname: '/provider/[businessId]/add', params: { businessId: id } });
+    if (pathname !== '/provider/dashboard') openAgenda();
   };
   return [
     { key: 'home', label: t('nav.home'), active: pathname === '/provider/dashboard', onPress: openAgenda },
     // Until setup is done the agenda redirects to settings, so there is nowhere to add an appointment.
-    ...(readiness.data && !needsSetupGuide(readiness.data) ? [{ key: 'add' as const, label: t('manual.open'), active: pathname === manualBookingPath(business), onPress: () => openAdd(business) }] : []),
+    ...(readiness.data && !needsSetupGuide(readiness.data) ? [{ key: 'add' as const, label: t('manual.open'), active: false, onPress: () => openAdd(business) }] : []),
     { key: 'team', label: t('nav.teamAccess'), active: pathname === `/provider/team/${business}`, onPress: () => router.navigate({ pathname: '/provider/team/[businessId]', params: { businessId: business } }) },
   ];
 }

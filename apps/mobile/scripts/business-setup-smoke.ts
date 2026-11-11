@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import jsQR from 'jsqr';
 import type { Page, BrowserContext, Locator } from 'playwright';
 import { translate } from '../src/i18n/messages';
+import { pickDate } from './pickers';
 // The catalog this setup flow creates through the UI; journeys that book it assert against these values.
 export const SETUP_SERVICE = { name: 'Pilot consultation', durationMinutes: 30, price: 100, currency: 'ILS' } as const;
 export const SETUP_STAFF_NAME = 'Pilot expert edited';
@@ -133,10 +134,9 @@ export async function configureBusinessSmoke({ page, context, webUrl, apiUrl, bu
   const blockForm = page.getByTestId('block-form'); await page.getByRole('dialog').waitFor();
   await blockForm.getByRole('radio', { name: SETUP_STAFF_NAME, exact: true }).click();
   await blockForm.getByRole('radio', { name: 'Whole days', exact: true }).click();
-  await blockForm.getByRole('textbox', { name: 'First day', exact: true }).fill(closedDate);
-  await blockForm.getByRole('textbox', { name: 'Last day', exact: true }).fill('2020-01-01');
-  await blockForm.getByRole('button', { name: 'Save block', exact: true }).click(); await blockForm.getByText('The last day cannot come before the first day.', { exact: true }).waitFor();
-  await blockForm.getByRole('textbox', { name: 'Last day', exact: true }).fill(closedDate);
+  // A first day after the last one moves the last day with it, so the range cannot be backwards.
+  await pickDate(page, 'block-from-date', closedDate);
+  assert.match(await blockForm.getByTestId('block-to-date').innerText(), new RegExp(String(Number(closedDate.slice(8)))));
   await blockForm.getByRole('textbox', { name: 'Reason (optional)', exact: true }).fill('Day off');
   await page.screenshot({ path: 'test-results/business-block-dialog-en-mobile.png' });
   const blocked = page.waitForResponse(r => r.url() === blocksUrl && r.request().method() === 'POST');

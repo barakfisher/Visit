@@ -23,7 +23,7 @@ export const manualBookingSchema = z.strictObject({
   finalConsent: z.literal(true), idempotencyKey: z.string().uuid(), serviceId: z.string().min(1).max(256), staffId: z.string().min(1).max(256),
   localDate: z.string().date(), localTime: z.string().regex(/^\d{2}:\d{2}$/), utcOffset: z.string().regex(/^[+-]\d{2}:\d{2}$/).optional(),
   customerName: z.string().trim().min(2).max(120).refine(value => [...value].length >= 2), customerPhone: z.string().regex(/^\+[1-9]\d{7,14}$/), customerEmail: z.string().trim().email().max(254).optional(),
-  exceptionReason: z.string().trim().min(5).max(500).refine(value => [...value].length >= 5).optional(), reviewedService: reviewedServiceSchema,
+  reviewedService: reviewedServiceSchema,
 });
 type ManualInput = z.infer<typeof manualBookingSchema>;
 function result(booking: Booking) { return { id: booking.id, status: booking.status, startsAt: booking.startsAt, endsAt: booking.endsAt, revision: booking.revision, source: 'MANUAL', contactVerification: 'UNVERIFIED', notification: 'NOT_SENT' }; }
@@ -60,8 +60,8 @@ export async function createManualBooking(session: AuthenticatedSession, busines
       if (!business) throw conflict('Publish this business before creating appointments.');
       const policy = business.bookingPolicy;
       if (!policy) throw conflict('Configure the booking policy first.');
+      // Entering a customer by hand is itself the exception to a verified-contact policy; the audit says the policy was in force, no written reason is asked for (decisions.md, 2026-11-11).
       const exception = policy.requireVerifiedPhone || policy.requireVerifiedEmail;
-      if (exception && !input.exceptionReason) throw new AppError(400, 'MANUAL_EXCEPTION_REQUIRED', 'Record why this appointment uses unverified contact details.');
       const link = await tx.staffService.findUnique({ where: { businessId_staffId_serviceId: { businessId, staffId: input.staffId, serviceId: input.serviceId } }, include: { staff: true, service: true } });
       if (!link?.staff.active || !link.service.active) throw notFound();
       const service = link.service, reviewed = input.reviewedService;
@@ -85,7 +85,7 @@ export async function createManualBooking(session: AuthenticatedSession, busines
       await requireHold(reservationId, session.identity.id);
       await setBookingAudit(tx, session.identity.id, 'MANUAL', exception ? 'MANUAL_CONTACT_EXCEPTION' : 'MANUAL_ENTRY');
       await tx.$queryRaw`SELECT set_config('visit.booking_session', ${session.sessionId}, true)`;
-      const saved = await tx.booking.create({ data: { businessId, customerId: null, source: 'MANUAL', enteredByIdentityId: session.identity.id, manualFingerprint: fingerprint, manualReason: input.exceptionReason ?? null,
+      const saved = await tx.booking.create({ data: { businessId, customerId: null, source: 'MANUAL', enteredByIdentityId: session.identity.id, manualFingerprint: fingerprint, manualReason: null,
         customerName: input.customerName, customerPhone: input.customerPhone, customerEmail: input.customerEmail ?? null, staffId: input.staffId, serviceId: input.serviceId, startsAt, endsAt: new Date(+startsAt + service.durationMinutes * 60000), occupiedFrom: occupied.startsAt, occupiedUntil: occupied.endsAt, idempotencyKey: key, status: 'CONFIRMED' } });
       await tx.manualBookingAttempt.update({ where: { id: registered.id }, data: { status: 'CONFIRMED' } });
       return result(saved);
@@ -121,8 +121,8 @@ export async function readManualBookingOptions(session: AuthenticatedSession, bu
   await validateAuthenticatedSession(session);
   await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']);
   return prisma.$transaction(async tx => {
-    const business = await tx.business.findFirst({ where: { id: businessId, approvalStatus: 'APPROVED', deletedAt: null }, select: { timezone: true, publishedAt: true, bookingPolicy: { select: { requireVerifiedPhone: true, requireVerifiedEmail: true } }, services: { where: { active: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }], select: { id: true, name: true, durationMinutes: true, priceMinor: true, currency: true, staff: { where: { staff: { active: true } }, select: { staff: { select: { id: true, displayName: true, parallelCapacity: true } } } } } } } });
+    const business = await tx.business.findFirst({ where: { id: businessId, approvalStatus: 'APPROVED', deletedAt: null }, select: { timezone: true, publishedAt: true, bookingPolicy: { select: { id: true } }, services: { where: { active: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }], select: { id: true, name: true, durationMinutes: true, priceMinor: true, currency: true, staff: { where: { staff: { active: true } }, select: { staff: { select: { id: true, displayName: true, parallelCapacity: true } } } } } } } });
     if (!business) throw notFound();
-    return { timezone: business.timezone, bookable: Boolean(business.publishedAt && business.bookingPolicy), requiresException: Boolean(business.bookingPolicy?.requireVerifiedPhone || business.bookingPolicy?.requireVerifiedEmail), services: business.services.map(service => ({ ...service, staff: service.staff.map(link => link.staff) })) };
+    return { timezone: business.timezone, bookable: Boolean(business.publishedAt && business.bookingPolicy), services: business.services.map(service => ({ ...service, staff: service.staff.map(link => link.staff) })) };
   }, { isolationLevel: 'RepeatableRead' });
 }

@@ -4,6 +4,7 @@ import type { MessageKey } from '../i18n/messages';
 import type { TimeBlock } from './TimeBlocks.types';
 import type { AgendaItem, FreeGap } from '../lib/AgendaToday.utils';
 import type { BlockRemovalState, TimeBlockDialogState } from '../lib/TimeBlocks.hook';
+import type { ManualBookingView } from './ManualBooking.types';
 export type ProviderAgenda = {
   business: { id: string; name: string; timezone: string }; fromDate: string; toDate: string;
   summary: { appointments: number; revenue: Record<string, number> }; staff: { id: string; displayName: string; parallelCapacity: number }[];
@@ -28,5 +29,5 @@ export type ProviderAgendaView = {
   addAt: (gap: FreeGap) => void; openHours: () => void;
   busy: boolean; feedback: string; notice: string;
   selectBusiness: (id: string) => void; retry: () => void;
-  span: (startsAt: string, endsAt: string) => string; blockDialog: TimeBlockDialogState; blockRemoval: BlockRemovalState; contact: (phone: string | null, mode: 'call' | 'whatsapp') => void;
+  span: (startsAt: string, endsAt: string) => string; blockDialog: TimeBlockDialogState; blockRemoval: BlockRemovalState; manual: ManualBookingView; contact: (phone: string | null, mode: 'call' | 'whatsapp') => void;
 };
