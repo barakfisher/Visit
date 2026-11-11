@@ -1,4 +1,5 @@
 import { signalAppointmentChanged } from '../infra/live-signals.js';
+import { attachOwnBookingCard } from '../repositories/CustomerCards.service.js';
 import { readUpcomingAppointment } from '../repositories/UpcomingAppointments.service.js';
 import { readBookingDetails, readBookingCalendar } from '../repositories/BookingDetails.service.js';
 import { changeBookingOutcome, readBookingHistory, setBookingAudit } from '../repositories/BookingLifecycle.service.js';
@@ -186,6 +187,7 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
       await setBookingAudit(tx, identity.id, 'CUSTOMER', 'FINAL_CONSENT');
       const result = await tx.booking.updateMany({ where: { id: booking.id, customerId: identity.id, status: BookingStatus.HELD, holdExpiresAt: { gt: new Date() } }, data: { status: BookingStatus.CONFIRMED, holdExpiresAt: null } });
       if (result.count !== 1) throw conflict('This appointment hold has expired. Start again to choose a new time.');
+      await attachOwnBookingCard(tx, booking.id);
     });
     signalAppointmentChanged({ businessId: booking.businessId, customerId: identity.id });
     await releaseHold(booking.id, identity.id).catch(() => {});

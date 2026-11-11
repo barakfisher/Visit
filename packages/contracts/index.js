@@ -74,3 +74,11 @@ export const LIVE_READY_EVENT = 'ready';
 export const LIVE_HEARTBEAT_MS = 25000;
 /** A client that hears nothing for this long treats the stream as dead. Two heartbeats may be late. */
 export const LIVE_SILENCE_LIMIT_MS = 65000;
+// The Add appointment sheet searches a business's own customer cards (customer-cards.md, criterion 1).
+export const CUSTOMER_SEARCH_MIN_LETTERS = 2;
+export const CUSTOMER_SEARCH_MIN_DIGITS = 3;
+/** Whether typed text is long enough to search cards by name (letters) or by phone (digits). */
+export function customerSearchKind(text) {
+  const value = String(text).trim(), digits = value.replace(/\D/g, '');
+  return { byName: Array.from(value.replace(/[\d\s+().-]/g, '')).length >= CUSTOMER_SEARCH_MIN_LETTERS, byPhone: digits.length >= CUSTOMER_SEARCH_MIN_DIGITS, digits };
+}

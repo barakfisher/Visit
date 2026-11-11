@@ -11,3 +11,6 @@ export declare function providerSharePath(slug: unknown): string | undefined;
 export declare const LIVE_READY_EVENT: string;
 export declare const LIVE_HEARTBEAT_MS: number;
 export declare const LIVE_SILENCE_LIMIT_MS: number;
+export declare const CUSTOMER_SEARCH_MIN_LETTERS: number;
+export declare const CUSTOMER_SEARCH_MIN_DIGITS: number;
+export declare function customerSearchKind(text: string): { byName: boolean; byPhone: boolean; digits: string };

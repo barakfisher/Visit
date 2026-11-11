@@ -1,4 +1,10 @@
 export const manualEn = {
+ 'manual.searching': 'Searching your customers…', 'manual.newCustomer': 'New customer', 'manual.searchError': 'Your customers could not be searched. You can still type a new customer.',
+ 'manual.suggestions': 'Your customers', 'manual.pickedCustomer': 'Saved customer', 'manual.changeCustomer': 'Change customer', 'manual.linked': 'In the app',
+ 'manual.save': 'Save customer details', 'manual.saveHint': 'Next time, find them by name.',
+ 'manual.phoneMatch': 'This phone belongs to {name}.', 'manual.useCustomer': 'Use {name}', 'manual.unnamed': 'Customer',
+ 'manual.cardExists': 'This phone already belongs to one of your customers. Use that customer, or turn off saving.',
+ 'manual.reviewSaved': 'Booked on a saved customer', 'manual.reviewSave': 'The customer will be saved', 'manual.reviewNotSaved': 'The customer will not be saved',
  'manual.summary': '{name} · {minutes} minutes · {price}', 'manual.priceUnknown': 'Price on request',
  'manual.open': 'Add appointment', 'manual.close': 'Close', 'manual.title': 'Add appointment',
  'manual.unverified': 'Entered contact details are unverified. No automatic message will be sent.', 'manual.staff': 'Staff', 'manual.anyStaff': 'Anyone', 'manual.chosenTime': 'Chosen time: {time}', 'manual.name': 'Customer name', 'manual.phone': 'Customer phone', 'manual.email': 'Customer email (optional)',
@@ -13,6 +19,12 @@ export const manualEn = {
  'manual.notBookable': 'Publish the business and configure its booking policy before creating appointments.', 'manual.tag': 'Manually entered · contact unverified · no automatic message',
 };
 export const manualHe: Record<keyof typeof manualEn, string> = {
+ 'manual.searching': 'מחפשים בלקוחות שלך…', 'manual.newCustomer': 'לקוח חדש', 'manual.searchError': 'לא ניתן לחפש בלקוחות שלך. אפשר עדיין להקליד לקוח חדש.',
+ 'manual.suggestions': 'הלקוחות שלך', 'manual.pickedCustomer': 'לקוח שמור', 'manual.changeCustomer': 'החלפת לקוח', 'manual.linked': 'באפליקציה',
+ 'manual.save': 'שמירת פרטי הלקוח', 'manual.saveHint': 'בפעם הבאה אפשר למצוא אותו לפי שם.',
+ 'manual.phoneMatch': 'הטלפון הזה שייך ל{name}.', 'manual.useCustomer': 'בחירה ב{name}', 'manual.unnamed': 'לקוח',
+ 'manual.cardExists': 'הטלפון הזה כבר שייך לאחד הלקוחות שלך. בחרו בלקוח הזה או בטלו את השמירה.',
+ 'manual.reviewSaved': 'התור נקבע ללקוח שמור', 'manual.reviewSave': 'הלקוח יישמר', 'manual.reviewNotSaved': 'הלקוח לא יישמר',
  'manual.summary': '{name} · {minutes} דקות · {price}', 'manual.priceUnknown': 'מחיר בתיאום עם העסק',
  'manual.open': 'הוספת תור', 'manual.close': 'סגירה', 'manual.title': 'הוספת תור',
  'manual.unverified': 'פרטי הקשר שהוזנו אינם מאומתים. לא תישלח הודעה אוטומטית.', 'manual.staff': 'איש צוות', 'manual.anyStaff': 'כל הצוות', 'manual.chosenTime': 'השעה שנבחרה: {time}', 'manual.name': 'שם הלקוח', 'manual.phone': 'טלפון הלקוח', 'manual.email': 'דוא״ל הלקוח (רשות)',

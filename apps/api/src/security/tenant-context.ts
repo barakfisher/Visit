@@ -1,4 +1,5 @@
 import { publicBusinessWhere } from './business-eligibility.js';
+import { customerOwnedBookingWhere } from './booking-ownership.js';
 import { validateAuthenticatedSession, type AuthenticatedSession } from './sessions.js';
 import { MembershipRole, MembershipStatus } from '../generated/prisma/client.js';
 import { prisma } from '../db/client.js';
@@ -72,7 +73,7 @@ export async function validatePublicBusinessContext(context: PublicBusinessConte
 }
 
 async function validateOwnedReschedule(bookingId: string, customerId: string) {
-  const booking = await prisma.booking.findFirst({ where: { id: bookingId, customerId, status: 'CONFIRMED', business: { approvalStatus: 'APPROVED', deletedAt: null } }, include: { business: { include: { bookingPolicy: true } } } });
+  const booking = await prisma.booking.findFirst({ where: { id: bookingId, ...customerOwnedBookingWhere(customerId), status: 'CONFIRMED', business: { approvalStatus: 'APPROVED', deletedAt: null } }, include: { business: { include: { bookingPolicy: true } } } });
   if (!booking) throw notFound();
   if (!booking.business.bookingPolicy) throw conflict('This business has not configured its booking policy.');
   if (booking.startsAt.getTime() < Date.now() + booking.business.bookingPolicy.rescheduleCutoffMinutes * 60000) throw rescheduleCutoff();

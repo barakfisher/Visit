@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { customerOwnedBookingWhere, lockCustomerOwnedBooking } from '../security/booking-ownership.js';
 import { Temporal } from '@js-temporal/polyfill';
 import { z } from 'zod';
 import { prisma } from '../db/client.js';
@@ -24,7 +25,7 @@ export const rescheduleInputSchema = z.strictObject({
 export async function rescheduleBooking(session: AuthenticatedSession, bookingId: string, input: z.infer<typeof rescheduleInputSchema>, businessId?: string) {
   await validateAuthenticatedSession(session);
   if (businessId) await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']);
-  const scope = businessId ? { businessId } : { customerId: session.identity.id };
+  const scope = businessId ? { businessId } : customerOwnedBookingWhere(session.identity.id);
   const original = await prisma.booking.findFirst({ where: { id: bookingId, ...scope }, include: { business: { select: { timezone: true } } } });
   if (!original) throw notFound();
   let startsAt: Date;
@@ -55,7 +56,7 @@ export async function rescheduleBooking(session: AuthenticatedSession, bookingId
         await tx.$queryRaw`SELECT id FROM "Membership" WHERE "businessId" = ${businessId} AND "identityId" = ${session.identity.id} FOR SHARE`;
         if (!await tx.membership.findFirst({ where: { businessId, identityId: session.identity.id, status: 'ACTIVE', role: { in: ['OWNER', 'MANAGER'] } } })) throw notFound();
         await tx.$queryRaw`SELECT id FROM "Booking" WHERE id = ${bookingId} AND "businessId" = ${businessId} FOR UPDATE`;
-      } else await tx.$queryRaw`SELECT id FROM "Booking" WHERE id = ${bookingId} AND "customerId" = ${session.identity.id} FOR UPDATE`;
+      } else await lockCustomerOwnedBooking(tx, bookingId, session.identity.id);
       const current = await tx.booking.findFirst({ where: { id: bookingId, ...scope }, include: { business: { include: { bookingPolicy: true } } } });
       if (!current) throw notFound();
       const committed = await tx.bookingReschedule.findUnique({ where: key });
@@ -73,8 +74,9 @@ export async function rescheduleBooking(session: AuthenticatedSession, bookingId
       const horizon = Temporal.Instant.from(now.toISOString()).toZonedDateTimeISO(business.timezone).toPlainDate().add({ days: policy.maximumAdvanceDays });
       if (+startsAt < +now + policy.minimumNoticeMinutes * 60000 || Temporal.PlainDate.compare(localDate, horizon) > 0) throw conflict('The requested time is outside the booking window.');
       if (current.customerId) assertCustomerContact(policy, await tx.identity.findUniqueOrThrow({ where: { id: current.customerId } }));
-      // A guest needs no written contact exception, whatever the current policy (decisions.md, 2026-11-11).
-      else if (!businessId || current.source !== 'MANUAL') throw notFound();
+      // A guest needs no written contact exception, whatever the current policy (decisions.md, 2026-11-11). A customer reaches
+      // a business-entered booking only through their linked card (the ownership scope above) and moves it under the same rule.
+      else if (current.source !== 'MANUAL') throw notFound();
       const link = await tx.staffService.findUnique({ where: { businessId_staffId_serviceId: { businessId: business.id, staffId: input.staffId, serviceId: current.serviceId } }, include: { staff: true } });
       // Archived services remain manageable using the immutable original service snapshot.
       if (!link?.staff.active) throw notFound();

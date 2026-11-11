@@ -60,3 +60,19 @@ test('Add appointment starts a new form today and leaves a form in progress alon
   assert.deepEqual({ localDate: useManualDraft.getState().draft.localDate, localTime: useManualDraft.getState().draft.localTime, staffId: useManualDraft.getState().draft.staffId }, free);
  } finally { useSessionStore.getState().clear(); useManualDraft.getState().clear(); }
 });
+test('a typed customer is saved by default, and saving can be turned off (criteria 3, 4)', () => {
+ assert.equal(manualInput(draft, options, 'attempt')?.saveCustomer, true);
+ assert.equal(emptyManualDraft.saveCustomer, true);
+ const off = manualInput({ ...draft, saveCustomer: false }, options, 'attempt');
+ assert.equal(off?.saveCustomer, false); assert.equal(off && 'customerCardId' in off, false);
+});
+test('a picked card books on that card with its own contacts; typing fills only what it lacks (criterion 2)', () => {
+ const card = { id: 'card', name: 'Dana Levi', phone: '+972501234567', email: 'dana@example.test', linked: false };
+ const picked = manualInput({ ...draft, customerCard: card, customerName: 'Typed', customerPhone: '', customerEmail: 'typed@example.test' }, options, 'attempt');
+ assert.ok(picked); assert.equal(picked.customerCardId, 'card'); assert.equal('saveCustomer' in picked, false);
+ assert.equal(picked.customerName, 'Dana Levi'); assert.equal(picked.customerPhone, '+972501234567'); assert.equal(picked.customerEmail, 'dana@example.test');
+ const app = { id: 'app', name: null, phone: null, email: 'app@example.test', linked: true };
+ const filled = manualInput({ ...draft, customerCard: app, customerName: 'Typed Name', customerPhone: '050-7654321' }, options, 'attempt');
+ assert.equal(filled?.customerName, 'Typed Name'); assert.equal(filled?.customerPhone, '+972507654321'); assert.equal(filled?.customerEmail, 'app@example.test');
+ assert.equal(manualInput({ ...draft, customerCard: app, customerPhone: '' }, options, 'attempt'), null);
+});

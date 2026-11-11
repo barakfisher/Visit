@@ -4,7 +4,8 @@ import { ActionButton } from './ActionButton';
 import { CompactBookingControls } from './CompactBookingControls.component';
 import { Control } from './Control';
 import { FormDialog } from './FormDialog';
-import { TextField } from './TextField';
+import { ManualCustomer, customerReviewLine } from './ManualCustomer.component';
+import { isolateLtr } from '../src/i18n/messages';
 import type { ManualBookingView, ManualSlotPicking } from '../src/types/ManualBooking.types';
 
 function StaffChoice({ label, selected, disabled, onPress, testID }: { label: string; selected: boolean; disabled: boolean; onPress: () => void; testID?: string }) {
@@ -41,15 +42,14 @@ export function ManualBooking(view: ManualBookingView) {
         <Text accessibilityRole="header" className="font-semibold text-ink">{t('manual.reviewTitle')}</Text>
         <Text>{view.serviceSummary}</Text>
         <Text>{draft.localDate} · {picking?.slotLabel || draft.localTime}</Text>
-        <Text>{draft.customerName}</Text><Text>{draft.customerPhone}</Text>{draft.customerEmail ? <Text>{draft.customerEmail}</Text> : null}
+        <Text>{draft.customerName}</Text><Text>{isolateLtr(draft.customerPhone)}</Text>{draft.customerEmail ? <Text>{isolateLtr(draft.customerEmail)}</Text> : null}
+        <Text testID="manual-review-customer" className="text-sm text-body">{customerReviewLine(t, draft)}</Text>
         <ActionButton label={t(locked && !busy ? 'manual.retry' : 'manual.confirm')} onPress={view.confirm} busy={busy} />
         <ActionButton secondary label={t('manual.edit')} disabled={busy || locked} onPress={() => update({ reviewed: false })} />
       </View> : <>
         {picking ? <CompactBookingControls t={t} {...picking} beforeTimes={<StaffFilter t={t} picking={picking} />} /> : null}
         {picking?.slotLabel ? <Text testID="manual-chosen-time" className="font-semibold text-brand">{t('manual.chosenTime', { time: picking.slotLabel })}</Text> : null}
-        <TextField testID="manual-name" editable={!busy} label={t('manual.name')} value={draft.customerName} maxLength={120} autoCapitalize="words" onChangeText={customerName => update({ customerName })} />
-        <TextField testID="manual-phone" identifier editable={!busy} label={t('manual.phone')} placeholder="050-1234567" value={draft.customerPhone} maxLength={20} keyboardType="phone-pad" autoComplete="tel" onChangeText={customerPhone => update({ customerPhone })} />
-        <TextField testID="manual-email" identifier editable={!busy} label={t('manual.email')} value={draft.customerEmail} maxLength={254} keyboardType="email-address" autoCapitalize="none" onChangeText={customerEmail => update({ customerEmail })} />
+        <ManualCustomer view={view} />
         <ActionButton testID="manual-review" label={t('manual.review')} onPress={view.review} disabled={busy} />
       </>}
     {view.feedback && !view.success ? <Text accessibilityRole="alert" className="text-danger">{view.feedback}</Text> : null}
