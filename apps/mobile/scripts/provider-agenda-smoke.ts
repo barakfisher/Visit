@@ -132,10 +132,16 @@ export async function providerAgendaSmoke({ browser, webUrl, apiUrl, prisma, run
     await blockForm.getByRole('button', { name: 'Save block', exact: true }).click(); assert.equal((await blocked).status(), 201); await blockForm.waitFor({ state: 'detached' });
     assert.deepEqual((await prisma.timeBlock.findMany({ where: { businessId: business.id }, select: { staffId: true, allDay: true, reason: true } })), [{ staffId: null, allDay: true, reason: 'Holiday' }]);
     await showAgendaAt(page, home, `${freeDate}T06:00:00Z`);
-    const agendaBlocks = page.getByTestId('agenda-blocks'); await agendaBlocks.getByText('Whole business · Holiday', { exact: true }).waitFor();
-    await agendaBlocks.getByText(/All day/).waitFor();
-    await agendaBlocks.getByRole('button', { name: 'Remove block', exact: true }).click(); await agendaBlocks.getByRole('button', { name: 'Confirm', exact: true }).click();
-    await agendaBlocks.waitFor({ state: 'detached' }); assert.equal(await prisma.timeBlock.count({ where: { businessId: business.id } }), 0);
+    // The block is a card in the day, the day has no free time, and the card opens its details, where it is released.
+    const blockCard = page.locator('[data-testid^="agenda-blocked-"]').filter({ hasText: 'Holiday' }); await blockCard.getByText(/All day/).waitFor();
+    assert.equal(await page.locator('[data-testid^="agenda-free-"]').count(), 0);
+    await blockCard.click(); const blockDetails = page.getByTestId('agenda-block-details'); await blockDetails.getByText('Whole business · Holiday', { exact: true }).waitFor();
+    await blockDetails.getByRole('button', { name: 'Remove block', exact: true }).click(); await blockDetails.getByRole('button', { name: 'Confirm', exact: true }).click();
+    await blockCard.waitFor({ state: 'detached' }); assert.equal(await prisma.timeBlock.count({ where: { businessId: business.id } }), 0);
+    // Released, the day is free again: one card across the hours, and it opens Add appointment on that day.
+    const freeCard = page.locator('[data-testid^="agenda-free-"]').first(); await freeCard.waitFor();
+    await freeCard.click(); await page.waitForURL(/\/add/);
+    assert.equal(await page.getByRole('textbox', { name: 'Appointment date (YYYY-MM-DD)', exact: true }).inputValue(), freeDate);
     await showAgendaAt(page, home, morning); await unfoldAgendaCard(page, firstCard);
     await firstCard.getByRole('button', { name: 'Cancel appointment', exact: true }).click(); await answerCancellation(page, false); assert.equal((await prisma.booking.findUniqueOrThrow({ where: { id: first.id } })).status, 'CONFIRMED');
     const cancelUrl = `${apiUrl}/v1/provider/businesses/${business.id}/bookings/${first.id}/cancel`;

@@ -136,6 +136,9 @@ export async function pilotLifecycleSmoke({ browser, webUrl, apiUrl, prisma, red
 
     // 3. Setup through the UI, including a required verified customer phone; unpublished links stay unbookable.
     const setup = await configureBusinessSmoke({ page: provider, context: providerContext, webUrl, apiUrl, businessId: business.id });
+    // The staff form no longer offers capacity (decisions.md, "Staff capacity hidden"), but the server still enforces it,
+    // and the resilience suite's two-tab scenario needs a slot with room for two. Set it where the form used to.
+    await prisma.staff.updateMany({ where: { businessId: business.id }, data: { parallelCapacity: 2 } });
     await openSettings(provider, webUrl, business.id, 'policy');
     await provider.getByRole('switch', { name: 'Require verified phone', exact: true }).click();
     const policySaved = provider.waitForResponse(r => r.url() === `${apiUrl}/v1/provider/businesses/${business.id}/booking-policy` && r.request().method() === 'PUT');

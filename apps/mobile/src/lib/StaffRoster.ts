@@ -4,6 +4,12 @@ import type { BlockConflict } from '../types/TimeBlocks.types';
 /** The API's limits (`apps/api/src/routes/providers.ts`, staff routes). */
 export const MIN_CAPACITY = 1;
 export const MAX_CAPACITY = 100;
+/**
+ * Capacity is hidden while every staff member takes one appointment at a time (decisions.md, 2026-11-11).
+ * The server still stores and enforces it, a new staff member starts at MIN_CAPACITY, and an existing value is kept on save.
+ * Turning this back on restores the field, the card line and the manual-booking label.
+ */
+export const STAFF_CAPACITY_SHOWN = false;
 export const MIN_STAFF_NAME = 2;
 export const MAX_STAFF_NAME = 120;
 export const STAFF_HAS_APPOINTMENTS = 'STAFF_HAS_APPOINTMENTS';

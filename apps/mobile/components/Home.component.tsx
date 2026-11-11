@@ -16,7 +16,11 @@ export function Home(view: HomeView) {
     {/* Someone with providers came for them; the welcome is for someone with an empty list. */}
     {empty ? <View className="gap-2"><AppText accessibilityRole="header" className="text-3xl font-bold tracking-tight text-ink">{t('home.title')}</AppText><AppText className="text-base leading-6 text-body">{t('home.intro')}</AppText></View> : null}
     <UpcomingAppointment {...view.upcoming} />
-    <AppText accessibilityRole="header" className="text-xl font-bold text-ink">{t('home.providers')}</AppText>
+    {/* The archive sits by the list it feeds, so a removed provider is easy to find again. */}
+    <View className="flex-row items-center justify-between gap-3">
+      <AppText accessibilityRole="header" className="shrink text-xl font-bold text-ink">{t('home.providers')}</AppText>
+      {view.hasArchive ? <Control testID="home-archive" accessibilityRole="button" accessibilityLabel={t('home.archive')} onPress={view.onArchive} className="items-center justify-center rounded-control px-2 active:bg-brand-soft"><AppText className="text-sm font-semibold text-brand">{t('home.archiveLink')}</AppText></Control> : null}
+    </View>
     {view.providersState === 'loading' ? <AppText>{t('home.loadingProviders')}</AppText> : view.providersState === 'error' ? <View className="gap-3 rounded-card border border-line bg-surface p-5"><AppText accessibilityRole="alert">{t('home.providersFailure')}</AppText><ActionButton secondary label={t('home.retryProviders')} onPress={view.onRetryProviders} /></View> : <>
       {empty ? <View className="gap-3 rounded-card border border-line bg-surface p-5"><AppText className="font-semibold text-ink">{t('home.empty')}</AppText><AppText className="leading-6 text-body">{t('home.emptyHelp')}</AppText></View> : <View className="gap-3">
         {/* Rows of two at every width; the spacer keeps a lone last card the same width as the others. */}
@@ -27,7 +31,6 @@ export function Home(view: HomeView) {
       {view.hasMore ? <ActionButton secondary label={t('home.more')} busy={view.loadingMore} onPress={view.onMore} /> : null}
     </>}
     {view.removeError ? <AppText accessibilityRole="alert" className="text-danger">{t('home.removeFailure')}</AppText> : null}
-    {view.hasArchive ? <Control accessibilityRole="button" accessibilityLabel={t('home.archive')} onPress={view.onArchive} className="items-center justify-center"><AppText className="font-semibold text-brand">{t('home.archive')}</AppText></Control> : null}
     <RemoveProviderDialog t={t} name={view.removeName} busy={!!view.removingId} onConfirm={view.onConfirmRemove} onClose={view.onCancelRemove} />
   </ScrollView>;
 }

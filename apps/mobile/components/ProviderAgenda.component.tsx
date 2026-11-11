@@ -14,6 +14,8 @@ import { DirectionalChevron } from './DirectionalChevron.component';
 import { ShareIcon } from './NavigationIcons.component';
 import { AddButton } from './AddButton';
 import { TimeBlockRow } from './TimeBlocks';
+import { BlockCard, ClosedDayCard, FreeTimeCard } from './AgendaDayCards.component';
+import { FormDialog } from './FormDialog';
 import { TimeBlockDialog } from './TimeBlockForm.component';
 import { formatMoney } from '../src/types/flows';
 import type { AgendaAppointment, ProviderAgendaView } from '../src/types/ProviderAgenda.types';
@@ -22,9 +24,13 @@ import type { AgendaAppointment, ProviderAgendaView } from '../src/types/Provide
  * (decisions.md, "The business home shows today" — 2026-11-10). `published` comes from publication readiness.
  */
 export function ProviderAgenda({ published, ...view }: ProviderAgendaView & { published: boolean }) {
-  const { business, profile, t, day, agenda, busy, feedback, upcoming, ended } = view;
+  const { business, profile, t, day, agenda, busy, feedback, timeline, closed, ended } = view;
   const { blockDialog, blockRemoval } = view, { removeFailure: _shownAsFeedback, ...removal } = blockRemoval;
   const [endedOpen, setEndedOpen] = useState(false);
+  // The block whose details are open; it closes by itself once the block is released and leaves the day.
+  const [blockId, setBlockId] = useState<string | null>(null);
+  const openBlock = agenda.data?.blocks.find(block => block.id === blockId) ?? null;
+  const severalStaff = (agenda.data?.staff.length ?? 0) > 1;
   const revenue = agenda.data ? Object.entries(agenda.data.summary.revenue).map(([currency, amount]) => formatMoney(amount, currency)).join(' · ') || '—' : '—';
   const card = (booking: AgendaAppointment): ReactNode => <AgendaAppointmentCard key={booking.id} booking={booking} span={view.span(booking.startsAt, booking.endsAt)} t={t} contact={view.contact}
     lifecycle={<AppointmentAudit key={`${business.id}:${booking.id}`} booking={booking} timezone={business.timezone} businessId={business.id} quiet />} />;
@@ -49,7 +55,12 @@ export function ProviderAgenda({ published, ...view }: ProviderAgendaView & { pu
     {feedback ? <Text accessibilityRole="alert" className="text-danger">{feedback}</Text> : null}
     {agenda.isError ? <View className="gap-2"><Text accessibilityRole="alert">{t('agendaEdit.loadFailure')}</Text><ActionButton secondary label={t('common.retry')} onPress={view.retry} /></View>
       : agenda.isLoading || !agenda.data ? <Text role="status" className="text-body">{t('dashboard.loading')}</Text> : <>
-        {upcoming.length ? <View className="gap-2">{upcoming.map(card)}</View> : <Text className="text-body">{t(ended.length ? 'dashboard.noneLeft' : 'dashboard.empty')}</Text>}
+        {/* Free time, blocks and appointments in one list (decisions.md, "The business day as cards" — 2026-11-11). */}
+        {closed ? <ClosedDayCard t={t} onHours={view.openHours} /> : null}
+        {timeline.length ? <View testID="agenda-today" className="gap-2">{timeline.map(entry => entry.kind === 'appointment' ? card(entry.item)
+          : entry.kind === 'free' ? <FreeTimeCard key={`free-${entry.item.staffId}-${entry.item.startsAt}`} gap={entry.item} t={t} staffName={severalStaff} onPress={() => view.addAt(entry.item)} />
+          : <BlockCard key={`block-${entry.item.id}`} block={entry.item} t={t} onPress={() => { removal.askRemove(null); setBlockId(entry.item.id); }} />)}</View>
+          : closed ? null : <Text className="text-body">{t(ended.length ? 'dashboard.noneLeft' : 'dashboard.empty')}</Text>}
         {/* Ended appointments stay reachable, since "Mark no-show" exists only once an appointment is over (decisions.md, 2026-11-10). */}
         {ended.length ? <View className="gap-2">
           <Control testID="agenda-ended-toggle" accessibilityRole="button" aria-expanded={endedOpen} accessibilityState={{ expanded: endedOpen }} onPress={() => setEndedOpen(value => !value)} className="flex-row items-center justify-between gap-3 rounded-control px-1">
@@ -59,7 +70,10 @@ export function ProviderAgenda({ published, ...view }: ProviderAgendaView & { pu
           {/* A fade, not SmoothReveal: a card unfolding inside another measured clip would be cut off at its folded height. */}
           {endedOpen ? <Animated.View testID="agenda-ended" entering={itemArrives} exiting={itemLeaves} style={{ gap: 8 }}>{ended.map(card)}</Animated.View> : null}
         </View> : null}
-        {agenda.data.blocks.length ? <View testID="agenda-blocks" className="gap-3"><Text className="text-lg font-semibold text-ink">{t('blocks.title')}</Text>{agenda.data.blocks.map(block => <TimeBlockRow key={block.id} block={block} t={t} locale={blockDialog.locale} {...removal} />)}</View> : null}
+        {/* A block's details and its release, with the same confirmation as the hours screen. */}
+        <FormDialog testID="agenda-block-details" title={t('dashboard.blockTitle')} open={openBlock !== null} onClose={() => { removal.askRemove(null); setBlockId(null); }}>
+          {openBlock ? <TimeBlockRow block={openBlock} t={t} locale={blockDialog.locale} {...removal} /> : null}
+        </FormDialog>
       </>}
   </ScrollView>;
 }

@@ -73,10 +73,8 @@ export async function configureBusinessSmoke({ page, context, webUrl, apiUrl, bu
   await page.getByTestId('staff-add').filter({ visible: true }).click();
   const addForm = page.getByTestId('staff-add-form'); await page.getByRole('dialog').waitFor();
   await addForm.getByRole('textbox', { name: 'Name', exact: true }).fill('Pilot expert');
-  // Capacity takes digits only: the letters never reach the field.
-  await addForm.getByRole('textbox', { name: 'Simultaneous appointments', exact: true }).fill('');
-  await addForm.getByRole('textbox', { name: 'Simultaneous appointments', exact: true }).pressSequentially('x2y');
-  assert.equal(await addForm.getByRole('textbox', { name: 'Simultaneous appointments', exact: true }).inputValue(), '2');
+  // Capacity is hidden (STAFF_CAPACITY_SHOWN): a new staff member starts at one appointment at a time.
+  assert.equal(await addForm.getByRole('textbox', { name: 'Simultaneous appointments', exact: true }).count(), 0);
   await addForm.getByRole('checkbox', { name: SETUP_SERVICE.name, exact: true }).click();
   let lostAcknowledgement = true, firstStaffId = '';
   await page.route(`${base}/staff`, async route => {
