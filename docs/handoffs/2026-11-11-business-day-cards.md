@@ -1,6 +1,6 @@
 # Visit handoff — 2026-11-11, the business day as cards
 
-Built on `main` after PR #58. Read `2026-11-10-business-home-today.md` first; its lessons hold.
+PR #59, built on `main` after PR #58. Read `2026-11-10-business-home-today.md` first; its lessons hold.
 
 ## Authorization
 

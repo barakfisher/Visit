@@ -560,7 +560,7 @@ The user's review of the business home on Android: day/week buttons, period navi
 
 ## Customer Home cards roomier, remove is a cross — 2026-11-11
 
-The user found the customer Home cards cramped after the 2026-11-08 compaction, and the archive box unclear as a remove control.
+The user found the customer Home cards cramped after the 2026-11-08 compaction, and the archive box unclear as a remove control. PR #59.
 
 - **Choice: customer Home cards get their room back; business mode stays compact.** The upcoming card goes from 8px to 14px vertical padding with a 4px gap between its lines, and provider cards from 12px to 16px padding. `UpcomingAppointment` and `SavedProviderCard` render only on customer screens, so business screens are untouched. *Rejected:* a shared "compact" prop, which no screen would set to the other value.
 - **Choice: the remove control is a muted ✕, not a trash can and not red.** It says "take this off my list"; the confirmation dialog still says it goes to the archive and can come back. *Rejected:* a trash icon, which promises a deletion that does not happen (as on 2026-11-08); a red icon, which would put a warning mark on every provider; a "⋯" menu, one more tap for a rare action with only one item.
@@ -569,7 +569,7 @@ The user found the customer Home cards cramped after the 2026-11-08 compaction, 
 
 ## Staff capacity hidden, kept in the engine — 2026-11-11
 
-The user is designing the business day as cards (free time, blocks, closed days) and has not yet decided how several staff members, or one person serving several customers at once, should look. "Free" is ambiguous when one person can take two customers and has one booked.
+The user is designing the business day as cards (free time, blocks, closed days) and has not yet decided how several staff members, or one person serving several customers at once, should look. "Free" is ambiguous when one person can take two customers and has one booked. PR #59.
 
 - **Choice: hide "Simultaneous appointments" everywhere in the app** (`STAFF_CAPACITY_SHOWN = false` in `StaffRoster.ts`): the staff form field, the card line and the label on manual booking's staff chips. A new staff member starts at `MIN_CAPACITY` (1). The server, the database column, validation and the availability engine are unchanged, and an existing value is sent back as it was on save, so a business with capacity above 1 keeps working. Measured before the change: every development business has capacity 1; only smoke-test fixtures use 2, 50 or 100.
 - *Rejected:* **removing capacity from the code.** It touches about 35 places in the server and the app and needs a migration that is hard to reverse, for no gain while no business needs it.
@@ -577,7 +577,7 @@ The user is designing the business day as cards (free time, blocks, closed days)
 
 ## The business day as cards — 2026-11-11
 
-The user asked the business home to show what today holds between appointments: free time to fill, blocked time with its reason, and a closed day. Scope: one staff member with capacity 1 in the UI (see "Staff capacity hidden"), today only, as the home already is.
+The user asked the business home to show what today holds between appointments: free time to fill, blocked time with its reason, and a closed day. Scope: one staff member with capacity 1 in the UI (see "Staff capacity hidden"), today only, as the home already is. PR #59.
 
 - **Choice: the server computes free time** (`scheduling/free-time.ts`, `day` on the agenda response for a single day). A gap is the working hours (business ∩ staff, as availability resolves them) minus occupied intervals of live appointments and holds (buffers included), minus blocks for that staff member or the whole business, minus the past rounded up to `FREE_TIME_STEP_MINUTES`. *Rejected:* computing gaps in the app, which would need hours, buffers, holds and services shipped to it and a second copy of what "busy" means.
 - **Choice: one card per gap, not one per bookable slot** (the user's choice). A gap shorter than the shortest active service the staff member gives (plus both buffers) is not offered; a staff member who gives no service has no free cards. Capacity is not used: any appointment makes its time busy.
