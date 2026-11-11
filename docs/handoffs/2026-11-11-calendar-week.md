@@ -1,6 +1,6 @@
 # Visit handoff — 2026-11-11, the calendar: week and day (slice 1 of 3)
 
-Built on `main` after PR #64. Read `2026-11-11-add-appointment-fixes.md` first; its lessons hold. Decisions: `decisions.md`, "The calendar screen".
+PR #66, built on `main` after PR #64. Read `2026-11-11-add-appointment-fixes.md` first; its lessons hold. Decisions: `decisions.md`, "The calendar screen".
 
 ## Authorization
 
