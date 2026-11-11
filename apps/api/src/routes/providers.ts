@@ -1,3 +1,4 @@
+import { customerCardSearchSchema, searchCustomerCards } from '../repositories/CustomerCards.service.js';
 import { createManualBooking, manualBookingSchema, readManualBookingOptions } from '../repositories/ManualBooking.service.js';
 import { previewSchedule } from '../repositories/ScheduleImpact.service.js';
 import { publicationReadiness, setPublication, withBusinessConfiguration } from '../repositories/publication.js';
@@ -35,6 +36,12 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
     const expected = request.headers['x-visit-expected-identity'];
     if (expected !== undefined && expected !== session.identity.id) throw conflict('The signed-in account changed.');
     return createManualBooking(session, businessId, manualBookingSchema.parse(request.body));
+  });
+
+  app.get('/v1/provider/businesses/:businessId/customer-cards', async request => {
+    const session = await authenticate(request);
+    const { businessId } = businessIdParams.parse(request.params);
+    return searchCustomerCards(session, businessId, customerCardSearchSchema.parse(request.query).q);
   });
 
   app.get('/v1/provider/businesses/:businessId', async (request) => {

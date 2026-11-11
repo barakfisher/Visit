@@ -1,4 +1,5 @@
 import { prisma } from '../db/client.js';
+import { customerOwnedBookingWhere } from '../security/booking-ownership.js';
 import { validateAuthenticatedSession, type AuthenticatedSession } from '../security/sessions.js';
 import { customerBookingActions } from './BookingActions.utils.js';
 import { bookingServiceSnapshot } from './bookings.js';
@@ -18,7 +19,7 @@ const appointmentSelect = {
 export async function readUpcomingAppointment(session: AuthenticatedSession, businessId?: string) {
   await validateAuthenticatedSession(session);
   const now = new Date();
-  const where = { customerId: session.identity.id, status: 'CONFIRMED' as const, startsAt: { gte: now }, ...(businessId ? { businessId } : {}) };
+  const where = { ...customerOwnedBookingWhere(session.identity.id), status: 'CONFIRMED' as const, startsAt: { gte: now }, ...(businessId ? { businessId } : {}) };
   const orderBy = [{ startsAt: 'asc' as const }, { id: 'asc' as const }];
   return prisma.$transaction(async tx => {
     const [booking, count, soon] = await Promise.all([

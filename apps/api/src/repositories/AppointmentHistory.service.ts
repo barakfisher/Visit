@@ -1,7 +1,8 @@
 import { prisma } from '../db/client.js';
+import { customerOwnedBookingWhere } from '../security/booking-ownership.js';
 import { AppError } from '../http/errors.js';
 import { validateAuthenticatedSession, type AuthenticatedSession } from '../security/sessions.js';
-import { bookingServiceSnapshot } from './bookings.js';
+import { customerAppointment } from './bookings.js';
 import { presentedStatus } from './AppointmentOutcome.utils.js';
 
 /** How many past appointments one page carries: a phone screen and a half, so the next page loads before it is needed. */
@@ -31,7 +32,7 @@ export async function listCustomerHistory(session: AuthenticatedSession, { curso
   const after = cursor ? decodeHistoryCursor(cursor) : null, now = new Date();
   const rows = await prisma.booking.findMany({
     where: {
-      customerId: session.identity.id,
+      ...customerOwnedBookingWhere(session.identity.id),
       status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'] },
       events: { some: {} },
       ...(businessId ? { businessId } : {}),
@@ -46,7 +47,7 @@ export async function listCustomerHistory(session: AuthenticatedSession, { curso
   });
   const page = rows.slice(0, HISTORY_PAGE_SIZE), last = page.at(-1);
   return {
-    bookings: page.map(booking => ({ ...booking, status: presentedStatus(booking, +now), service: bookingServiceSnapshot(booking) })),
+    bookings: page.map(booking => ({ ...customerAppointment(booking), status: presentedStatus(booking, +now) })),
     nextCursor: rows.length > HISTORY_PAGE_SIZE && last ? encodeHistoryCursor(last) : null,
   };
 }

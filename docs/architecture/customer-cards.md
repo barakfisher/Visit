@@ -1,6 +1,12 @@
-# Saved customers and an invite to the app — design (not built)
+# Saved customers and an invite to the app
 
-Reasoning and rejected alternatives: `decisions.md`, "Saved customers and an invite to the app", 2026-11-11. This file is the build brief.
+Reasoning and rejected alternatives: `decisions.md`, "Saved customers and an invite to the app", 2026-11-11, and "Customer cards and search, built". This file is the build brief.
+
+## Build status
+
+Built in two PRs, one after the other (the user's call).
+- **PR A (built):** the card table and backfill, the linked card on an app customer's own booking, the shared ownership scope, and search, pick and save on the Add appointment sheet. Criteria 1–4, 9, 11, and the search part of 12. The ownership scope is in place and tested with a card linked directly in the database, ahead of 7 and 10.
+- **PR B (next):** the invite link, the invite page and claim, merge on claim, the business's linked status and unlink. Criteria 5–8, 10, the invite part of 12, and 13 for those parts.
 
 ## Problem
 

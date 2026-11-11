@@ -1,4 +1,5 @@
 import { customerBookingActions } from './BookingActions.utils.js';
+import { customerOwnedBookingWhere } from '../security/booking-ownership.js';
 import { prisma } from '../db/client.js';
 import { validateAuthenticatedSession, type AuthenticatedSession } from '../security/sessions.js';
 import { conflict, notFound } from '../http/errors.js';
@@ -7,7 +8,7 @@ import { presentedStatus } from './AppointmentOutcome.utils.js';
 import { bookingCalendarBody } from './BookingCalendar.utils.js';
 async function ownedAppointment(session: AuthenticatedSession, id: string) {
   await validateAuthenticatedSession(session);
-  const booking = await prisma.booking.findFirst({ where: { id, customerId: session.identity.id, status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'] }, events: { some: {} } }, include: { business: { select: { id: true, name: true, timezone: true, location: true, approvalStatus: true, deletedAt: true, bookingPolicy: true } }, staff: { select: { displayName: true } } } });
+  const booking = await prisma.booking.findFirst({ where: { id, ...customerOwnedBookingWhere(session.identity.id), status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'] }, events: { some: {} } }, include: { business: { select: { id: true, name: true, timezone: true, location: true, approvalStatus: true, deletedAt: true, bookingPolicy: true } }, staff: { select: { displayName: true } } } });
   if (!booking) throw notFound();
   return booking;
 }

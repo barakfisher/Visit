@@ -1,4 +1,5 @@
 import { publicBusinessWhere } from '../security/business-eligibility.js';
+import { customerOwnedBookingWhere } from '../security/booking-ownership.js';
 import { Temporal } from '@js-temporal/polyfill';
 import { prisma } from '../db/client.js';
 import { AppError, conflict, notFound } from '../http/errors.js';
@@ -12,7 +13,7 @@ async function availabilityRange(context: PublicBusinessContext, serviceId: stri
   return prisma.$transaction(async tx => {
     const business = await tx.business.findFirst({ where: { id: context.businessId, ...(context.ownedBookingId ? { approvalStatus: 'APPROVED', deletedAt: null } : publicBusinessWhere) }, include: { bookingPolicy: true } });
     if (!business) throw notFound();
-    const ownedBooking = context.ownedBookingId ? await tx.booking.findFirst({ where: { id: context.ownedBookingId, customerId: context.customerId!, businessId: business.id, serviceId, status: 'CONFIRMED' }, select: { serviceDurationMinutes: true } }) : null;
+    const ownedBooking = context.ownedBookingId ? await tx.booking.findFirst({ where: { id: context.ownedBookingId, ...customerOwnedBookingWhere(context.customerId!), businessId: business.id, serviceId, status: 'CONFIRMED' }, select: { serviceDurationMinutes: true } }) : null;
     if (context.ownedBookingId && !ownedBooking) throw notFound();
     if (!business.bookingPolicy) throw conflict('This business has not finished setting its booking policy.');
     const policy = business.bookingPolicy;

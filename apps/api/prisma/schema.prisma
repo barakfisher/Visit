@@ -45,6 +45,7 @@ enum ChallengePurpose {
 }
 
 model Identity {
+  customerCards CustomerCard[]
   notifications Notification[]
   manualAttempts ManualBookingAttempt[]
   manualBookings Booking[] @relation("ManualBookingActor")
@@ -87,6 +88,7 @@ model Identity {
 }
 
 model Business {
+  customerCards CustomerCard[]
   notifications Notification[]
   manualAttempts ManualBookingAttempt[]
   bookingAttempts BookingAttempt[]
@@ -303,6 +305,9 @@ model BookingPolicy {
 }
 
 model Booking {
+  /// The business's customer card this booking belongs to (customer-cards.md). Unlike customerId it may move: a merge on claim.
+  customerCardId String?
+  customerCard CustomerCard? @relation(fields: [businessId, customerCardId], references: [businessId, id], onDelete: Restrict, onUpdate: Restrict)
   source String @default("CUSTOMER")
   enteredByIdentityId String?
   enteredBy Identity? @relation("ManualBookingActor", fields: [enteredByIdentityId], references: [id], onDelete: Restrict, onUpdate: NoAction)
@@ -635,4 +640,23 @@ model ManualBookingAttempt {
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   actor Identity @relation(fields: [actorId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   @@unique([businessId, idempotencyKey])
+}
+
+/// A business's own record of a customer. Linked to an app account only by the person's own act (customer-cards.md).
+/// Partial unique indexes (migration 20261111130000_customer_cards): (businessId, phone) while unlinked, (businessId, identityId) while linked.
+model CustomerCard {
+  id String @id @default(cuid())
+  businessId String
+  name String?
+  phone String?
+  email String?
+  identityId String?
+  linkedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  identity Identity? @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+  @@unique([businessId, id])
+  @@index([businessId, phone])
 }

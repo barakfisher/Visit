@@ -14,8 +14,10 @@ import { isBookingQuery } from './BookingQueries.utils';
 import { useCompactBooking } from './CompactBooking.hook';
 import { availableBookingSlots, bookingSlotId, validBookingDate } from './CompactBooking.utils';
 import { apiRequest, ApiError } from './api';
+import { useCustomerCardSearch } from './CustomerCardSearch.hook';
+import { localPhone } from './PhoneNumber';
 import type { ProviderDetail, Slot } from '../types/flows';
-import type { ManualBookingView, ManualDraft } from '../types/ManualBooking.types';
+import type { CustomerCardSummary, ManualBookingView, ManualDraft } from '../types/ManualBooking.types';
 
 /**
  * The Add appointment sheet over the business home (decisions.md, 2026-11-11). The service, date and time are chosen the
@@ -26,7 +28,7 @@ export function useManualBooking(business: { id: string; timezone: string }, dat
   const scope = manualDraftScope(identity, version, business.id);
   const prepared = useManualDraft(state => state.scope === scope ? state.prepared : null);
   const stored = useManualDraft(state => state.scope === scope ? state.draft : emptyManualDraft), attempt = useManualDraft(state => state.scope === scope ? state.attempt : null), result = useManualDraft(state => state.scope === scope ? state.result : null);
-  const [state, setState] = useState({ scope, busy: false, feedback: '' });
+  const [state, setState] = useState<{ scope: string; busy: boolean; feedback: string; existing?: CustomerCardSummary }>({ scope, busy: false, feedback: '' });
   const [staffFilter, setStaffFilter] = useState({ scope: '', staffId: '' });
   const mounted = useRef(true), operation = useRef(false), focused = useIsFocused(), focusRef = useRef(focused);
   useEffect(() => { focusRef.current = focused; }, [focused]);
@@ -44,6 +46,7 @@ export function useManualBooking(business: { id: string; timezone: string }, dat
   const offered = availableBookingSlots(slots.data?.slots ?? [], null).filter(slot => !filter || slot.staffId === filter);
   // A free card or an earlier choice names a time (and maybe a staff member); it is chosen while a matching slot is free.
   const chosen = draft.localTime ? offered.find(slot => slot.localTime === draft.localTime && (!draft.staffId || slot.staffId === draft.staffId)) : undefined;
+  const search = useCustomerCardSearch({ businessId: business.id, identity, version, enabled: open && !stored.customerCard && !stored.reviewed && !attempt && !result, name: draft.customerName, phone: draft.customerPhone });
   function update(patch: Partial<ManualDraft>) { if (!operation.current && !attempt) { setState({ scope, busy: false, feedback: '' }); useManualDraft.getState().update(scope, { ...patch, reviewed: false }); } }
   const disabled = state.scope === scope && state.busy || Boolean(attempt);
   const controls = useCompactBooking({ provider, providerId: business.id, serviceId: draft.serviceId, date: draft.localDate, fromBookingId: undefined, slots: offered, excluded: null, disabled,
@@ -70,11 +73,16 @@ export function useManualBooking(business: { id: string; timezone: string }, dat
       useManualDraft.getState().finish(scope, saved);
       setState({ scope, busy: true, feedback: '' });
       await client.invalidateQueries({ predicate: query => isBookingQuery(query.queryKey) });
+      void client.invalidateQueries({ queryKey: ['provider', business.id, 'customer-cards'] });
     } catch (error) {
       if (!current()) return;
       const definite = error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429;
       if (definite) useManualDraft.getState().unlock(scope);
-      setState({ scope, busy: true, feedback: t(!definite ? 'manual.uncertain' : error instanceof ApiError && error.code === 'INVALID_LOCAL_TIME' ? 'manual.invalidTime' : 'manual.conflict') });
+      // The server's duplicate check is the backstop for a phone the search had not matched yet (criterion 3).
+      const existing = error instanceof ApiError && error.code === 'CUSTOMER_CARD_EXISTS' ? (error.details as { card?: CustomerCardSummary } | undefined)?.card : undefined;
+      setState({ scope, busy: true, existing, feedback: t(!definite ? 'manual.uncertain' : existing ? 'manual.cardExists' : error instanceof ApiError && error.code === 'INVALID_LOCAL_TIME' ? 'manual.invalidTime' : 'manual.conflict') });
+      // A refused duplicate means the cached searches missed a card: read them again.
+      if (existing) void client.invalidateQueries({ queryKey: ['provider', business.id, 'customer-cards'] });
       if (definite) await Promise.allSettled([options.refetch(), slots.refetch()]);
     } finally { operation.current = false; if (mounted.current) setState(previous => ({ ...previous, busy: false })); }
   }
@@ -95,5 +103,11 @@ export function useManualBooking(business: { id: string; timezone: string }, dat
     staff, staffFilter: filter, onStaffFilter: (staffId: string) => setStaffFilter({ scope: `${scope}:${draft.serviceId}`, staffId }),
     slotLabel: chosen ? `${chosen.localTime}${staff.length > 1 ? ` · ${chosen.staffName}` : ''}` : '',
   } : null;
-  return { serviceSummary, t, draft, options: options.data, loading: options.isLoading, loadError: options.isError, busy: state.scope === scope && state.busy, locked: Boolean(attempt), feedback: result ? t(result.status === 'CONFIRMED' ? 'manual.saved' : 'manual.changed') : state.scope === scope ? state.feedback : '', success, picking, update, retry: () => { void options.refetch(); }, review, confirm: () => void confirm(), close };
+  const customer = {
+    suggestions: search.suggestions, searching: search.searching, searchError: search.searchError, searched: search.searched, onRetrySearch: search.retry,
+    phoneMatch: draft.customerCard ? null : search.phoneMatch ?? (state.scope === scope ? state.existing ?? null : null),
+    onPick: (card: CustomerCardSummary) => update({ customerCard: card, customerName: card.name ?? draft.customerName, customerPhone: card.phone ? localPhone(card.phone) : draft.customerPhone, customerEmail: card.email ?? '' }),
+    onClearPick: () => update({ customerCard: null }),
+  };
+  return { customer, serviceSummary, t, draft, options: options.data, loading: options.isLoading, loadError: options.isError, busy: state.scope === scope && state.busy, locked: Boolean(attempt), feedback: result ? t(result.status === 'CONFIRMED' ? 'manual.saved' : 'manual.changed') : state.scope === scope ? state.feedback : '', success, picking, update, retry: () => { void options.refetch(); }, review, confirm: () => void confirm(), close };
 }

@@ -1,4 +1,5 @@
 import type { Prisma } from '../generated/prisma/client.js';
+import { customerOwnedBookingWhere, lockCustomerOwnedBooking } from '../security/booking-ownership.js';
 import { prisma } from '../db/client.js';
 import { signalAppointmentChanged } from '../infra/live-signals.js';
 import { cancellationCutoff, conflict, notFound, unauthenticated } from '../http/errors.js';
@@ -28,8 +29,8 @@ export async function changeBookingOutcome(session: AuthenticatedSession, bookin
       if (!await tx.membership.findFirst({ where: { businessId, identityId: session.identity.id, status: 'ACTIVE', role: { in: ['OWNER', 'MANAGER'] }, business: { approvalStatus: 'APPROVED', deletedAt: null } }, select: { id: true } })) throw notFound();
     }
     if (businessId) await tx.$queryRaw`SELECT id FROM "Booking" WHERE id = ${bookingId} AND "businessId" = ${businessId} FOR UPDATE`;
-    else await tx.$queryRaw`SELECT id FROM "Booking" WHERE id = ${bookingId} AND "customerId" = ${session.identity.id} FOR UPDATE`;
-    const current = await tx.booking.findFirst({ where: { id: bookingId, ...(businessId ? { businessId } : { customerId: session.identity.id }) }, include: { business: { select: { bookingPolicy: true } } } });
+    else await lockCustomerOwnedBooking(tx, bookingId, session.identity.id);
+    const current = await tx.booking.findFirst({ where: { id: bookingId, ...(businessId ? { businessId } : customerOwnedBookingWhere(session.identity.id)) }, include: { business: { select: { bookingPolicy: true } } } });
     if (!current) throw notFound();
     if (current.status === outcome) return current;
     if (expectedRevision !== undefined && current.revision !== expectedRevision) throw conflict('This appointment changed. Refresh before updating it.');
@@ -51,7 +52,7 @@ export async function changeBookingOutcome(session: AuthenticatedSession, bookin
 export async function readBookingHistory(session: AuthenticatedSession, bookingId: string, businessId?: string) {
   await validateAuthenticatedSession(session);
   if (businessId) await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']);
-  const booking = await prisma.booking.findFirst({ where: { id: bookingId, ...(businessId ? { businessId } : { customerId: session.identity.id }), events: { some: {} } }, select: {
+  const booking = await prisma.booking.findFirst({ where: { id: bookingId, ...(businessId ? { businessId } : customerOwnedBookingWhere(session.identity.id)), events: { some: {} } }, select: {
     id: true, businessId: true, status: true, revision: true, endsAt: true,
     events: { orderBy: { revision: 'asc' }, select: { id: true, revision: true, kind: true, source: true, reason: true, oldStatus: true, newStatus: true, oldStartsAt: true, oldEndsAt: true, newStartsAt: true, newEndsAt: true, oldStaffId: true, newStaffId: true, createdAt: true } },
   } });

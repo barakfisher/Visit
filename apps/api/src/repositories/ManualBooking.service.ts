@@ -18,15 +18,19 @@ import { fenceScheduleSession } from './ScheduleImpact.service.js';
 import { setBookingAudit } from './BookingLifecycle.service.js';
 import { reviewedServiceSchema } from '../scheduling/booking-consent.utils.js';
 import { blocksCovering } from '../scheduling/time-blocks.js';
+import { customerCardExists, findCardByPhone } from './CustomerCards.service.js';
+import type { Prisma } from '../generated/prisma/client.js';
 
 export const manualBookingSchema = z.strictObject({
   finalConsent: z.literal(true), idempotencyKey: z.string().uuid(), serviceId: z.string().min(1).max(256), staffId: z.string().min(1).max(256),
   localDate: z.string().date(), localTime: z.string().regex(/^\d{2}:\d{2}$/), utcOffset: z.string().regex(/^[+-]\d{2}:\d{2}$/).optional(),
   customerName: z.string().trim().min(2).max(120).refine(value => [...value].length >= 2), customerPhone: z.string().regex(/^\+[1-9]\d{7,14}$/), customerEmail: z.string().trim().email().max(254).optional(),
   reviewedService: reviewedServiceSchema,
-});
+  // A picked card books on that card; otherwise saveCustomer creates one for the typed customer (customer-cards.md).
+  customerCardId: z.string().min(1).max(256).optional(), saveCustomer: z.boolean().optional(),
+}).refine(input => !(input.customerCardId && input.saveCustomer), 'A picked customer is already saved.');
 type ManualInput = z.infer<typeof manualBookingSchema>;
-function result(booking: Booking) { return { id: booking.id, status: booking.status, startsAt: booking.startsAt, endsAt: booking.endsAt, revision: booking.revision, source: 'MANUAL', contactVerification: 'UNVERIFIED', notification: 'NOT_SENT' }; }
+function result(booking: Booking) { return { customerCard: booking.customerCardId ? { id: booking.customerCardId } : null, id: booking.id, status: booking.status, startsAt: booking.startsAt, endsAt: booking.endsAt, revision: booking.revision, source: 'MANUAL', contactVerification: 'UNVERIFIED', notification: 'NOT_SENT' }; }
 export async function createManualBooking(session: AuthenticatedSession, businessId: string, input: ManualInput) {
   await validateAuthenticatedSession(session);
   await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']);
@@ -38,6 +42,9 @@ export async function createManualBooking(session: AuthenticatedSession, busines
     if (booking.manualFingerprint !== fingerprint) throw conflict('This attempt was used for different details.');
     return result(booking);
   }
+  // Offer the existing card before this attempt is spent on a refusal (criterion 3); the transaction checks again.
+  // A retry of a save that committed finds its own booking, not a duplicate.
+  if (input.saveCustomer && !await prisma.booking.findUnique({ where: { businessId_idempotencyKey: { businessId, idempotencyKey: key } }, select: { id: true } })) { const existing = await findCardByPhone(prisma, businessId, input.customerPhone); if (existing) throw customerCardExists(existing); }
   await prisma.manualBookingAttempt.createMany({ data: [{ businessId, actorId: session.identity.id, idempotencyKey: key, fingerprint }], skipDuplicates: true });
   const registered = await prisma.manualBookingAttempt.findUniqueOrThrow({ where: { businessId_idempotencyKey: { businessId, idempotencyKey: key } } });
   if (registered.actorId !== session.identity.id || registered.fingerprint !== fingerprint) throw conflict('This attempt was used for different details.');
@@ -83,10 +90,11 @@ export async function createManualBooking(session: AuthenticatedSession, busines
       if (!assertCapacity(occupied, conflicts.map(row => ({ startsAt: row.occupiedFrom, endsAt: row.occupiedUntil })), link.staff.parallelCapacity)) throw conflict('That time has no remaining capacity.');
       await reserveHold({ id: reservationId, businessId, staffId: input.staffId, customerId: session.identity.id, occupiedFrom: occupied.startsAt, occupiedUntil: occupied.endsAt, holdExpiresAt: new Date(Date.now() + 30000) }, link.staff.parallelCapacity);
       await requireHold(reservationId, session.identity.id);
+      const card = await customerCardFor(tx, businessId, input);
       await setBookingAudit(tx, session.identity.id, 'MANUAL', exception ? 'MANUAL_CONTACT_EXCEPTION' : 'MANUAL_ENTRY');
       await tx.$queryRaw`SELECT set_config('visit.booking_session', ${session.sessionId}, true)`;
       const saved = await tx.booking.create({ data: { businessId, customerId: null, source: 'MANUAL', enteredByIdentityId: session.identity.id, manualFingerprint: fingerprint, manualReason: null,
-        customerName: input.customerName, customerPhone: input.customerPhone, customerEmail: input.customerEmail ?? null, staffId: input.staffId, serviceId: input.serviceId, startsAt, endsAt: new Date(+startsAt + service.durationMinutes * 60000), occupiedFrom: occupied.startsAt, occupiedUntil: occupied.endsAt, idempotencyKey: key, status: 'CONFIRMED' } });
+        customerCardId: card?.id ?? null, customerName: card?.name ?? input.customerName, customerPhone: card?.phone ?? input.customerPhone, customerEmail: (card ? card.email : null) ?? input.customerEmail ?? null, staffId: input.staffId, serviceId: input.serviceId, startsAt, endsAt: new Date(+startsAt + service.durationMinutes * 60000), occupiedFrom: occupied.startsAt, occupiedUntil: occupied.endsAt, idempotencyKey: key, status: 'CONFIRMED' } });
       await tx.manualBookingAttempt.update({ where: { id: registered.id }, data: { status: 'CONFIRMED' } });
       return result(saved);
     });
@@ -125,4 +133,25 @@ export async function readManualBookingOptions(session: AuthenticatedSession, bu
     if (!business) throw notFound();
     return { timezone: business.timezone, bookable: Boolean(business.publishedAt && business.bookingPolicy), services: business.services.map(service => ({ ...service, staff: service.staff.map(link => link.staff) })) };
   }, { isolationLevel: 'RepeatableRead' });
+}
+
+/**
+ * The card this booking is on. A picked card must be this business's; its contacts become the snapshot, and the
+ * typed ones fill only what an app customer's card lacks. Saving creates the card unless the phone already has one.
+ */
+async function customerCardFor(tx: Prisma.TransactionClient, businessId: string, input: ManualInput) {
+  if (input.customerCardId) {
+    const card = await tx.customerCard.findFirst({ where: { id: input.customerCardId, businessId } });
+    if (!card) throw notFound();
+    return card;
+  }
+  if (!input.saveCustomer) return null;
+  const existing = await findCardByPhone(tx, businessId, input.customerPhone);
+  if (existing) throw customerCardExists(existing);
+  try { return await tx.customerCard.create({ data: { businessId, name: input.customerName, phone: input.customerPhone, email: input.customerEmail ?? null } }); }
+  catch (error) {
+    // A concurrent save of the same phone won the unique index: offer that card, as the check above would have.
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') { const winner = await prisma.customerCard.findFirst({ where: { businessId, phone: input.customerPhone, identityId: null } }); if (winner) throw customerCardExists(winner); }
+    throw error;
+  }
 }
