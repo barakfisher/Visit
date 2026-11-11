@@ -1,6 +1,6 @@
 # Visit handoff — 2026-11-11, business forms as sheets with pickers
 
-Built on `main` after PR #59. Read `2026-11-11-business-day-cards.md` first; its lessons hold.
+PR #60, built on `main` after PR #59. Read `2026-11-11-business-day-cards.md` first; its lessons hold.
 
 ## Authorization
 

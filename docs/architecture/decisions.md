@@ -590,14 +590,14 @@ The user asked the business home to show what today holds between appointments: 
 
 ## Customer Home cards: the archive box back, three lines each — 2026-11-11
 
-The user saw the ✕ and the roomier provider cards from earlier the same day on Android and asked for the previous look, and for every card to be the same size.
+The user saw the ✕ and the roomier provider cards from earlier the same day on Android and asked for the previous look, and for every card to be the same size. PR #60.
 
 - **Choice: `SavedProviderCard` is back to its pre-#59 state: the archive box and 12px padding.** The upcoming-appointment card keeps its #59 spacing; the user did not mention it.
 - **Choice: every provider card is three lines tall: the name on one line, the address and category (or "Not accepting bookings") on up to two,** with an ellipsis past that. A minimum height of those three lines makes short cards match (`CARD_MIN_HEIGHT`); the user proposed three and agreed. *Rejected:* letting each card grow to its text (the look the user rejected), and a fixed height, which would clip text under a larger system font instead of growing the row.
 
 ## Add appointment and Block time as sheets with pickers — 2026-11-11
 
-The user reviewed both business forms on Android: Add appointment was a long screen of typed fields (date as YYYY-MM-DD, time as HH:mm, a UTC offset, an "international format" phone and a reason for unverified contact), and Block time took typed dates and times.
+The user reviewed both business forms on Android: Add appointment was a long screen of typed fields (date as YYYY-MM-DD, time as HH:mm, a UTC offset, an "international format" phone and a reason for unverified contact), and Block time took typed dates and times. PR #60.
 
 - **Choice: Add appointment is a bottom sheet over the business home, like Block time (the user's call).** `ManualBookingDialog` in `ProviderAgenda`; the footer and free-time cards open it, and from another screen the footer first returns to the home. The `/provider/[businessId]/add` route is gone, and the footer no longer marks Add appointment. Close after a save lowers the sheet onto the home's "Appointment saved for {date}." notice. *Rejected:* keeping its own screen (PR #57), which the user asked to replace.
 - **Choice: the service, date and time are chosen the way a customer chooses them: the service sheet, the month calendar and the free-time chips** (`useCompactBooking` and `CompactBookingControls`, reading the public availability and calendar endpoints). A time chip brings its staff member and UTC offset, so the offset field is gone. With several staff on the service, a row of staff chips narrows the times; with one, it is hidden. A free-time card's day, time and staff member are chosen as soon as the service is, while that slot is free. *Rejected:* a date and clock picker for any time, which the user did not pick: the server refuses anything outside the free slots anyway, so it would offer times that fail only at confirmation.
