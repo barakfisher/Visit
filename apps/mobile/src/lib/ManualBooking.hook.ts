@@ -8,11 +8,12 @@ import { useSessionStore } from '../state/session';
 import { useManualDraft, emptyManualDraft } from '../state/ManualBooking.store';
 import { agendaDraftScope, useAgendaDraft } from '../state/ProviderAgenda.store';
 import { readManualOptions, submitManualBooking } from './ManualBooking.service';
-import { manualDraftScope, manualInput } from './ManualBooking.utils';
+import { manualDraftScope, manualFieldErrors, manualInput } from './ManualBooking.utils';
 import { canContinueAppointmentAction } from './AppointmentLifecycle.utils';
 import { isBookingQuery } from './BookingQueries.utils';
 import { useCompactBooking } from './CompactBooking.hook';
 import { availableBookingSlots, bookingSlotId, validBookingDate } from './CompactBooking.utils';
+import { fullDate } from './appointmentTime';
 import { apiRequest, ApiError } from './api';
 import { useCustomerCardSearch } from './CustomerCardSearch.hook';
 import { localPhone } from './PhoneNumber';
@@ -28,7 +29,7 @@ export function useManualBooking(business: { id: string; timezone: string }, dat
   const scope = manualDraftScope(identity, version, business.id);
   const prepared = useManualDraft(state => state.scope === scope ? state.prepared : null);
   const stored = useManualDraft(state => state.scope === scope ? state.draft : emptyManualDraft), attempt = useManualDraft(state => state.scope === scope ? state.attempt : null), result = useManualDraft(state => state.scope === scope ? state.result : null);
-  const [state, setState] = useState<{ scope: string; busy: boolean; feedback: string; existing?: CustomerCardSummary }>({ scope, busy: false, feedback: '' });
+  const [state, setState] = useState<{ scope: string; busy: boolean; feedback: string; existing?: CustomerCardSummary; showErrors?: boolean }>({ scope, busy: false, feedback: '' });
   const [staffFilter, setStaffFilter] = useState({ scope: '', staffId: '' });
   const mounted = useRef(true), operation = useRef(false), focused = useIsFocused(), focusRef = useRef(focused);
   useEffect(() => { focusRef.current = focused; }, [focused]);
@@ -47,7 +48,8 @@ export function useManualBooking(business: { id: string; timezone: string }, dat
   // A free card or an earlier choice names a time (and maybe a staff member); it is chosen while a matching slot is free.
   const chosen = draft.localTime ? offered.find(slot => slot.localTime === draft.localTime && (!draft.staffId || slot.staffId === draft.staffId)) : undefined;
   const search = useCustomerCardSearch({ businessId: business.id, identity, version, enabled: open && !stored.customerCard && !stored.reviewed && !attempt && !result, name: draft.customerName, phone: draft.customerPhone });
-  function update(patch: Partial<ManualDraft>) { if (!operation.current && !attempt) { setState({ scope, busy: false, feedback: '' }); useManualDraft.getState().update(scope, { ...patch, reviewed: false }); } }
+  // Once Continue has found something missing, the marks follow each change, so a fixed field clears at once.
+  function update(patch: Partial<ManualDraft>) { if (!operation.current && !attempt) { setState(current => ({ scope, busy: false, feedback: '', showErrors: current.scope === scope && current.showErrors })); useManualDraft.getState().update(scope, { ...patch, reviewed: false }); } }
   const disabled = state.scope === scope && state.busy || Boolean(attempt);
   const controls = useCompactBooking({ provider, providerId: business.id, serviceId: draft.serviceId, date: draft.localDate, fromBookingId: undefined, slots: offered, excluded: null, disabled,
     onDate: localDate => update({ localDate, localTime: '', staffId: '', utcOffset: '' }), onService: serviceId => update({ serviceId }) });
@@ -55,7 +57,9 @@ export function useManualBooking(business: { id: string; timezone: string }, dat
     if (operation.current || attempt) return;
     const picked: ManualDraft = { ...draft, staffId: chosen?.staffId ?? '', localTime: chosen?.localTime ?? '', utcOffset: chosen?.utcOffset ?? '' };
     const input = chosen ? manualInput(picked, options.data, Crypto.randomUUID()) : null;
-    if (!input) { setState({ scope, busy: false, feedback: t('manual.invalid') }); return; }
+    // A wrong field is marked under itself; the general line remains only for what no field explains (say, a business that stopped taking bookings).
+    if (!input) { setState({ scope, busy: false, showErrors: true, feedback: manualFieldErrors(draft, Boolean(chosen)).length ? '' : t('manual.invalid') }); return; }
+    setState({ scope, busy: false, feedback: '' });
     useManualDraft.getState().update(scope, picked);
     useManualDraft.getState().prepare(scope, input);
   }
@@ -87,10 +91,19 @@ export function useManualBooking(business: { id: string; timezone: string }, dat
     } finally { operation.current = false; if (mounted.current) setState(previous => ({ ...previous, busy: false })); }
   }
   const reviewed = (attempt ?? prepared)?.reviewedService;
+  // The review reads the date the way the date field showed it, never as YYYY-MM-DD.
+  const reviewDate = validBookingDate(draft.localDate) ? fullDate(draft.localDate, locale) : draft.localDate;
   const serviceSummary = reviewed ? t('manual.summary', { name: reviewed.name, minutes: reviewed.durationMinutes, price: reviewed.priceMinor !== null && reviewed.currency ? formatPrice(locale, reviewed.priceMinor, reviewed.currency) : t('manual.priceUnknown') }) : '';
   const success = Boolean(result);
+  /**
+   * Closing is always possible once no request is in flight, even when a save's outcome is unknown: the sheet used to
+   * lock there, and with the server down nothing could leave it. The home then reads the day again, so an appointment
+   * that did save shows there. Typing the same appointment again afterwards is a new attempt (decisions.md,
+   * "Add appointment: errors under fields, a closable unknown outcome" — 2026-11-11).
+   */
   function close() {
-    if (operation.current || attempt) return;
+    if (operation.current) return;
+    if (attempt) void client.invalidateQueries({ predicate: query => isBookingQuery(query.queryKey) });
     // After a save the home says which day it was saved for; it shows only today.
     const savedDay = success ? draft.localDate : '';
     setState({ scope, busy: false, feedback: '' }); useManualDraft.getState().clear();
@@ -104,10 +117,11 @@ export function useManualBooking(business: { id: string; timezone: string }, dat
     slotLabel: chosen ? `${chosen.localTime}${staff.length > 1 ? ` · ${chosen.staffName}` : ''}` : '',
   } : null;
   const customer = {
-    suggestions: search.suggestions, searching: search.searching, searchError: search.searchError, searched: search.searched, onRetrySearch: search.retry,
+    suggestions: search.suggestions, searching: search.searching, searchError: search.searchError, searched: search.searched,
     phoneMatch: draft.customerCard ? null : search.phoneMatch ?? (state.scope === scope ? state.existing ?? null : null),
     onPick: (card: CustomerCardSummary) => update({ customerCard: card, customerName: card.name ?? draft.customerName, customerPhone: card.phone ? localPhone(card.phone) : draft.customerPhone, customerEmail: card.email ?? '' }),
     onClearPick: () => update({ customerCard: null }),
   };
-  return { customer, serviceSummary, t, draft, options: options.data, loading: options.isLoading, loadError: options.isError, busy: state.scope === scope && state.busy, locked: Boolean(attempt), feedback: result ? t(result.status === 'CONFIRMED' ? 'manual.saved' : 'manual.changed') : state.scope === scope ? state.feedback : '', success, picking, update, retry: () => { void options.refetch(); }, review, confirm: () => void confirm(), close };
+  const errors = state.scope === scope && state.showErrors && !attempt ? Object.fromEntries(manualFieldErrors(draft, Boolean(chosen)).map(field => [field, t(`manual.error.${field}`)])) : {};
+  return { customer, serviceSummary, reviewDate, errors, t, draft, options: options.data, loading: options.isLoading, loadError: options.isError, busy: state.scope === scope && state.busy, locked: Boolean(attempt), feedback: result ? t(result.status === 'CONFIRMED' ? 'manual.saved' : 'manual.changed') : state.scope === scope ? state.feedback : '', success, picking, update, retry: () => { void options.refetch(); }, review, confirm: () => void confirm(), close };
 }

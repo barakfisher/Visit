@@ -41,6 +41,10 @@ export function appointmentSpan(startsAt: string, endsAt: string, timezone: stri
   if (localDate(timezone, new Date(startsAt)) === localDate(timezone, new Date(endsAt))) return `${startDate} · ${isolateLtr(`${start}–${end}`)}`;
   return `${startDate} · ${isolateLtr(start)} – ${appointmentDate(endsAt, timezone, locale)} · ${isolateLtr(end)}`;
 }
+/** "יום רביעי, 11 בנובמבר 2026" for one local calendar date (YYYY-MM-DD), the way the date pickers show it. */
+export function fullDate(date: string, locale: Locale) {
+  return new Intl.DateTimeFormat(intlLocale(locale), { dateStyle: 'full', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`));
+}
 /** "1–7 Nov 2026" for two local calendar dates (YYYY-MM-DD), read at UTC noon so no zone can shift them.
  *  Month and year appear once when both ends share them; without `formatRange` both dates are written out. */
 export function dateRange(fromDate: string, toDate: string, locale: Locale) {

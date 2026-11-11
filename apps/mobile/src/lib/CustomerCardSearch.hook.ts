@@ -31,6 +31,5 @@ export function useCustomerCardSearch({ businessId, identity, version, enabled, 
     searchError: searched && byName.isError,
     searched,
     phoneMatch,
-    retry: () => { void byName.refetch(); },
   };
 }

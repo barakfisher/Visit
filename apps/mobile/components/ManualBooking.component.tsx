@@ -41,19 +41,20 @@ export function ManualBooking(view: ManualBookingView) {
       : !editing ? <View className="gap-2">
         <Text accessibilityRole="header" className="font-semibold text-ink">{t('manual.reviewTitle')}</Text>
         <Text>{view.serviceSummary}</Text>
-        <Text>{draft.localDate} · {picking?.slotLabel || draft.localTime}</Text>
+        <Text testID="manual-review-when">{view.reviewDate} · {picking?.slotLabel || draft.localTime}</Text>
         <Text>{draft.customerName}</Text><Text>{isolateLtr(draft.customerPhone)}</Text>{draft.customerEmail ? <Text>{isolateLtr(draft.customerEmail)}</Text> : null}
         <Text testID="manual-review-customer" className="text-sm text-body">{customerReviewLine(t, draft)}</Text>
         <ActionButton label={t(locked && !busy ? 'manual.retry' : 'manual.confirm')} onPress={view.confirm} busy={busy} />
-        <ActionButton secondary label={t('manual.edit')} disabled={busy || locked} onPress={() => update({ reviewed: false })} />
+        {/* While a save's outcome is unknown the details cannot change (a retry must send the same appointment), so Edit is not offered. */}
+        {locked ? null : <ActionButton secondary label={t('manual.edit')} disabled={busy} onPress={() => update({ reviewed: false })} />}
       </View> : <>
-        {picking ? <CompactBookingControls t={t} {...picking} beforeTimes={<StaffFilter t={t} picking={picking} />} /> : null}
+        {picking ? <CompactBookingControls t={t} {...picking} required serviceError={view.errors.service} timeError={view.errors.time} beforeTimes={<StaffFilter t={t} picking={picking} />} /> : null}
         {picking?.slotLabel ? <Text testID="manual-chosen-time" className="font-semibold text-brand">{t('manual.chosenTime', { time: picking.slotLabel })}</Text> : null}
         <ManualCustomer view={view} />
         <ActionButton testID="manual-review" label={t('manual.review')} onPress={view.review} disabled={busy} />
       </>}
     {view.feedback && !view.success ? <Text accessibilityRole="alert" className="text-danger">{view.feedback}</Text> : null}
-    <ActionButton secondary testID="manual-close" label={t('manual.close')} onPress={view.close} disabled={busy || locked} />
+    <ActionButton secondary testID="manual-close" label={t('manual.close')} onPress={view.close} disabled={busy} />
   </View>;
 }
 
