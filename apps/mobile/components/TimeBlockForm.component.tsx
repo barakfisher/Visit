@@ -8,6 +8,7 @@ import { AppointmentConflicts } from './AppointmentConflicts.component';
 import { Control } from './Control';
 import { FormDialog } from './FormDialog';
 import { TextField } from './TextField';
+import { DatePickerField, TimePickerField } from './DateTimePicker.component';
 
 /** One tap fills the reason with a common one in the person's language; the field stays free text (decisions.md, 2026-11-11). */
 const QUICK_REASONS = ['blocks.quick.break', 'blocks.quick.meeting', 'blocks.quick.errands', 'blocks.quick.dayOff'] as const satisfies readonly MessageKey[];
@@ -23,7 +24,7 @@ function Choice({ label, selected, disabled, onPress, testID }: { label: string;
 
 /** Who, what and when to block, with an optional reason. Saving here is the only save. */
 export function TimeBlockForm({ staff, ...state }: TimeBlockDialogState & { staff: readonly { id: string; displayName: string }[] }) {
-  const { t, form, errors, conflicts, failure, busy, update, save, close, when } = state;
+  const { t, form, errors, conflicts, failure, busy, update, save, close, when, today } = state;
   const errorFor = (key: keyof typeof errors) => errors[key] ? t(errorMessages[errors[key]!], { max: errors[key] === 'reason' ? MAX_BLOCK_REASON : MAX_BLOCK_DAYS }) : undefined;
   const kinds: BlockKind[] = ['hours', 'days'];
   return <View testID="block-form" className="gap-4">
@@ -40,17 +41,18 @@ export function TimeBlockForm({ staff, ...state }: TimeBlockDialogState & { staf
         {kinds.map(kind => <Choice key={kind} testID={`block-kind-${kind}`} label={t(`blocks.kind.${kind}`)} selected={form.kind === kind} disabled={busy} onPress={() => update({ kind })} />)}
       </View>
     </View>
+    {/* Chosen in pickers, never typed (decisions.md, 2026-11-11). */}
     {form.kind === 'hours' ? <View className="gap-3">
-      <TextField identifier editable={!busy} label={t('blocks.date')} value={form.date} placeholder="YYYY-MM-DD" maxLength={10} hint={t('blocks.dateHint')} onChangeText={date => update({ date })} error={errorFor('date')} />
+      <DatePickerField testID="block-date" disabled={busy} label={t('blocks.date')} value={form.date} min={today} onChange={date => update({ date })} error={errorFor('date')} />
       <View className="flex-row gap-3">
-        <View className="flex-1"><TextField identifier editable={!busy} label={t('blocks.from')} value={form.startLocal} placeholder="12:00" maxLength={5} onChangeText={startLocal => update({ startLocal })} error={errorFor('startLocal')} /></View>
-        <View className="flex-1"><TextField identifier editable={!busy} label={t('blocks.to')} value={form.endLocal} placeholder="13:00" maxLength={5} onChangeText={endLocal => update({ endLocal })} error={errorFor('endLocal')} /></View>
+        <View className="flex-1"><TimePickerField testID="block-from" disabled={busy} label={t('blocks.from')} value={form.startLocal} onChange={startLocal => update({ startLocal })} error={errorFor('startLocal')} /></View>
+        <View className="flex-1"><TimePickerField testID="block-to" disabled={busy} label={t('blocks.to')} value={form.endLocal} onChange={endLocal => update({ endLocal })} error={errorFor('endLocal')} /></View>
       </View>
       <AppText className="text-sm text-body">{t('blocks.timeHint')}</AppText>
     </View> : <View className="gap-3">
       <View className="flex-row gap-3">
-        <View className="flex-1"><TextField identifier editable={!busy} label={t('blocks.fromDate')} value={form.fromDate} placeholder="YYYY-MM-DD" maxLength={10} onChangeText={fromDate => update({ fromDate })} error={errorFor('fromDate')} /></View>
-        <View className="flex-1"><TextField identifier editable={!busy} label={t('blocks.toDate')} value={form.toDate} placeholder="YYYY-MM-DD" maxLength={10} onChangeText={toDate => update({ toDate })} error={errorFor('toDate')} /></View>
+        <View className="flex-1"><DatePickerField testID="block-from-date" disabled={busy} label={t('blocks.fromDate')} value={form.fromDate} min={today} onChange={fromDate => update({ fromDate, ...(form.toDate < fromDate ? { toDate: fromDate } : {}) })} error={errorFor('fromDate')} /></View>
+        <View className="flex-1"><DatePickerField testID="block-to-date" disabled={busy} label={t('blocks.toDate')} value={form.toDate} min={form.fromDate || today} onChange={toDate => update({ toDate })} error={errorFor('toDate')} /></View>
       </View>
       <AppText className="text-sm text-body">{t('blocks.daysHint')}</AppText>
     </View>}

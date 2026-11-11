@@ -6,11 +6,9 @@ import { AppText } from './AppText';
 import { ActionButton } from './ActionButton';
 import { SmoothHeight } from './SmoothHeight.component';
 import { TimeChips } from './TimeChips';
-import { Control } from './Control';
-import { DirectionalChevron } from './DirectionalChevron.component';
-import { tokens } from '@/src/design/tokens';
+import { MonthStep } from './MonthStep.component';
 import type { CompactBookingControlsProps } from './CompactBookingControls.types';
-export function CompactBookingControls({ controls: c, t, disabled, date, selectedId, slotLoading, slotError, onRetrySlots, onSelectSlot }: CompactBookingControlsProps) {
+export function CompactBookingControls({ controls: c, t, disabled, date, selectedId, slotLoading, slotError, onRetrySlots, onSelectSlot, beforeTimes }: CompactBookingControlsProps) {
   // Sheet width measured at layout; the grid takes it, or scrolls horizontally below the minimum touch-target width.
   const [sheetWidth, setSheetWidth] = useState(0);
   return <View className="gap-5">
@@ -21,6 +19,7 @@ export function CompactBookingControls({ controls: c, t, disabled, date, selecte
     <View className="gap-2"><AppText className="text-sm font-semibold text-body">{t('compact.date')}</AppText>
       <Pressable testID="booking-date-trigger" accessibilityRole="button" accessibilityLabel={`${t('compact.chooseDate')} · ${c.dateTitle} · ${date}`} accessibilityState={{ expanded: c.sheet === 'calendar', disabled: disabled || !c.chosen }} disabled={disabled || !c.chosen} onPress={() => c.open('calendar')} className="min-h-14 rounded-control border border-line bg-surface px-4 py-3"><AppText className="font-semibold text-brand">{c.dateTitle}</AppText></Pressable>
     </View>
+    {c.chosen ? beforeTimes : null}
     {c.chosen ? <View className="gap-3">
       {slotError ? <View className="gap-2"><AppText accessibilityRole="alert" className="text-danger">{t('compact.slotsFailed')}</AppText><ActionButton secondary label={t('common.retry')} onPress={onRetrySlots} /></View> : <>
         <SmoothHeight><TimeChips timezone="" slots={c.page} selectedId={selectedId} loading={slotLoading} busy={disabled} onSelect={onSelectSlot} /></SmoothHeight>
@@ -44,12 +43,4 @@ export function CompactBookingControls({ controls: c, t, disabled, date, selecte
           </>}
     </FormDialog>
   </View>;
-}
-
-/** A month step is an arrow beside the month's name; its full name ("Next month") is for screen readers. */
-function MonthStep({ pointing, label, disabled, onPress }: { pointing: 'back' | 'forward'; label: string; disabled: boolean; onPress: () => void }) {
-  return <Control accessibilityRole="button" accessibilityLabel={label} aria-disabled={disabled} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
-    className={`items-center justify-center rounded-control border ${disabled ? 'border-control-line' : 'border-brand active:bg-brand-soft'}`}>
-    <DirectionalChevron pointing={pointing} color={disabled ? tokens.color.muted : tokens.color.brand} />
-  </Control>;
 }

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { LocalePreview } from '@/src/i18n/LocaleContext';
@@ -23,7 +23,7 @@ type Args = Omit<TimeBlocksState, 't' | 'locale' | 'direction' | 'dialog'> & {
 };
 function BlocksPreview({ locale, dialogOpen, form, errors, conflicts: listed, failure, busy, update, save, close, ...state }: Args) {
   const t: TimeBlocksState['t'] = (key, values) => translate(locale, key, values), direction = locale === 'he' ? 'rtl' as const : 'ltr' as const;
-  const dialog: TimeBlocksState['dialog'] = { t, locale, direction, timezone: 'Asia/Jerusalem', open: dialogOpen, form, errors, conflicts: listed, failure, busy, ready: true, openDialog: fn(), close, update, save, when: () => '24 Dec 2026 · 10:00' };
+  const dialog: TimeBlocksState['dialog'] = { t, locale, direction, timezone: 'Asia/Jerusalem', today: '2026-12-01', open: dialogOpen, form, errors, conflicts: listed, failure, busy, ready: true, openDialog: fn(), close, update, save, when: () => '24 Dec 2026 · 10:00' };
   return <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, bottom: 0, left: 0, right: 0 } }}>
     <LocalePreview locale={locale}><View style={{ maxWidth: 600, padding: 16 }}><TimeBlocks {...state} t={t} locale={locale} direction={direction} dialog={dialog} /></View></LocalePreview>
   </SafeAreaProvider>;
@@ -83,8 +83,20 @@ export const HoursDialog: Story = { args: { dialogOpen: true }, play: async ({ c
   const dialog = dialogOf(canvasElement);
   await expect(dialog.getByRole('radio', { name: 'Whole business' })).toHaveAttribute('aria-checked', 'true');
   await expect(dialog.getByRole('radio', { name: 'Hours on one day' })).toHaveAttribute('aria-checked', 'true');
-  await expect(dialog.getByLabelText('Date', { exact: true })).toHaveValue('2026-12-24');
-  await expect(dialog.getByLabelText('From', { exact: true })).toHaveStyle({ direction: 'ltr' });
+  // Dates and times are picked, never typed (decisions.md, 2026-11-11).
+  await expect(dialog.queryAllByRole('textbox')).toHaveLength(1);
+  await expect(dialog.getByTestId('block-date')).toHaveTextContent('24 December 2026');
+  await expect(dialog.getByTestId('block-from')).toHaveTextContent('12:00');
+  const body = within(canvasElement.ownerDocument.body);
+  await userEvent.click(dialog.getByTestId('block-date'));
+  // Today is 2026-12-01 here, so the month before cannot be reached and earlier days in it are off.
+  await expect(await body.findByRole('button', { name: 'Previous month' })).toHaveAttribute('aria-disabled', 'true');
+  await userEvent.click(await body.findByTestId('block-date-day-2026-12-25')); await expect(args.update).toHaveBeenCalledWith({ date: '2026-12-25' });
+  await userEvent.click(dialog.getByTestId('block-from'));
+  await userEvent.click(await body.findByTestId('block-from-hour-09')); await expect(args.update).toHaveBeenCalledWith({ startLocal: '09:00' });
+  await userEvent.click(body.getByTestId('block-from-done'));
+  // A picker sheet stacked on the form leaves the form's modal without its dialog role until it closes (React Native Web); the axe check runs after.
+  await waitFor(() => expect(canvasElement.ownerDocument.querySelectorAll('[aria-modal="true"]')).toHaveLength(1));
   await userEvent.click(dialog.getByRole('radio', { name: 'Noa' })); await expect(args.update).toHaveBeenCalledWith({ staffId: 'noa' });
   await userEvent.click(dialog.getByRole('radio', { name: 'Whole days' })); await expect(args.update).toHaveBeenCalledWith({ kind: 'days' });
   const save = dialog.getByRole('button', { name: 'Save block' }), cancel = dialog.getByRole('button', { name: 'Cancel' });
@@ -95,9 +107,9 @@ export const HoursDialog: Story = { args: { dialogOpen: true }, play: async ({ c
 export const DaysDialog: Story = { args: { dialogOpen: true, form: { ...emptyBlockForm('2026-12-24'), kind: 'days', staffId: 'dan', toDate: '2026-12-26', reason: 'Vacation' } }, play: async ({ canvasElement }) => {
   const dialog = dialogOf(canvasElement);
   await expect(dialog.getByRole('radio', { name: 'Dan' })).toHaveAttribute('aria-checked', 'true');
-  await expect(dialog.getByLabelText('First day', { exact: true })).toHaveValue('2026-12-24');
-  await expect(dialog.getByLabelText('Last day', { exact: true })).toHaveValue('2026-12-26');
-  await expect(dialog.queryByLabelText('From', { exact: true })).toBeNull();
+  await expect(dialog.getByTestId('block-from-date')).toHaveTextContent('24 December 2026');
+  await expect(dialog.getByTestId('block-to-date')).toHaveTextContent('26 December 2026');
+  await expect(dialog.queryByTestId('block-from')).toBeNull();
   await expect(dialog.getByLabelText('Reason (optional)', { exact: true })).toHaveValue('Vacation');
 } };
 export const HebrewDialog: Story = { args: { locale: 'he', dialogOpen: true }, globals: { locale: 'he' }, play: async ({ canvasElement }) => {
@@ -116,7 +128,7 @@ export const Conflicts: Story = { args: { dialogOpen: true, conflicts }, play: a
   await expect(dialog.getByText('24 Dec 2026 · 10:00 · Noa · Dana Levi · Haircut')).toBeVisible();
   await expect(dialog.getByText('24 Dec 2026 · 10:00 · Dan · Reservation in progress')).toBeVisible();
   await expect(dialog.getByText('And 20 more.')).toBeVisible();
-  await expect(dialog.getByLabelText('Date', { exact: true })).toHaveValue('2026-12-24');
+  await expect(dialog.getByTestId('block-date')).toHaveTextContent('24 December 2026');
 } };
 export const SaveFailedKeepsDraft: Story = { args: { dialogOpen: true, failure: 'blocks.saveFailed', form: { ...emptyBlockForm('2026-12-24'), reason: 'Training' } }, play: async ({ canvasElement }) => {
   const dialog = dialogOf(canvasElement);
@@ -127,5 +139,4 @@ export const Pending: Story = { args: { dialogOpen: true, busy: true }, play: as
   const dialog = dialogOf(canvasElement);
   for (const button of dialog.getAllByRole('button')) await expect(button).toHaveAttribute('aria-disabled', 'true');
   for (const radio of dialog.getAllByRole('radio')) await expect(radio).toHaveAttribute('aria-disabled', 'true');
-  await expect(dialog.getByLabelText('Date', { exact: true })).toHaveAttribute('readonly');
 } };

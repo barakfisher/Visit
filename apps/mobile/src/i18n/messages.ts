@@ -12,6 +12,7 @@ import { blocksEn, blocksHe } from './blockMessages';
 import { staffEn, staffHe } from './staffMessages';
 import { notificationsEn, notificationsHe } from './notificationMessages';
 import { providerHomeEn, providerHomeHe } from './providerHomeMessages';
+import { pickerEn, pickerHe } from './pickerMessages';
 export const en = {
   ...manualEn,
   ...agendaEditEn,
@@ -27,6 +28,7 @@ export const en = {
   ...staffEn,
   ...notificationsEn,
   ...providerHomeEn,
+  ...pickerEn,
   'home.title': 'Your time, well spent.',
   'home.intro': 'Your next appointment and the businesses you visit.',
   'home.providers': 'My Providers',
@@ -328,6 +330,7 @@ export const he: Record<MessageKey, string> = {
   ...staffHe,
   ...notificationsHe,
   ...providerHomeHe,
+  ...pickerHe,
   'home.title': 'הזמן שלכם, מנוצל היטב.',
   'home.intro': 'התור הבא שלכם והעסקים שאתם מבקרים בהם.',
   'home.providers': 'נותני השירות שלי',

@@ -7,7 +7,6 @@ export type AccountNavigation = {
   providerApplications: { id: string; status: string; business: { name: string } }[];
 };
 /** Add appointment is its own business screen, so the footer can mark it (decisions.md, 2026-11-10). */
-export const manualBookingPath = (businessId: string) => `/provider/${businessId}/add`;
 export const isProviderPath = (pathname: string) => pathname.startsWith('/provider/');
 /** Account and the notifications belong to the person, not to a mode: each keeps the business it was opened from, carried in its URL so a reload keeps it too. Only a business in the person's own profile counts. */
 export const accountBusiness = (pathname: string, businessId: string | string[] | undefined, businesses: readonly { id: string }[] | undefined) => (pathname === '/account' || pathname === '/notifications') && businesses?.some(business => business.id === businessId) ? businessId as string : null;

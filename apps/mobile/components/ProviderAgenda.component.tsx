@@ -17,6 +17,7 @@ import { TimeBlockRow } from './TimeBlocks';
 import { BlockCard, ClosedDayCard, FreeTimeCard } from './AgendaDayCards.component';
 import { FormDialog } from './FormDialog';
 import { TimeBlockDialog } from './TimeBlockForm.component';
+import { ManualBookingDialog } from './ManualBooking.component';
 import { formatMoney } from '../src/types/flows';
 import type { AgendaAppointment, ProviderAgendaView } from '../src/types/ProviderAgenda.types';
 /**
@@ -45,6 +46,7 @@ export function ProviderAgenda({ published, ...view }: ProviderAgendaView & { pu
     </View>
     {published ? null : <View testID="dashboard-unpublished" className="flex-row flex-wrap items-center gap-x-3 gap-y-1 rounded-control border border-amber-300 bg-amber-50 px-4 py-3"><Text className="flex-1 text-sm text-warning">{t('dashboard.unpublished')}</Text><Link href={{ pathname: '/provider/[businessId]/[section]', params: { businessId: business.id, section: 'publish' } }} className="min-h-touch py-2 font-semibold text-warning underline">{t('dashboard.publishLink')}</Link></View>}
     <TimeBlockDialog staff={agenda.data?.staff ?? []} {...blockDialog} />
+    <ManualBookingDialog {...view.manual} />
     {/* The whole day's totals, including appointments that already ended. */}
     <View testID="agenda-summary" className="flex-row items-center rounded-card bg-brand px-4 py-3">
       <View className="flex-1 gap-0.5"><Text className="text-xs text-teal-50">{t('dashboard.appointments')}</Text><Text className="text-lg font-bold text-white">{agenda.data?.summary.appointments ?? '—'}</Text></View>

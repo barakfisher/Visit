@@ -1,29 +1,63 @@
-import { Pressable, TextInput, View } from 'react-native';
+import { View } from 'react-native';
 import { AppText as Text } from './AppText';
 import { ActionButton } from './ActionButton';
-import { STAFF_CAPACITY_SHOWN } from '../src/lib/StaffRoster';
-import type { ManualBookingView, ManualDraft } from '../src/types/ManualBooking.types';
-import type { MessageKey } from '../src/i18n/messages';
-const fieldClass = 'rounded-control border border-line bg-surface px-4 py-3 text-ink';
-const fields: { key: keyof Pick<ManualDraft, 'customerName' | 'customerPhone' | 'customerEmail' | 'localDate' | 'localTime' | 'utcOffset'>; label: MessageKey; max: number }[] = [
- { key: 'customerName', label: 'manual.name', max: 120 }, { key: 'customerPhone', label: 'manual.phone', max: 16 }, { key: 'customerEmail', label: 'manual.email', max: 254 },
- { key: 'localDate', label: 'manual.date', max: 10 }, { key: 'localTime', label: 'manual.time', max: 5 }, { key: 'utcOffset', label: 'manual.offset', max: 6 },
-];
+import { CompactBookingControls } from './CompactBookingControls.component';
+import { Control } from './Control';
+import { FormDialog } from './FormDialog';
+import { TextField } from './TextField';
+import type { ManualBookingView, ManualSlotPicking } from '../src/types/ManualBooking.types';
+
+function StaffChoice({ label, selected, disabled, onPress, testID }: { label: string; selected: boolean; disabled: boolean; onPress: () => void; testID?: string }) {
+  return <Control testID={testID} accessibilityRole="radio" aria-checked={selected} accessibilityLabel={label} accessibilityState={{ checked: selected, disabled }} disabled={disabled} onPress={onPress}
+    className={`min-h-touch justify-center rounded-control border px-4 py-2 ${selected ? 'border-brand bg-brand-soft' : 'border-line'}`}>
+    <Text className={selected ? 'font-semibold text-brand' : 'text-ink'}>{label}</Text>
+  </Control>;
+}
+
+/** With several staff on the service, the times can be narrowed to one of them; a time always brings its own staff member. */
+function StaffFilter({ t, picking }: { t: ManualBookingView['t']; picking: ManualSlotPicking }) {
+  if (picking.staff.length < 2) return null;
+  return <View className="gap-2" accessibilityRole="radiogroup" accessibilityLabel={t('manual.staff')}>
+    <Text className="text-sm font-semibold text-body">{t('manual.staff')}</Text>
+    <View className="flex-row flex-wrap gap-2">
+      <StaffChoice testID="manual-staff-any" label={t('manual.anyStaff')} selected={!picking.staffFilter} disabled={picking.disabled} onPress={() => picking.onStaffFilter('')} />
+      {picking.staff.map(row => <StaffChoice key={row.id} testID={`manual-staff-${row.id}`} label={row.displayName} selected={picking.staffFilter === row.id} disabled={picking.disabled} onPress={() => picking.onStaffFilter(row.id)} />)}
+    </View>
+  </View>;
+}
+
+/** The form inside the Add appointment sheet. Everything but the customer is chosen, never typed (decisions.md, 2026-11-11). */
 export function ManualBooking(view: ManualBookingView) {
- const { t, draft, update, options, busy, locked } = view;
- const service = options?.services.find(row => row.id === draft.serviceId), staff = service?.staff.find(row => row.id === draft.staffId);
- // The footer's Add appointment opens it (decisions.md, 2026-11-08).
- if (!draft.open) return null;
- return <View className="gap-3 rounded-card border border-line bg-surface p-5" testID="manual-booking-form">
-  <Text accessibilityRole="header" className="text-xl font-semibold text-ink">{t('manual.title')}</Text><Text>{t('manual.intro')}</Text><Text>{t('manual.unverified')}</Text>
-  {view.success ? <Text role="status">{view.feedback}</Text> : !locked && !draft.reviewed && view.loadError ? <View className="gap-2"><Text accessibilityRole="alert">{t('manual.loadError')}</Text><ActionButton secondary label={t('common.retry')} onPress={view.retry} /></View> : !locked && !draft.reviewed && view.loading ? <Text>{t('manual.loading')}</Text> : !locked && !draft.reviewed && !options?.bookable ? <Text>{t('manual.notBookable')}</Text> : !locked && !draft.reviewed && !options?.services.some(row => row.staff.length) ? <Text>{t('manual.empty')}</Text> : <>
-   {draft.reviewed || locked ? <View className="gap-2"><Text accessibilityRole="header" className="font-semibold">{t('manual.reviewTitle')}</Text><Text>{view.serviceSummary || service?.name || draft.serviceId} · {staff?.displayName ?? draft.staffId}</Text><Text>{draft.localDate} · {draft.localTime} {draft.utcOffset}</Text><Text>{draft.customerName}</Text><Text>{draft.customerPhone}</Text>{draft.customerEmail ? <Text>{draft.customerEmail}</Text> : null}{draft.exceptionReason ? <Text>{t('manual.exception')}: {draft.exceptionReason}</Text> : null}<ActionButton label={t(locked && !busy ? 'manual.retry' : 'manual.confirm')} onPress={view.confirm} busy={busy} /><ActionButton secondary label={t('manual.edit')} disabled={busy || locked} onPress={() => update({ reviewed: false })} /></View> : <>
-    <Text className="font-semibold">{t('manual.service')}</Text><View className="flex-row flex-wrap gap-2">{options?.services.filter(row => row.staff.length).map(row => <Pressable key={row.id} accessibilityRole="button" accessibilityState={{ selected: row.id === draft.serviceId }} disabled={busy} onPress={() => update({ serviceId: row.id, staffId: '' })} className="rounded-control border border-line px-3 py-3"><Text>{row.name}{row.id === draft.serviceId ? ' ✓' : ''}</Text></Pressable>)}</View>
-    <Text className="font-semibold">{t('manual.staff')}</Text><View className="flex-row flex-wrap gap-2">{service?.staff.map(row => <Pressable key={row.id} accessibilityRole="button" accessibilityState={{ selected: row.id === draft.staffId }} disabled={busy} onPress={() => update({ staffId: row.id })} className="rounded-control border border-line px-3 py-3"><Text>{row.displayName}{STAFF_CAPACITY_SHOWN ? ` · ${t('agendaEdit.capacity', { count: row.parallelCapacity })}` : ''}{row.id === draft.staffId ? ' ✓' : ''}</Text></Pressable>)}</View>
-    {fields.map(field => <View key={field.key} className="gap-1"><Text>{t(field.label)}</Text><TextInput accessibilityLabel={t(field.label)} value={draft[field.key]} onChangeText={value => update({ [field.key]: value })} editable={!busy} maxLength={field.max} autoCapitalize={field.key === 'customerName' ? 'words' : 'none'} keyboardType={field.key === 'customerPhone' ? 'phone-pad' : field.key === 'customerEmail' ? 'email-address' : 'default'} className={fieldClass} /></View>)}<Text className="text-sm text-muted">{t('manual.offsetHelp')}</Text>
-    {options?.requiresException ? <Text>{t('manual.exceptionHelp')}</Text> : null}<View className="gap-1"><Text>{t('manual.exception')}</Text><TextInput accessibilityLabel={t('manual.exception')} value={draft.exceptionReason} onChangeText={exceptionReason => update({ exceptionReason })} editable={!busy} maxLength={500} multiline className={fieldClass} /></View><ActionButton label={t('manual.review')} onPress={view.review} disabled={busy} />
-   </>}
-  </>}
-  {view.feedback && !view.success ? <Text accessibilityRole="alert" className="text-danger">{view.feedback}</Text> : null}<ActionButton secondary label={t('manual.close')} onPress={view.close} disabled={busy || locked} />
- </View>;
+  const { t, draft, update, options, busy, locked, picking } = view;
+  const editing = !locked && !draft.reviewed;
+  return <View className="gap-4" testID="manual-booking-form">
+    <Text className="text-sm text-body">{t('manual.unverified')}</Text>
+    {view.success ? <Text role="status" className="text-ink">{view.feedback}</Text>
+      : editing && view.loadError ? <View className="gap-2"><Text accessibilityRole="alert">{t('manual.loadError')}</Text><ActionButton secondary label={t('common.retry')} onPress={view.retry} /></View>
+      : editing && view.loading ? <Text role="status">{t('manual.loading')}</Text>
+      : editing && !options?.bookable ? <Text>{t('manual.notBookable')}</Text>
+      : editing && !options?.services.some(row => row.staff.length) ? <Text>{t('manual.empty')}</Text>
+      : !editing ? <View className="gap-2">
+        <Text accessibilityRole="header" className="font-semibold text-ink">{t('manual.reviewTitle')}</Text>
+        <Text>{view.serviceSummary}</Text>
+        <Text>{draft.localDate} · {picking?.slotLabel || draft.localTime}</Text>
+        <Text>{draft.customerName}</Text><Text>{draft.customerPhone}</Text>{draft.customerEmail ? <Text>{draft.customerEmail}</Text> : null}
+        <ActionButton label={t(locked && !busy ? 'manual.retry' : 'manual.confirm')} onPress={view.confirm} busy={busy} />
+        <ActionButton secondary label={t('manual.edit')} disabled={busy || locked} onPress={() => update({ reviewed: false })} />
+      </View> : <>
+        {picking ? <CompactBookingControls t={t} {...picking} beforeTimes={<StaffFilter t={t} picking={picking} />} /> : null}
+        {picking?.slotLabel ? <Text testID="manual-chosen-time" className="font-semibold text-brand">{t('manual.chosenTime', { time: picking.slotLabel })}</Text> : null}
+        <TextField testID="manual-name" editable={!busy} label={t('manual.name')} value={draft.customerName} maxLength={120} autoCapitalize="words" onChangeText={customerName => update({ customerName })} />
+        <TextField testID="manual-phone" identifier editable={!busy} label={t('manual.phone')} placeholder="050-1234567" value={draft.customerPhone} maxLength={20} keyboardType="phone-pad" autoComplete="tel" onChangeText={customerPhone => update({ customerPhone })} />
+        <TextField testID="manual-email" identifier editable={!busy} label={t('manual.email')} value={draft.customerEmail} maxLength={254} keyboardType="email-address" autoCapitalize="none" onChangeText={customerEmail => update({ customerEmail })} />
+        <ActionButton testID="manual-review" label={t('manual.review')} onPress={view.review} disabled={busy} />
+      </>}
+    {view.feedback && !view.success ? <Text accessibilityRole="alert" className="text-danger">{view.feedback}</Text> : null}
+    <ActionButton secondary testID="manual-close" label={t('manual.close')} onPress={view.close} disabled={busy || locked} />
+  </View>;
+}
+
+/** Add appointment rises from the bottom like Block time, over the business home (decisions.md, 2026-11-11). */
+export function ManualBookingDialog(view: ManualBookingView) {
+  return <FormDialog testID="manual-booking-sheet" title={view.t('manual.title')} open={view.draft.open} onClose={view.close}><ManualBooking {...view} /></FormDialog>;
 }

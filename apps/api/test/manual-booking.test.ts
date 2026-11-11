@@ -14,7 +14,7 @@ import { saveBusinessAvailability } from '../src/repositories/provider-settings.
 import { requireBusinessMembership } from '../src/security/tenant-context.js';
 import { releaseHold } from '../src/scheduling/reservations.js';
 after(async () => { redis.disconnect(); await prisma.$disconnect(); });
-test('manual bookings enforce contact exceptions and authoritative scheduling without creating identities', async t => {
+test('manual bookings need no contact exception and keep authoritative scheduling without creating identities', async t => {
  const key = randomUUID(), token = randomUUID();
  const owner = await prisma.identity.create({ data: { email: `manual-${key}@example.test` } });
  const matchingIdentity = await prisma.identity.create({ data: { phone: '+12025550123', phoneVerifiedAt: new Date() } });
@@ -30,7 +30,7 @@ test('manual bookings enforce contact exceptions and authoritative scheduling wi
  app.setErrorHandler((error, _request, reply) => reply.code(error instanceof AppError ? error.statusCode : error instanceof ZodError ? 400 : 500).send({ error: { code: error instanceof AppError ? error.code : 'INVALID' } }));
  await registerProviderRoutes(app); await registerBookingRoutes(app);
  const headers = { authorization: `Bearer ${token}`, 'x-visit-client': 'native' }, url = `/v1/provider/businesses/${business.id}/manual-bookings`;
- const payload = (time = '10:00') => ({ finalConsent: true, idempotencyKey: randomUUID(), serviceId: service.id, staffId: staff.id, localDate: '2027-03-15', localTime: time, customerName: 'Unregistered customer', customerPhone: '+12025550123', exceptionReason: 'Requested by telephone', reviewedService: { name: service.name, durationMinutes: 30, priceMinor: 10000, currency: 'USD' } });
+ const payload = (time = '10:00') => ({ finalConsent: true, idempotencyKey: randomUUID(), serviceId: service.id, staffId: staff.id, localDate: '2027-03-15', localTime: time, customerName: 'Unregistered customer', customerPhone: '+12025550123', reviewedService: { name: service.name, durationMinutes: 30, priceMinor: 10000, currency: 'USD' } });
  const post = (body: object) => app.inject({ method: 'POST', url, headers, payload: body });
  try {
   await t.test('requires session, correct tenant/role and strict contact input', async () => {
@@ -38,15 +38,14 @@ test('manual bookings enforce contact exceptions and authoritative scheduling wi
    assert.equal((await app.inject({ method: 'POST', url: '/v1/provider/businesses/foreign/manual-bookings', headers, payload: payload() })).statusCode, 403);
    await prisma.membership.update({ where: { id: membership.id }, data: { role: 'STAFF' } }); assert.equal((await post(payload())).statusCode, 403);
    await prisma.membership.update({ where: { id: membership.id }, data: { role: 'OWNER' } });
-   for (const patch of [{ customerId: owner.id }, { source: 'CUSTOMER' }, { customerPhoneVerifiedAt: new Date().toISOString() }, { finalConsent: false }, { customerPhone: '2025550123' }, { customerName: ' ' }, { customerEmail: 'broken' }, { exceptionReason: '' }]) assert.equal((await post({ ...payload(), ...patch })).statusCode, 400, JSON.stringify(patch));
-   const missing = payload(); const { exceptionReason: _reason, ...withoutReason } = missing; assert.equal((await post(withoutReason)).statusCode, 400);
+   for (const patch of [{ customerId: owner.id }, { source: 'CUSTOMER' }, { customerPhoneVerifiedAt: new Date().toISOString() }, { finalConsent: false }, { customerPhone: '2025550123' }, { customerName: ' ' }, { customerEmail: 'broken' }, { exceptionReason: 'Requested by telephone' }]) assert.equal((await post({ ...payload(), ...patch })).statusCode, 400, JSON.stringify(patch));
    await prisma.session.update({ where: { id: session.id }, data: { revokedAt: new Date() } }); assert.equal((await post(payload())).statusCode, 401);
    await prisma.session.update({ where: { id: session.id }, data: { revokedAt: null } });
   });
   await t.test('options expose assigned resources and no customer directory', async () => {
    const response = await app.inject({ url: `/v1/provider/businesses/${business.id}/manual-booking-options`, headers });
-   assert.equal(response.statusCode, 200); const result = response.json<{ requiresException: boolean; services: { staff: { id: string }[] }[] }>();
-   assert.equal(result.requiresException, true); assert.equal(result.services[0]?.staff[0]?.id, staff.id); assert.equal(response.body.includes(matchingIdentity.id), false);
+   assert.equal(response.statusCode, 200); const result = response.json<{ services: { staff: { id: string }[] }[] }>();
+   assert.equal(Object.hasOwn(result, 'requiresException'), false); assert.equal(result.services[0]?.staff[0]?.id, staff.id); assert.equal(response.body.includes(matchingIdentity.id), false);
   });
   await t.test('new contact remains unlinked/unverified, audit is immutable and replay uses exact fingerprint', async () => {
    const customerEmail = `manual-guest-${key}@example.test`, input = { ...payload(), customerEmail };
@@ -59,7 +58,7 @@ test('manual bookings enforce contact exceptions and authoritative scheduling wi
    assert.deepEqual(await prisma.identity.findMany({ where: { phone: input.customerPhone }, select: { id: true } }), [{ id: matchingIdentity.id }]);
    assert.equal(await prisma.identity.count({ where: { email: customerEmail } }), 0);
    assert.equal(booking.customerEmail, customerEmail); assert.equal(await prisma.bookingNotification.count({ where: { bookingId: result.id } }), 0);
-   const events = await prisma.bookingEvent.findMany({ where: { bookingId: result.id } }); assert.equal(events.length, 1); assert.equal(events[0]?.source, 'MANUAL'); assert.equal(events[0]?.reason, 'MANUAL_CONTACT_EXCEPTION');
+   const events = await prisma.bookingEvent.findMany({ where: { bookingId: result.id } }); assert.equal(events.length, 1); assert.equal(events[0]?.source, 'MANUAL'); assert.equal(events[0]?.reason, 'MANUAL_CONTACT_EXCEPTION'); assert.equal(booking.manualReason, null);
    const audit = events[0]; assert.ok(audit); await assert.rejects(prisma.bookingEvent.update({ where: { id: audit.id }, data: { reason: 'SYSTEM_CHANGE' } }));
    assert.equal((await post(input)).json<{ id: string }>().id, result.id); assert.equal((await post({ ...input, customerName: 'Different contact' })).statusCode, 409);
    await assert.rejects(prisma.booking.update({ where: { id: result.id }, data: { customerPhone: '+12025550124' } }));

@@ -17,6 +17,16 @@ export const One: Story = { args: { providers: providers.slice(0, 1) }, play: as
 export const Many: Story = { args: { providers, hasMore: true } };
 export const English: Story = { args: { t: (key, values) => translate('en', key, values), providers: providers.map(p => ({ ...p, provider: { ...p.provider, name: 'Extended consultation and follow-up care with the specialist team' } })) }, globals: { locale: 'en' } };
 export const WithUpcomingAppointment: Story = { args: { providers: providers.slice(0, 3), upcoming: { state: 'ready', heading: translate('he', 'upcoming.next'), sectionHeading: true, loadingLabel: '', error: '', retryLabel: '', appointments: [{ id: 'today', when: 'היום · 14:30', place: 'Dana Studio · Tel Aviv' }], onRetry: fn(), onOpen: fn() } }, play: async ({ canvas }) => { await expect(canvas.getByRole('heading', { name: translate('he', 'upcoming.next') })).toBeVisible(); } };
+/** Short and wrapping details side by side: every card is the same three lines tall. */
+export const MixedLengths: Story = { args: { providers: [
+  { id: 'a', businessId: 'a', available: true, provider: { id: 'a', name: 'Dana Studio', location: 'Tel Aviv', category: 'Hair' } },
+  { id: 'b', businessId: 'b', available: true, provider: { id: 'b', name: 'וטרינטור', location: 'רמת גן', category: 'מרפאה וטרינרית' } },
+  { id: 'c', businessId: 'c', available: true, provider: { id: 'c', name: 'ברק', location: 'רמת גן' } },
+  { id: 'd', businessId: 'd', available: false, provider: { id: 'd', name: 'המרכז המקצועי לייעוץ ושירותים עם צוות המומחים' } },
+] }, play: async ({ canvasElement }) => {
+  const heights = ['a', 'b', 'c', 'd'].map(id => canvasElement.querySelector(`[data-testid="saved-provider-${id}"]`)!.getBoundingClientRect().height);
+  await expect(new Set(heights).size).toBe(1);
+} };
 export const Loading: Story = { args: { providersState: 'loading' } };
 export const Failed: Story = { args: { providersState: 'error' }, play: async ({ canvas, args }) => { await userEvent.click(canvas.getByRole('button', { name: translate('he', 'home.retryProviders') })); await expect(args.onRetryProviders).toHaveBeenCalledOnce(); await expect(canvas.queryByText(translate('he', 'home.empty'))).toBeNull(); } };
 export const Unavailable: Story = { args: { providers: [{ ...providers[0]!, available: false }], removeError: true } };

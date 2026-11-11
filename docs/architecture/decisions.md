@@ -534,7 +534,7 @@ The user asked for three changes to the Account screen: the system administratio
 
 ## Add appointment is its own screen — 2026-11-10
 
-PR #57.
+*(Superseded by "Add appointment and Block time as sheets with pickers", 2026-11-11.)* PR #57.
 
 The user's review of business mode: pressing Add appointment in the footer showed the form above the agenda, with Home marked in the footer, and read as broken. The form had stayed inline in the agenda when its button moved to the footer (2026-11-08), so the tab opened the agenda.
 
@@ -563,7 +563,7 @@ The user's review of the business home on Android: day/week buttons, period navi
 The user found the customer Home cards cramped after the 2026-11-08 compaction, and the archive box unclear as a remove control. PR #59.
 
 - **Choice: customer Home cards get their room back; business mode stays compact.** The upcoming card goes from 8px to 14px vertical padding with a 4px gap between its lines, and provider cards from 12px to 16px padding. `UpcomingAppointment` and `SavedProviderCard` render only on customer screens, so business screens are untouched. *Rejected:* a shared "compact" prop, which no screen would set to the other value.
-- **Choice: the remove control is a muted ✕, not a trash can and not red.** It says "take this off my list"; the confirmation dialog still says it goes to the archive and can come back. *Rejected:* a trash icon, which promises a deletion that does not happen (as on 2026-11-08); a red icon, which would put a warning mark on every provider; a "⋯" menu, one more tap for a rare action with only one item.
+- *(Superseded by "Customer Home cards: the archive box back, three lines each", 2026-11-11.)* **Choice: the remove control is a muted ✕, not a trash can and not red.** It says "take this off my list"; the confirmation dialog still says it goes to the archive and can come back. *Rejected:* a trash icon, which promises a deletion that does not happen (as on 2026-11-08); a red icon, which would put a warning mark on every provider; a "⋯" menu, one more tap for a rare action with only one item.
 - **Choice: the archive link sits at the end of the "My providers" heading**, with the short label "Archive" and the full "Provider archive" as its accessible name. It used to sit under the list, where a long list hid it. It still shows only when the archive has someone in it.
 
 
@@ -587,3 +587,22 @@ The user asked the business home to show what today holds between appointments: 
 - **Choice: colours.** Free time is grey with a dashed border and a plus; a block is amber with its reason, or "Blocked"; a closed day is a darker grey with dark text. The closed card's link is dark, not brand teal, because teal on that grey fails contrast (4.43:1, caught by the Storybook axe check).
 - **Choice: the home reads the day again whenever its clock check fires** (at most every 15 minutes and when an appointment ends), because free time is computed against the server's clock. Between reads a running gap can show a start a few minutes in the past.
 - **Choice: the block form offers four common reasons as one-tap fills** (break, meeting, errands, day off), in the person's language; the field stays free text. *Rejected:* a fixed list stored as codes, which would need a migration and would not cover the reasons people actually write.
+
+## Customer Home cards: the archive box back, three lines each — 2026-11-11
+
+The user saw the ✕ and the roomier provider cards from earlier the same day on Android and asked for the previous look, and for every card to be the same size. PR #60.
+
+- **Choice: `SavedProviderCard` is back to its pre-#59 state: the archive box and 12px padding.** The upcoming-appointment card keeps its #59 spacing; the user did not mention it.
+- **Choice: every provider card is three lines tall: the name on one line, the address and category (or "Not accepting bookings") on up to two,** with an ellipsis past that. A minimum height of those three lines makes short cards match (`CARD_MIN_HEIGHT`); the user proposed three and agreed. *Rejected:* letting each card grow to its text (the look the user rejected), and a fixed height, which would clip text under a larger system font instead of growing the row.
+
+## Add appointment and Block time as sheets with pickers — 2026-11-11
+
+The user reviewed both business forms on Android: Add appointment was a long screen of typed fields (date as YYYY-MM-DD, time as HH:mm, a UTC offset, an "international format" phone and a reason for unverified contact), and Block time took typed dates and times. PR #60.
+
+- **Choice: Add appointment is a bottom sheet over the business home, like Block time (the user's call).** `ManualBookingDialog` in `ProviderAgenda`; the footer and free-time cards open it, and from another screen the footer first returns to the home. The `/provider/[businessId]/add` route is gone, and the footer no longer marks Add appointment. Close after a save lowers the sheet onto the home's "Appointment saved for {date}." notice. *Rejected:* keeping its own screen (PR #57), which the user asked to replace.
+- **Choice: the service, date and time are chosen the way a customer chooses them: the service sheet, the month calendar and the free-time chips** (`useCompactBooking` and `CompactBookingControls`, reading the public availability and calendar endpoints). A time chip brings its staff member and UTC offset, so the offset field is gone. With several staff on the service, a row of staff chips narrows the times; with one, it is hidden. A free-time card's day, time and staff member are chosen as soon as the service is, while that slot is free. *Rejected:* a date and clock picker for any time, which the user did not pick: the server refuses anything outside the free slots anyway, so it would offer times that fail only at confirmation.
+- **Choice: no reason for unverified contact, in the app or on the server (the user's call).** A business that requires verified phone or email can still add a customer by hand, and nothing is asked: entering a customer is itself the exception. The CREATED audit event still says `MANUAL_CONTACT_EXCEPTION` when that policy is on and `MANUAL_ENTRY` when it is off, `exceptionReason` is no longer accepted, the options response lost `requiresException`, and guest rescheduling no longer fails for want of a reason. Migration `20261111120000_manual_without_exception_reason` drops the database trigger's reason check; the column and old reasons stay and still show on agenda cards. *Rejected:* blocking manual booking under that policy, which would leave such a business no way to record a walk-in; and keeping the field required, a five-character box that protects nothing.
+- **Choice: the customer phone is typed the local way** ("050-1234567") and sent in E.164 through `internationalPhone`, as everywhere else in the app. The API still accepts E.164 only.
+- **Choice: dates and times in both forms are picked, never typed** (`DatePickerField`, `TimePickerField` in `DateTimePicker.component.tsx`). A date is a month grid from today on, built from the booking calendar's `bookingMonthCells` and `MonthStep`; a time is a grid of 24 hours and a grid of minutes in steps of `TIME_PICKER_MINUTE_STEP` (5, how appointments and free time line up), in one sheet over the form. Choosing a first day after the last day moves the last day with it. *Rejected:* `@react-native-community/datetimepicker`, the maintained native picker, because it has no web implementation and the browser suite and web app would need a second picker; flagged to the user for a decision if the native look is wanted on phones.
+- **Accepted consequence: a picker sheet opens over the form's sheet.** Two stacked `Modal`s work on web and are standard on native, but were checked only in the browser.
+

@@ -1,5 +1,6 @@
 import { manualBookingSmoke } from './manual-booking-smoke';
 import { showAgendaAt, unfoldAgendaCard } from './agenda-day';
+import { pickTime } from './pickers';
 import { openConfirmation, selectBookingDate, showBookingTime } from './booking-controls.utils';
 import { answerCancellation } from './cancellation-prompt';
 import assert from 'node:assert/strict';
@@ -240,8 +241,8 @@ try {
     await agendaPage.screenshot({ path: path.join(diagnostics, 'provider-agenda-desktop.png'), fullPage: true });
     await agendaPage.getByRole('button', { name: 'Block time / add a break' }).click();
     const blockForm = agendaPage.getByTestId('block-form');
-    assert.equal(await blockForm.getByRole('textbox', { name: 'Date', exact: true }).inputValue(), date, 'the agenda opens the block dialog on its date');
-    await blockForm.getByRole('textbox', { name: 'From', exact: true }).fill('10:00'); await blockForm.getByRole('textbox', { name: 'Until', exact: true }).fill('10:30');
+    assert.match(await blockForm.getByTestId('block-date').getAttribute('aria-label') ?? '', new RegExp(new Intl.DateTimeFormat('en-GB', { dateStyle: 'full', timeZone: 'UTC' }).format(new Date(`${date}T12:00Z`))), 'the agenda opens the block dialog on its date');
+    await pickTime(agendaPage, 'block-from', '10:00'); await pickTime(agendaPage, 'block-to', '10:30');
     await blockForm.getByRole('button', { name: 'Save block' }).click(); await blockForm.waitFor({ state: 'detached' });
     // The break is a card in today's list (decisions.md, "The business day as cards").
     await agendaPage.locator('[data-testid^="agenda-blocked-"]').first().waitFor(); await agendaPage.close();
