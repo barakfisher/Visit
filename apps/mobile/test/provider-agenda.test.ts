@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { scheduleDraft, scheduleProposal } from '../src/lib/WeeklyHours';
 import { emptyAgendaDraft, useAgendaDraft } from '../src/state/ProviderAgenda.store';
-import { AGENDA_RECHECK_MAX_MS, nextAgendaRecheck, splitAgendaToday } from '../src/lib/AgendaToday.utils';
+import { AGENDA_RECHECK_MAX_MS, agendaTimeline, nextAgendaRecheck, splitAgendaToday, type FreeGap } from '../src/lib/AgendaToday.utils';
 
 test('schedule draft fills closed days and copies source rows before edits', () => {
   assert.deepEqual(scheduleDraft(), { weekly: [[], [], [], [], [], [], []] });
@@ -60,4 +60,17 @@ test('the home looks at the clock again when the next appointment ends, and at l
   assert.equal(nextAgendaRecheck(bookings, now), soon);
   assert.equal(nextAgendaRecheck([], now), AGENDA_RECHECK_MAX_MS);
   assert.equal(nextAgendaRecheck([bookings[0]!], now), AGENDA_RECHECK_MAX_MS);
+});
+
+test('today lists blocks, free time and appointments in time order, without blocks already over', () => {
+  const now = Date.parse('2026-11-11T12:00:00Z');
+  const gap = (startsAt: string, endsAt: string): FreeGap => ({ staffId: 's', staffName: 'Barak', startsAt, endsAt, startLocal: '', endLocal: '', bookLocal: '' });
+  const appointment = { id: 'a', startsAt: '2026-11-11T13:00:00Z', endsAt: '2026-11-11T13:30:00Z' };
+  const over = { id: 'over', startsAt: '2026-11-11T09:00:00Z', endsAt: '2026-11-11T10:00:00Z' };
+  const lunch = { id: 'lunch', startsAt: '2026-11-11T13:30:00Z', endsAt: '2026-11-11T14:00:00Z' };
+  const timeline = agendaTimeline([appointment], [gap('2026-11-11T12:00:00Z', '2026-11-11T13:00:00Z'), gap('2026-11-11T14:00:00Z', '2026-11-11T15:00:00Z')], [over, lunch], now);
+  assert.deepEqual(timeline.map(entry => `${entry.kind}@${new Date(entry.at).toISOString().slice(11, 16)}`), ['free@12:00', 'appointment@13:00', 'block@13:30', 'free@14:00']);
+  // A whole-day block starting at midnight leads, ahead of anything at the same minute.
+  const allDay = { id: 'day', startsAt: '2026-11-11T00:00:00Z', endsAt: '2026-11-12T00:00:00Z' };
+  assert.deepEqual(agendaTimeline([], [gap('2026-11-11T00:00:00Z', '2026-11-11T01:00:00Z')], [allDay], now).map(entry => entry.kind), ['block', 'free']);
 });

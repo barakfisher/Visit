@@ -243,7 +243,8 @@ try {
     assert.equal(await blockForm.getByRole('textbox', { name: 'Date', exact: true }).inputValue(), date, 'the agenda opens the block dialog on its date');
     await blockForm.getByRole('textbox', { name: 'From', exact: true }).fill('10:00'); await blockForm.getByRole('textbox', { name: 'Until', exact: true }).fill('10:30');
     await blockForm.getByRole('button', { name: 'Save block' }).click(); await blockForm.waitFor({ state: 'detached' });
-    await agendaPage.getByTestId('agenda-blocks').getByRole('button', { name: 'Remove block' }).waitFor(); await agendaPage.close();
+    // The break is a card in today's list (decisions.md, "The business day as cards").
+    await agendaPage.locator('[data-testid^="agenda-blocked-"]').first().waitFor(); await agendaPage.close();
     console.log('PASS: provider login lands Home; explicit dashboard navigation, agenda verification and manual break.');
     // The catalog lives in business settings (decisions.md, 2026-11-02). Reach it in-app, through the menu and the
     // settings business switcher, so switching keeps the same page and query cache instead of reloading.

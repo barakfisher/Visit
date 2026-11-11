@@ -1,5 +1,5 @@
 import { ActivityIndicator, View } from 'react-native';
-import { assignedServiceNames, type RosterStaff } from '@/src/lib/StaffRoster';
+import { STAFF_CAPACITY_SHOWN, assignedServiceNames, type RosterStaff } from '@/src/lib/StaffRoster';
 import type { StaffRosterState, StaffTab } from '@/src/lib/StaffRoster.hook';
 import { AppText } from './AppText';
 import { ActionButton } from './ActionButton';
@@ -45,7 +45,7 @@ function StaffCard({ row, ...state }: RosterProps & { row: RosterStaff }) {
   return <View testID={`staff-card-${row.id}`} className="gap-3 rounded-control border border-line bg-surface p-4">
     <AppText accessibilityRole="header" className="text-lg font-semibold text-ink">{row.displayName}</AppText>
     {row.active ? null : <AppText className="self-start rounded-full bg-canvas px-3 py-1 text-sm font-semibold text-warning">{t('roster.unavailable')}</AppText>}
-    <AppText>{t('roster.capacityLine', { count: row.parallelCapacity })}</AppText>
+    {STAFF_CAPACITY_SHOWN ? <AppText>{t('roster.capacityLine', { count: row.parallelCapacity })}</AppText> : null}
     <View className="flex-row flex-wrap gap-2">
       {assignedServiceNames(row, locale).map(name => <AppText key={name} className="rounded-full border border-line bg-canvas px-3 py-1 text-sm text-ink">{name}</AppText>)}
     </View>

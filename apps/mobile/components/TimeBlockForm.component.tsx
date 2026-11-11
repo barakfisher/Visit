@@ -9,6 +9,9 @@ import { Control } from './Control';
 import { FormDialog } from './FormDialog';
 import { TextField } from './TextField';
 
+/** One tap fills the reason with a common one in the person's language; the field stays free text (decisions.md, 2026-11-11). */
+const QUICK_REASONS = ['blocks.quick.break', 'blocks.quick.meeting', 'blocks.quick.errands', 'blocks.quick.dayOff'] as const satisfies readonly MessageKey[];
+
 const errorMessages: Record<BlockFormError, MessageKey> = { date: 'blocks.error.date', past: 'blocks.error.past', format: 'blocks.error.format', order: 'blocks.error.order', range: 'blocks.error.range', tooLong: 'blocks.error.tooLong', reason: 'blocks.error.reason' };
 
 function Choice({ label, selected, disabled, onPress, testID }: { label: string; selected: boolean; disabled: boolean; onPress: () => void; testID?: string }) {
@@ -51,6 +54,9 @@ export function TimeBlockForm({ staff, ...state }: TimeBlockDialogState & { staf
       </View>
       <AppText className="text-sm text-body">{t('blocks.daysHint')}</AppText>
     </View>}
+    <View className="flex-row flex-wrap gap-2" accessibilityRole="radiogroup" accessibilityLabel={t('blocks.quick')}>
+      {QUICK_REASONS.map(key => <Choice key={key} testID={`block-reason-${key.slice('blocks.quick.'.length)}`} label={t(key)} selected={form.reason === t(key)} disabled={busy} onPress={() => update({ reason: t(key) })} />)}
+    </View>
     <TextField editable={!busy} label={t('blocks.reason')} value={form.reason} hint={t('blocks.reasonHint')} maxLength={MAX_BLOCK_REASON} onChangeText={reason => update({ reason })} error={errorFor('reason')} />
     {conflicts ? <AppointmentConflicts testID="block-conflicts" title={t('blocks.conflicts', { count: conflicts.total })} total={conflicts.total} conflicts={conflicts.conflicts} when={when} /> : null}
     {failure ? <AppText accessibilityRole="alert" className="text-danger">{t(failure)}</AppText> : null}

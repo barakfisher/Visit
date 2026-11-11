@@ -43,7 +43,8 @@ export const Hebrew: Story = { play: async ({ canvas }) => {
   const card = within(canvas.getByTestId('staff-card-noa'));
   await expect(card.getByText('תספורת')).toBeVisible();
   await expect(card.getByText('צבע')).toBeVisible();
-  await expect(card.getByText('תורים במקביל: 2')).toBeVisible();
+  // Capacity is hidden (STAFF_CAPACITY_SHOWN); Noa's stored 2 is kept but not shown.
+  await expect(card.queryByText(/תורים במקביל/)).toBeNull();
   await expect(within(canvas.getByTestId('staff-card-dan')).getByText('לא זמין לתורים חדשים')).toBeVisible();
 } };
 export const English: Story = { args: { locale: 'en' }, play: async ({ canvas }) => {
@@ -78,19 +79,12 @@ export const LoadFailed: Story = { args: { locale: 'he', data: 'failed' }, play:
 export const AddDialog: Story = { args: { locale: 'en' }, play: async ({ canvas, canvasElement }) => {
   await userEvent.click(canvas.getByRole('button', { name: 'Add staff member' }));
   const dialog = within(within(canvasElement.ownerDocument.body).getByTestId('staff-add-form'));
-  const capacity = dialog.getByLabelText('Simultaneous appointments', { exact: true });
-  await userEvent.clear(capacity);
-  await userEvent.type(capacity, 'a1b');
-  await expect(capacity).toHaveValue('1');
-  await expect(capacity).toHaveStyle({ direction: 'ltr' });
+  await expect(dialog.queryByLabelText('Simultaneous appointments', { exact: true })).toBeNull();
   await expect(dialog.queryByRole('switch')).toBeNull();
   await expect(dialog.queryByRole('checkbox', { name: 'Colour' })).toBeNull();
   await userEvent.click(dialog.getByRole('button', { name: 'Add staff member' }));
   await expect(dialog.getByText('Enter a name of 2 to 120 characters.')).toBeVisible();
   await expect(dialog.getByText('Choose at least one service.')).toBeVisible();
-  await userEvent.clear(capacity);
-  await userEvent.click(dialog.getByRole('button', { name: 'Add staff member' }));
-  await expect(dialog.getByText('Enter a whole number from 1 to 100.')).toBeVisible();
   await userEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
   // The sheet slides away before it unmounts.
   await waitFor(() => expect(within(canvasElement.ownerDocument.body).queryByTestId('staff-add-form')).toBeNull());

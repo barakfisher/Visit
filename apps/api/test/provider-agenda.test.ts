@@ -57,6 +57,29 @@ test('provider agenda and schedule edits preserve private bookings and occupied 
       assert.equal(week.fromDate, '2027-03-14'); assert.equal(week.toDate, '2027-03-20'); assert.equal(week.bookings.length, 4);
       await prisma.booking.deleteMany({ where: { businessId: business.id } });
     });
+    await t.test('one day returns its free gaps around appointments, holds and blocks; a week returns none', async () => {
+      // New York is UTC-4 on 2027-04-07; `create` adds ten minutes of occupied time on each side.
+      await create('free-booked', '2027-04-07T17:00:00Z', '2027-04-07T17:30:00Z');
+      // The hold must still be live at the clock this test reads with.
+      const held = await create('free-held', '2027-04-07T21:00:00Z', '2027-04-07T21:30:00Z', true);
+      await prisma.booking.update({ where: { id: held.id }, data: { holdExpiresAt: new Date('2027-04-08T00:00:00Z') } });
+      const block = await prisma.timeBlock.create({ data: { businessId: business.id, startsAt: new Date('2027-04-07T19:00:00Z'), endsAt: new Date('2027-04-07T20:00:00Z'), reason: 'Lunch' } });
+      try {
+        const day = await readProviderAgenda(context, '2027-04-07', 1, new Date('2027-04-07T10:00:00Z'));
+        assert.equal(day.day?.closed, false);
+        assert.deepEqual(day.day?.free.map(gap => [gap.staffId, gap.startLocal, gap.endLocal, gap.bookLocal]), [
+          [staff.id, '08:00', '12:50', '08:00'], [staff.id, '13:40', '15:00', '13:40'], [staff.id, '16:00', '16:50', '16:00'],
+          // 17:40–18:00 is shorter than the 30-minute service, so it is not offered.
+        ]);
+        // Later in the day, time already past is not free (16:05 local).
+        const later = await readProviderAgenda(context, '2027-04-07', 1, new Date('2027-04-07T20:05:00Z'));
+        assert.deepEqual(later.day?.free.map(gap => gap.startLocal), ['16:05']);
+        assert.equal((await readProviderAgenda(context, '2027-04-07', 7)).day, null);
+      } finally {
+        await prisma.timeBlock.delete({ where: { id: block.id } });
+        await prisma.booking.deleteMany({ where: { businessId: business.id } });
+      }
+    });
     const booked = await create('buffer', '2027-03-15T13:00:00Z', '2027-03-15T13:30:00Z');
     const held = await create('held', '2027-03-15T16:00:00Z', '2027-03-15T16:30:00Z', true);
     await t.test('preview is read only and includes buffers and valid holds', async () => {
