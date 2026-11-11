@@ -12,6 +12,7 @@ PR #63, built on `main` after PR #62. Decisions: `decisions.md`, "Block time sim
 ## Lessons
 
 - **The swipe was checked only on web, with synthetic mouse events in Storybook.** A short, slow drag springs back and a long one calls `onClose`. Native iOS and Android are not checked. On native, a `ScrollView` may claim the touch before the capture handler, so a drag that starts inside a long form could scroll instead of closing. Try it on a phone before relying on the content drag. The handle is the safe target.
+- **`accessibilityRole="group"` crashes an Android screen**, and `test:foundation` (`accessibilityRole only holds values Android accepts`) catches it; CI did, after only the time-block tests were run locally. Run the whole `test:foundation` before pushing.
 - **Synthetic drags at 20 ms steps read as a flick** (over 0.8 pt/ms) and close the sheet at 60 px. Use slower steps in any automated swipe test.
 - **Reading a sheet's position from the DOM in a hidden browser pane is stale.** Reanimated runs on `requestAnimationFrame`, which pauses there. A screenshot forces a frame.
 - **`react-hooks/refs` forbids refs read inside a `PanResponder` built during render.** Gesture state that needs no render lives in Reanimated shared values (`drag`, `scrollTop`) instead.

@@ -61,7 +61,8 @@ export function TimeBlockForm({ staff, ...state }: TimeBlockDialogState & { staf
       </View>
       <AppText className="text-sm text-body">{t('blocks.daysHint')}</AppText>
     </View>}
-    <View className="gap-2" accessibilityRole="group" accessibilityLabel={t('blocks.reason')}>
+    {/* No group role: Android accepts no such value and crashes the screen on one; the heading above names the boxes. */}
+    <View className="gap-2">
       <AppText className="font-medium text-ink">{t('blocks.reason')}</AppText>
       <View className="flex-row flex-wrap gap-2">
         {BLOCK_REASONS.map(reason => <ReasonChoice key={reason} testID={`block-reason-${reason}`} label={t(`blocks.reason.${reason}`)} selected={form.reasons.includes(reason)} disabled={busy} onPress={() => update({ reasons: toggleBlockReason(form.reasons, reason) })} />)}
