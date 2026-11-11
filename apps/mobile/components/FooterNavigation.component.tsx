@@ -7,7 +7,7 @@ import { Control } from './Control';
 import { HomeIcon, PlusIcon, TeamIcon } from './NavigationIcons.component';
 import type { FooterIcon, FooterNavigationProps } from '@/src/types/FooterNavigation.types';
 
-const icons: Record<FooterIcon, ComponentType<{ color: string }>> = { home: HomeIcon, appointments: CalendarIcon, add: PlusIcon, team: TeamIcon };
+const icons: Record<FooterIcon, ComponentType<{ color: string }>> = { home: HomeIcon, appointments: CalendarIcon, calendar: CalendarIcon, add: PlusIcon, team: TeamIcon };
 
 /** The current mode's main destinations, one tap away from every screen (decisions.md, 2026-11-08). */
 export function FooterNavigation({ tabs }: FooterNavigationProps) {

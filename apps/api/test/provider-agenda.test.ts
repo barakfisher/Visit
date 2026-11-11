@@ -55,6 +55,9 @@ test('provider agenda and schedule edits preserve private bookings and occupied 
       assert.deepEqual(Object.keys(day.bookings[0]!).sort(), ['id', 'revision', 'status', 'canMarkNoShow', 'startsAt', 'endsAt', 'customer', 'service', 'staff', 'source', 'manualReason'].sort());
       const week = await readProviderAgenda(context, '2027-03-17', 7);
       assert.equal(week.fromDate, '2027-03-14'); assert.equal(week.toDate, '2027-03-20'); assert.equal(week.bookings.length, 4);
+      // The calendar's grid reads each day's opening hours from the same response, in local time (DST day included).
+      assert.deepEqual(week.hours.map(day => day.date), ['2027-03-14', '2027-03-15', '2027-03-16', '2027-03-17', '2027-03-18', '2027-03-19', '2027-03-20']);
+      for (const day of week.hours) assert.deepEqual(day.windows, hours().weekly[0]!.intervals);
       await prisma.booking.deleteMany({ where: { businessId: business.id } });
     });
     await t.test('one day returns its free gaps around appointments, holds and blocks; a week returns none', async () => {

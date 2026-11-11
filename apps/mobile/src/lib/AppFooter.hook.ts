@@ -22,12 +22,15 @@ export function useAppFooter(): FooterTab[] | null {
   // Back to the agenda in the stack rather than piling up another one; when none is there this opens it.
   const openAgenda = () => router.dismissTo({ pathname: '/provider/dashboard', params: { businessId: business } });
   // The sheet rises over the business home, so another screen first goes back there (decisions.md, 2026-11-11). A new form starts today.
+  // The calendar has the sheet too, so Add appointment opens over it there.
   const openAdd = (id: string) => {
     openManualBooking(id);
-    if (pathname !== '/provider/dashboard') openAgenda();
+    if (pathname !== '/provider/dashboard' && pathname !== '/provider/calendar') openAgenda();
   };
   return [
     { key: 'home', label: t('nav.home'), active: pathname === '/provider/dashboard', onPress: openAgenda },
+    // The calendar opens on this week; from another week, the tab brings it back (decisions.md, "The calendar screen" — 2026-11-11).
+    { key: 'calendar', label: t('nav.calendar'), active: pathname === '/provider/calendar', onPress: () => router.navigate({ pathname: '/provider/calendar', params: { businessId: business } }) },
     // Until setup is done the agenda redirects to settings, so there is nowhere to add an appointment.
     ...(readiness.data && !needsSetupGuide(readiness.data) ? [{ key: 'add' as const, label: t('manual.open'), active: false, onPress: () => openAdd(business) }] : []),
     { key: 'team', label: t('nav.teamAccess'), active: pathname === `/provider/team/${business}`, onPress: () => router.navigate({ pathname: '/provider/team/[businessId]', params: { businessId: business } }) },
