@@ -5,8 +5,8 @@ export const blocksEn = {
   'blocks.who': 'Who is unavailable', 'blocks.wholeBusiness': 'Whole business', 'blocks.kind': 'What to block', 'blocks.kind.hours': 'Hours on one day', 'blocks.kind.days': 'Whole days',
   'blocks.date': 'Date', 'blocks.from': 'From', 'blocks.to': 'Until', 'blocks.fromDate': 'First day', 'blocks.toDate': 'Last day',
   'blocks.timeHint': 'In the business\'s local time.', 'blocks.daysHint': 'Both days are included.',
-  'blocks.reason': 'Reason (optional)', 'blocks.reasonHint': 'For example: holiday, training, day off. Customers do not see it.',
-  'blocks.quick': 'Common reasons', 'blocks.quick.break': 'Break', 'blocks.quick.meeting': 'Meeting', 'blocks.quick.errands': 'Errands', 'blocks.quick.dayOff': 'Day off',
+  'blocks.reason': 'Reason (optional)', 'blocks.reasonHint': 'Choose any that apply. Customers do not see it.',
+  'blocks.reason.break': 'Break', 'blocks.reason.meeting': 'Meeting', 'blocks.reason.errands': 'Errands', 'blocks.reason.vacation': 'Vacation', 'blocks.reason.other': 'Other',
   'blocks.save': 'Save block', 'blocks.cancel': 'Cancel', 'blocks.allDay': 'All day',
   'blocks.remove': 'Remove block', 'blocks.removeHelp': 'Remove this block? Customers will be able to book this time again.', 'blocks.confirmRemove': 'Confirm', 'blocks.back': 'Cancel',
   'blocks.saved': 'Time blocked.', 'blocks.removed': 'Block removed.',
@@ -17,7 +17,7 @@ export const blocksEn = {
   'blocks.reservation': 'Reservation in progress', 'blocks.more': 'And {count} more.',
   'blocks.error.date': 'Choose a date.', 'blocks.error.past': 'This date has already passed.', 'blocks.error.format': 'Choose a time.',
   'blocks.error.order': 'The end must be after the start.', 'blocks.error.range': 'The last day cannot come before the first day.',
-  'blocks.error.tooLong': 'Block at most {max} days at a time.', 'blocks.error.reason': 'Keep the reason to {max} characters.',
+  'blocks.error.tooLong': 'Block at most {max} days at a time.',
 } as const;
 export const blocksHe: Record<keyof typeof blocksEn, string> = {
   'blocks.title': 'זמנים חסומים', 'blocks.hint': 'חגים, ימי חופש ושעות שבהן העסק או איש צוות אחד לא זמינים. לקוחות לא יכולים לקבוע תור בזמן חסום.',
@@ -26,8 +26,8 @@ export const blocksHe: Record<keyof typeof blocksEn, string> = {
   'blocks.who': 'מי לא זמין', 'blocks.wholeBusiness': 'כל העסק', 'blocks.kind': 'מה לחסום', 'blocks.kind.hours': 'שעות ביום אחד', 'blocks.kind.days': 'ימים שלמים',
   'blocks.date': 'תאריך', 'blocks.from': 'משעה', 'blocks.to': 'עד שעה', 'blocks.fromDate': 'יום ראשון לחסימה', 'blocks.toDate': 'יום אחרון לחסימה',
   'blocks.timeHint': 'לפי השעון המקומי של העסק.', 'blocks.daysHint': 'שני הימים כלולים.',
-  'blocks.reason': 'סיבה (לא חובה)', 'blocks.reasonHint': 'למשל: חג, השתלמות, יום חופש. הלקוחות לא רואים אותה.',
-  'blocks.quick': 'סיבות נפוצות', 'blocks.quick.break': 'הפסקה', 'blocks.quick.meeting': 'פגישה', 'blocks.quick.errands': 'סידורים', 'blocks.quick.dayOff': 'יום חופש',
+  'blocks.reason': 'סיבה (לא חובה)', 'blocks.reasonHint': 'אפשר לבחור כמה. הלקוחות לא רואים אותה.',
+  'blocks.reason.break': 'הפסקה', 'blocks.reason.meeting': 'פגישה', 'blocks.reason.errands': 'סידורים', 'blocks.reason.vacation': 'חופש', 'blocks.reason.other': 'אחר',
   'blocks.save': 'שמירת החסימה', 'blocks.cancel': 'ביטול', 'blocks.allDay': 'כל היום',
   'blocks.remove': 'הסרת החסימה', 'blocks.removeHelp': 'להסיר את החסימה? לקוחות יוכלו שוב לקבוע תור בזמן הזה.', 'blocks.confirmRemove': 'אישור', 'blocks.back': 'ביטול',
   'blocks.saved': 'הזמן נחסם.', 'blocks.removed': 'החסימה הוסרה.',
@@ -38,5 +38,5 @@ export const blocksHe: Record<keyof typeof blocksEn, string> = {
   'blocks.reservation': 'שריון בתהליך', 'blocks.more': 'ועוד {count}.',
   'blocks.error.date': 'בחרו תאריך.', 'blocks.error.past': 'התאריך הזה כבר עבר.', 'blocks.error.format': 'בחרו שעה.',
   'blocks.error.order': 'שעת הסיום צריכה להיות אחרי שעת ההתחלה.', 'blocks.error.range': 'היום האחרון לא יכול להיות לפני היום הראשון.',
-  'blocks.error.tooLong': 'אפשר לחסום עד {max} ימים בכל פעם.', 'blocks.error.reason': 'הסיבה יכולה להכיל עד {max} תווים.',
+  'blocks.error.tooLong': 'אפשר לחסום עד {max} ימים בכל פעם.',
 };

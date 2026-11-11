@@ -1,19 +1,15 @@
 import { View } from 'react-native';
 import type { MessageKey } from '@/src/i18n/messages';
-import { MAX_BLOCK_DAYS, MAX_BLOCK_REASON, type BlockFormError, type BlockKind } from '@/src/lib/TimeBlocks';
+import { BLOCK_REASONS, MAX_BLOCK_DAYS, toggleBlockReason, type BlockFormError, type BlockKind } from '@/src/lib/TimeBlocks';
 import type { TimeBlockDialogState } from '@/src/lib/TimeBlocks.hook';
 import { AppText } from './AppText';
 import { ActionButton } from './ActionButton';
 import { AppointmentConflicts } from './AppointmentConflicts.component';
 import { Control } from './Control';
 import { FormDialog } from './FormDialog';
-import { TextField } from './TextField';
 import { DatePickerField, TimePickerField } from './DateTimePicker.component';
 
-/** One tap fills the reason with a common one in the person's language; the field stays free text (decisions.md, 2026-11-11). */
-const QUICK_REASONS = ['blocks.quick.break', 'blocks.quick.meeting', 'blocks.quick.errands', 'blocks.quick.dayOff'] as const satisfies readonly MessageKey[];
-
-const errorMessages: Record<BlockFormError, MessageKey> = { date: 'blocks.error.date', past: 'blocks.error.past', format: 'blocks.error.format', order: 'blocks.error.order', range: 'blocks.error.range', tooLong: 'blocks.error.tooLong', reason: 'blocks.error.reason' };
+const errorMessages: Record<BlockFormError, MessageKey> = { date: 'blocks.error.date', past: 'blocks.error.past', format: 'blocks.error.format', order: 'blocks.error.order', range: 'blocks.error.range', tooLong: 'blocks.error.tooLong' };
 
 function Choice({ label, selected, disabled, onPress, testID }: { label: string; selected: boolean; disabled: boolean; onPress: () => void; testID?: string }) {
   return <Control testID={testID} accessibilityRole="radio" aria-checked={selected} accessibilityLabel={label} accessibilityState={{ checked: selected, disabled }} disabled={disabled} onPress={onPress}
@@ -22,19 +18,28 @@ function Choice({ label, selected, disabled, onPress, testID }: { label: string;
   </Control>;
 }
 
-/** Who, what and when to block, with an optional reason. Saving here is the only save. */
+/** A reason that can be chosen along with others, drawn like a staff member's services. */
+function ReasonChoice({ label, selected, disabled, onPress, testID }: { label: string; selected: boolean; disabled: boolean; onPress: () => void; testID: string }) {
+  return <Control testID={testID} accessibilityRole="checkbox" aria-checked={selected} accessibilityLabel={label} accessibilityState={{ checked: selected, disabled }} disabled={disabled} onPress={onPress}
+    className={`min-h-touch justify-center rounded-control border px-4 py-2 ${selected ? 'border-brand bg-brand-soft' : 'border-line'}`}>
+    <AppText className={selected ? 'font-semibold text-brand' : 'text-ink'}>{selected ? '✓ ' : ''}{label}</AppText>
+  </Control>;
+}
+
+/** Who, what and when to block, with optional reasons. Saving here is the only save. */
 export function TimeBlockForm({ staff, ...state }: TimeBlockDialogState & { staff: readonly { id: string; displayName: string }[] }) {
   const { t, form, errors, conflicts, failure, busy, update, save, close, when, today } = state;
-  const errorFor = (key: keyof typeof errors) => errors[key] ? t(errorMessages[errors[key]!], { max: errors[key] === 'reason' ? MAX_BLOCK_REASON : MAX_BLOCK_DAYS }) : undefined;
+  const errorFor = (key: keyof typeof errors) => errors[key] ? t(errorMessages[errors[key]!], { max: MAX_BLOCK_DAYS }) : undefined;
   const kinds: BlockKind[] = ['hours', 'days'];
+  // With one staff member, "the whole business" and that person are the same block, so there is nothing to ask.
   return <View testID="block-form" className="gap-4">
-    <View className="gap-2" accessibilityRole="radiogroup" accessibilityLabel={t('blocks.who')}>
+    {staff.length > 1 ? <View className="gap-2" accessibilityRole="radiogroup" accessibilityLabel={t('blocks.who')}>
       <AppText className="font-medium text-ink">{t('blocks.who')}</AppText>
       <View className="flex-row flex-wrap gap-2">
         <Choice testID="block-who-business" label={t('blocks.wholeBusiness')} selected={!form.staffId} disabled={busy} onPress={() => update({ staffId: '' })} />
         {staff.map(row => <Choice key={row.id} testID={`block-who-${row.id}`} label={row.displayName} selected={form.staffId === row.id} disabled={busy} onPress={() => update({ staffId: row.id })} />)}
       </View>
-    </View>
+    </View> : null}
     <View className="gap-2" accessibilityRole="radiogroup" accessibilityLabel={t('blocks.kind')}>
       <AppText className="font-medium text-ink">{t('blocks.kind')}</AppText>
       <View className="flex-row flex-wrap gap-2">
@@ -56,10 +61,13 @@ export function TimeBlockForm({ staff, ...state }: TimeBlockDialogState & { staf
       </View>
       <AppText className="text-sm text-body">{t('blocks.daysHint')}</AppText>
     </View>}
-    <View className="flex-row flex-wrap gap-2" accessibilityRole="radiogroup" accessibilityLabel={t('blocks.quick')}>
-      {QUICK_REASONS.map(key => <Choice key={key} testID={`block-reason-${key.slice('blocks.quick.'.length)}`} label={t(key)} selected={form.reason === t(key)} disabled={busy} onPress={() => update({ reason: t(key) })} />)}
+    <View className="gap-2" accessibilityRole="group" accessibilityLabel={t('blocks.reason')}>
+      <AppText className="font-medium text-ink">{t('blocks.reason')}</AppText>
+      <View className="flex-row flex-wrap gap-2">
+        {BLOCK_REASONS.map(reason => <ReasonChoice key={reason} testID={`block-reason-${reason}`} label={t(`blocks.reason.${reason}`)} selected={form.reasons.includes(reason)} disabled={busy} onPress={() => update({ reasons: toggleBlockReason(form.reasons, reason) })} />)}
+      </View>
+      <AppText className="text-sm text-body">{t('blocks.reasonHint')}</AppText>
     </View>
-    <TextField editable={!busy} label={t('blocks.reason')} value={form.reason} hint={t('blocks.reasonHint')} maxLength={MAX_BLOCK_REASON} onChangeText={reason => update({ reason })} error={errorFor('reason')} />
     {conflicts ? <AppointmentConflicts testID="block-conflicts" title={t('blocks.conflicts', { count: conflicts.total })} total={conflicts.total} conflicts={conflicts.conflicts} when={when} /> : null}
     {failure ? <AppText accessibilityRole="alert" className="text-danger">{t(failure)}</AppText> : null}
     <View className="flex-row gap-3">

@@ -239,7 +239,7 @@ try {
     await unfoldAgendaCard(agendaPage, agendaPage.getByTestId(`agenda-booking-${hold.holdId}`));
     await agendaPage.getByRole('button', { name: 'Call', exact: true }).waitFor();
     await agendaPage.screenshot({ path: path.join(diagnostics, 'provider-agenda-desktop.png'), fullPage: true });
-    await agendaPage.getByRole('button', { name: 'Block time / add a break' }).click();
+    await agendaPage.getByRole('button', { name: 'Time off' }).click();
     const blockForm = agendaPage.getByTestId('block-form');
     assert.match(await blockForm.getByTestId('block-date').getAttribute('aria-label') ?? '', new RegExp(new Intl.DateTimeFormat('en-GB', { dateStyle: 'full', timeZone: 'UTC' }).format(new Date(`${date}T12:00Z`))), 'the agenda opens the block dialog on its date');
     await pickTime(agendaPage, 'block-from', '10:00'); await pickTime(agendaPage, 'block-to', '10:30');

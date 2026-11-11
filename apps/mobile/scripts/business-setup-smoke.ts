@@ -128,23 +128,24 @@ export async function configureBusinessSmoke({ page, context, webUrl, apiUrl, bu
   assert.equal(new URL(page.url()).pathname, `/provider/${businessId}/hours`, 'business hours save in place');
   await page.screenshot({ path: 'test-results/business-hours-en-mobile.png', fullPage: true });
   // Downstream journeys need exactly one date the only staff member does not work: a whole-day block with a reason.
+  // With one staff member the form does not ask who: the whole business and that person are the same block.
   const closedDate = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10), blocksUrl = `${apiUrl}/api/provider/block-time`;
   await page.getByTestId('time-blocks-empty').filter({ visible: true }).waitFor();
   await page.getByTestId('block-add').filter({ visible: true }).click();
   const blockForm = page.getByTestId('block-form'); await page.getByRole('dialog').waitFor();
-  await blockForm.getByRole('radio', { name: SETUP_STAFF_NAME, exact: true }).click();
+  assert.equal(await blockForm.getByRole('radiogroup', { name: 'Who is unavailable', exact: true }).count(), 0);
   await blockForm.getByRole('radio', { name: 'Whole days', exact: true }).click();
   // A first day after the last one moves the last day with it, so the range cannot be backwards.
   await pickDate(page, 'block-from-date', closedDate);
   assert.match(await blockForm.getByTestId('block-to-date').innerText(), new RegExp(String(Number(closedDate.slice(8)))));
-  await blockForm.getByRole('textbox', { name: 'Reason (optional)', exact: true }).fill('Day off');
+  await blockForm.getByRole('checkbox', { name: 'Vacation', exact: true }).click();
   await page.screenshot({ path: 'test-results/business-block-dialog-en-mobile.png' });
   const blocked = page.waitForResponse(r => r.url() === blocksUrl && r.request().method() === 'POST');
   await blockForm.getByRole('button', { name: 'Save block', exact: true }).click(); assert.equal((await blocked).status(), 201);
   await blockForm.waitFor({ state: 'detached' }); await page.getByRole('status').filter({ hasText: 'Time blocked.' }).filter({ visible: true }).waitFor();
-  await page.getByText(`${SETUP_STAFF_NAME} · Day off`, { exact: true }).filter({ visible: true }).waitFor();
+  await page.getByText('Whole business · Vacation', { exact: true }).filter({ visible: true }).waitFor();
   const stored = await (await context.request.get(`${blocksUrl}?businessId=${businessId}`)).json() as { blocks: { staff: { id: string } | null; allDay: boolean; fromDate: string; toDate: string }[] };
-  assert.deepEqual(stored.blocks.map(row => [row.staff?.id, row.allDay, row.fromDate, row.toDate]), [[staffId, true, closedDate, closedDate]], 'one staff day off, as booking journeys expect');
+  assert.deepEqual(stored.blocks.map(row => [row.staff?.id, row.allDay, row.fromDate, row.toDate]), [[undefined, true, closedDate, closedDate]], 'one day off for the only staff member, as booking journeys expect');
   await page.screenshot({ path: 'test-results/business-blocks-en-mobile.png', fullPage: true });
   await backToHub(page, businessId); await openFromHub(page, 'policy');
   await page.getByRole('textbox', { name: 'Latest booking before start (minutes)', exact: true }).fill('0');
