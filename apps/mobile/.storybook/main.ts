@@ -19,7 +19,7 @@ const config: StorybookConfig = {
       optimizeDeps: { exclude: ['react-native-safe-area-context', 'react-native-gesture-handler'], include: ['react/jsx-runtime', 'nativewind/jsx-runtime', 'nativewind/jsx-dev-runtime', 'react-native-css-interop/dist/runtime/web/api'] },
       // Isolated stories never inherit production credentials or the development API.
       // Reanimated reads __DEV__ and global, which Metro defines and Vite does not.
-      define: { 'process.env.EXPO_PUBLIC_API_URL': JSON.stringify('https://storybook.invalid'), __DEV__: 'true', global: 'globalThis' },
+      define: { 'process.env.EXPO_PUBLIC_API_URL': JSON.stringify('https://storybook.invalid'), 'process.env.EXPO_PUBLIC_WEB_API_URL': JSON.stringify('https://storybook.invalid'), __DEV__: 'true', global: 'globalThis' },
       resolve: { extensions: ['.web.tsx', '.web.ts', '.web.js', '.tsx', '.ts', '.jsx', '.js', '.json'], alias: [{ find: /^react-native$/, replacement: 'react-native-web' }, { find: '@', replacement: fileURLToPath(new URL('..', import.meta.url)) }] },
     });
   },
