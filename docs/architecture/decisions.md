@@ -659,6 +659,13 @@ PR #67. The booking-guard subtest "reschedule can reuse capacity from an expired
 - **Choice: the booking-attempt rejection step runs at Read Committed (`withAfterLockTransaction`).** The security review found the one race Serializable had caught: a hold of the same key inserted while the rejection waited on the attempt row. The hold guard trigger only locks that row `FOR SHARE`, so at Repeatable Read the rejection continued on its old snapshot, missed the hold and left it unconfirmable, occupying the slot for its five minutes (`booking-attempt-rejection.test.ts` reproduced it 3/3). Read Committed reads the committed hold after the wait and expires it. *Rejected:* making the trigger update the attempt row (as the capacity trigger updates Staff): a new migration, and the confirm path's `FOR SHARE` on the same row would then upgrade to an exclusive lock, which can deadlock two confirms.
 - **Accepted consequence:** isolation no longer catches write skew. A future invariant spanning two booking writes that share no row needs a lock, a constraint or a trigger of its own.
 
+## One Metro for the phone and the browser — 2026-11-11
+
+PR #65. Sign-in in the computer's browser failed while the phone worked. Measured: `apps/mobile/.env` set `EXPO_PUBLIC_API_URL` to the computer's Tailscale address so the phone could reach the API, and Expo's web build used it too. Sign-in succeeded on the server (identity and session written), but the session cookie was set on the Tailscale host with `SameSite=Lax`, so the page on `localhost:8081` never sent it back, the profile read failed and the app reported a connection error.
+
+- **Choice: the web build reads `EXPO_PUBLIC_WEB_API_URL` first and falls back to `EXPO_PUBLIC_API_URL`; native builds read only the latter** (`apiAddress` in `src/lib/apiAddress.ts`; the user's call: "make both work"). One Metro serves the phone on Tailscale and the browser on localhost. Unset, everything behaves as before. *Rejected:* two Metro servers (the earlier advice in the 2026-11-08 handoff), which the user did not want to keep running; choosing by the page's hostname at runtime, which would hard-code a port and guess at configuration; letting the API accept several web origins, which would still leave the cookie on the wrong host.
+- **The browser suite, CI and Storybook set both variables,** so a developer's `.env` with a browser address cannot point the suite at the development API.
+
 ## The calendar screen — 2026-11-11
 
 PR #66 (slice 1 of 3). The user asked for a Google-Calendar-style business calendar in the app's own design, reached from the footer. Agreed slices: (1) week and day grid, (2) an appointment details screen, (3) a "schedule" list view. This entry covers slice 1.

@@ -10,7 +10,7 @@ From the repository root:
 - `npm run dev:mobile` starts Metro; `npm run web --workspace @visit/mobile` opens web.
 - `npm run ios --workspace @visit/mobile` / `npm run android --workspace @visit/mobile` open an available simulator/emulator or device. Custom native modules require a development build. No native project directories are checked in; use Expo configuration/CNG.
 - `npm run export:web --workspace @visit/mobile` builds web. From `apps/mobile`, `NODE_PATH=./node_modules npx expo export --platform ios --platform android --output-dir dist-native` checks both native bundles. Bundle export is not a device boot check.
-- For physical devices set `EXPO_PUBLIC_API_URL` to the host's reachable LAN address; Android emulator host access normally uses `10.0.2.2`. Client configuration is public. Google/Twilio credentials remain on the API.
+- For physical devices set `EXPO_PUBLIC_API_URL` to the host's reachable LAN address; Android emulator host access normally uses `10.0.2.2`. To keep the browser on this computer working from the same Metro, also set `EXPO_PUBLIC_WEB_API_URL` (web only; falls back to `EXPO_PUBLIC_API_URL`). Client configuration is public. Google/Twilio credentials remain on the API.
 
 ## Workspace and request boundaries
 
