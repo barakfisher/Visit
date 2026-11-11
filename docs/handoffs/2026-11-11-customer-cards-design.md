@@ -1,6 +1,6 @@
 # Visit handoff — 2026-11-11, saved customers and invite (design only)
 
-Built on `main` after PR #59. Nothing is implemented; this PR records an agreed design.
+Built on `main` after PR #59. PR #61. Nothing is implemented; it records an agreed design.
 
 ## Where things stand
 
