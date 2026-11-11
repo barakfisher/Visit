@@ -1,6 +1,6 @@
 # Visit handoff — 2026-11-10, the business home shows today
 
-Built on `main` after PR #57. Read `2026-11-10-add-appointment-screen.md` for #57's state; its lessons hold, except where this changes where Close lands.
+PR #58, built on `main` after PR #57. Read `2026-11-10-add-appointment-screen.md` for #57's state; its lessons hold, except where this changes where Close lands.
 
 ## Authorization
 

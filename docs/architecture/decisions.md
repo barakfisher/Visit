@@ -545,7 +545,7 @@ The user's review of business mode: pressing Add appointment in the footer showe
 
 ## The business home shows today — 2026-11-10
 
-PR pending.
+PR #58.
 
 The user's review of the business home on Android: day/week buttons, period navigation and a date field above two large summary boxes, a "concurrent capacity" line and a "Daily agenda" heading pushed the appointments below the fold, and each card carried every detail and button at once.
 
