@@ -46,7 +46,7 @@ A database trigger snapshots service name, duration, integer price and currency
 when each booking is first inserted. It locks the service row FOR SHARE and rejects
 all later snapshot/service-ID/business-ID changes, including raw database writes.
 Snapshot values from a caller are ignored at insertion. The booking API also
-rechecks the selected service under the same lock inside its serializable booking
+rechecks the selected service under the same lock inside its booking
 transaction; a concurrent edit/archive results in a conflict rather than silently
 changing the selected duration or price.
 

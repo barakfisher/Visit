@@ -12,7 +12,7 @@ import { readProviderAgenda } from '../src/repositories/ProviderAgenda.service.j
 import { previewSchedule } from '../src/repositories/ScheduleImpact.service.js';
 import { saveBusinessAvailability, saveStaffAvailability } from '../src/repositories/provider-settings.js';
 import { registerBookingRoutes } from '../src/routes/bookings.js';
-import { isTransactionConflict } from '../src/scheduling/booking-transaction.js';
+import { BOOKING_ISOLATION_LEVEL, isTransactionConflict } from '../src/scheduling/booking-transaction.js';
 import { releaseHold } from '../src/scheduling/reservations.js';
 import { registerProviderRoutes } from '../src/routes/providers.js';
 import { registerScreenFlows } from '../src/routes/screen-flows.js';
@@ -138,7 +138,7 @@ test('provider agenda and schedule edits preserve private bookings and occupied 
       assert.ok(code('SCHEDULE_CHANGED')(failure.reason));
       assert.equal(await prisma.booking.count({ where: { businessId: business.id } }), 2);
     });
-    await t.test('a serializable booking snapshot taken before an edit cannot lock and continue stale', async () => {
+    await t.test('a booking snapshot taken before an edit cannot lock and continue stale', async () => {
       let signalSnapshot: (() => void) | undefined;
       let allowLock: (() => void) | undefined;
       const snapshotReady = new Promise<void>(resolve => { signalSnapshot = resolve; });
@@ -148,7 +148,7 @@ test('provider agenda and schedule edits preserve private bookings and occupied 
         signalSnapshot?.();
         await editCommitted;
         await tx.$queryRaw`SELECT id FROM "Business" WHERE id = ${business.id} FOR SHARE`;
-      }, { isolationLevel: 'Serializable', timeout: 15000 });
+      }, { isolationLevel: BOOKING_ISOLATION_LEVEL, timeout: 15000 });
       // Observe the rejection immediately so a serialization error is never unhandled.
       const rejected = assert.rejects(staleReader, isTransactionConflict);
       await snapshotReady;

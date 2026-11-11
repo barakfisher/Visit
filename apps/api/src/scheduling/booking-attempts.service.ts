@@ -4,7 +4,7 @@ import { env } from '../env.js';
 import { prisma } from '../db/client.js';
 import { AppError, conflict, notFound } from '../http/errors.js';
 import { releaseHold } from './reservations.js';
-import { withBookingTransaction } from './booking-transaction.js';
+import { withAfterLockTransaction } from './booking-transaction.js';
 import type { FinalBookingInput, BookingAttemptResult } from './booking-attempts.types.js';
 // Orchestration ownership has its own bounded pool; it never occupies a Prisma worker connection.
 const ownership = new Pool({ connectionString: env.DATABASE_URL, max: 4, connectionTimeoutMillis: 1500, idleTimeoutMillis: 10000, allowExitOnIdle: true });
@@ -41,7 +41,9 @@ export async function runBookingAttempt(input: FinalBookingInput, customerId: st
       return result;
     } catch (error) {
       if (!lost && error instanceof AppError && error.statusCode >= 400 && error.statusCode < 500 && ![408, 429].includes(error.statusCode)) {
-        const final = await withBookingTransaction(async tx => {
+        // The hold guard trigger only shares this attempt row, so waiting on it refuses no snapshot. Read
+        // Committed reads a hold of this key that committed during the wait, and expires it with the rejection.
+        const final = await withAfterLockTransaction(async tx => {
           await tx.$queryRaw`SELECT id FROM "Business" WHERE id = ${businessId} FOR SHARE`;
           await tx.$queryRaw`SELECT id FROM "BookingAttempt" WHERE id = ${attempt.id} FOR UPDATE`;
           const committed = await tx.booking.findFirst({ where: { businessId, customerId, idempotencyKey: key, status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW'] } }, select: { id: true, status: true } });

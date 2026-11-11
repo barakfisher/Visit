@@ -40,7 +40,7 @@ Services use integer minor currency units internally. Daily expected revenue is 
 
 ## Reservation and break safety
 
-A slot click creates a HELD database record and an owned Redis reservation lasting five minutes. Redis atomically reserves whole-minute buckets covering the service plus buffers, respecting staff capacity. PostgreSQL serializable transactions remain authoritative across old and new clients. Redis outages fail the new reservation endpoint closed. Confirmation validates owner, Redis reservation and database expiry before changing status to CONFIRMED. Confirmation retries are idempotent.
+A slot click creates a HELD database record and an owned Redis reservation lasting five minutes. Redis atomically reserves whole-minute buckets covering the service plus buffers, respecting staff capacity. PostgreSQL booking transactions remain authoritative across old and new clients. Redis outages fail the new reservation endpoint closed. Confirmation validates owner, Redis reservation and database expiry before changing status to CONFIRMED. Confirmation retries are idempotent.
 
 Selecting a different date, service or slot releases the previous hold. Late responses and screen unmounts release obsolete reservations. Both Redis and the database expiry rules recover holds after crashes or closed browsers. Expired holds cannot confirm. Other clients see availability refresh every two seconds; a conflict response immediately disables the contested time and shows an accessible alert in the sticky footer.
 
