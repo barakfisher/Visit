@@ -4,11 +4,11 @@ PR #67, built on `main` after PR #64. Decisions: `decisions.md`, "Booking transa
 
 ## Where things stand
 
-- **`withBookingTransaction` runs at Repeatable Read** (`BOOKING_ISOLATION_LEVEL` in `scheduling/booking-transaction.ts`). It is the only place booking writes choose an isolation level. It still makes three bounded attempts, through `retrySerializable`.
+- **`withBookingTransaction` runs at Repeatable Read** (`BOOKING_ISOLATION_LEVEL` in `scheduling/booking-transaction.ts`). That module is the only place booking writes choose an isolation level. It still makes three bounded attempts, through `retrySerializable`.
 - **The booking-attempt rejection step in `runBookingAttempt` runs at Read Committed** (`withAfterLockTransaction`). Nothing else does.
 - **New tests:**
   - `cross-tenant-contention.test.ts`: six businesses reschedule at once, three rounds, and no move is refused.
-  - `booking-attempt-rejection.test.ts`: replays the rejection race step by step, watching `pg_stat_activity` for the lock wait.
+  - `booking-attempt-rejection.test.ts`: replays the rejection race step by step, waiting until `pg_blocking_pids` shows the rejection blocked by the hold's own transaction.
   - Both are in `test:security`.
 - **`provider-agenda.test.ts`** now builds its stale reader at `BOOKING_ISOLATION_LEVEL`, not a hard-coded Serializable.
 
