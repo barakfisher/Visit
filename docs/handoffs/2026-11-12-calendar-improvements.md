@@ -1,6 +1,6 @@
 # Visit handoff — 2026-11-12, calendar: three days, swipe, whole-day blocks, slot choices
 
-Built on `main` after PR #66. Read `2026-11-11-calendar-week.md` first; its lessons hold. Decisions: `decisions.md`, "Calendar: three days, swipe, whole-day blocks, slot choices", which replaces three choices of "The calendar screen".
+Built on `main` after PR #66; this is PR #68. Read `2026-11-11-calendar-week.md` first; its lessons hold. Decisions: `decisions.md`, "Calendar: three days, swipe, whole-day blocks, slot choices", which replaces three choices of "The calendar screen".
 
 ## Authorization
 

@@ -679,7 +679,7 @@ PR #66 (slice 1 of 3). The user asked for a Google-Calendar-style business calen
 
 ## Calendar: three days, swipe, whole-day blocks, slot choices — 2026-11-12
 
-PR to be cited when it opens. The user reviewed the calendar on a phone after PR #66 and asked for five changes. This entry replaces three choices of "The calendar screen" above: closed hours were tappable, a slot opened Add appointment directly, and whole-day blocks sat in a row above the grid.
+PR #68. The user reviewed the calendar on a phone after PR #66 and asked for five changes. This entry replaces three choices of "The calendar screen" above: closed hours were tappable, a slot opened Add appointment directly, and whole-day blocks sat in a row above the grid.
 
 - **Choice: a third mode, three days, starting on the chosen date and stepping three days** (`PERIOD_DAYS`, `periodStart`). The agenda API reads `days=3` from that date without snapping to Sunday; `days=7` still snaps. The switch reads week, 3 days, day. *Rejected:* reading a whole week and showing three of it, which crosses two weeks when the three days do, so it would need two reads or a week that is not a week.
 - **Choice: a day blocked whole is filled with its block from the grid's top to its bottom, in that day's column (the user's call);** the row above the grid is gone. A tap opens the block's sheet, as before. Several whole-day blocks on one day share the width. *Rejected:* keeping the row, which the user found disconnected from the day it blocks.
