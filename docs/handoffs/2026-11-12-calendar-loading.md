@@ -1,6 +1,6 @@
 # Visit handoff — 2026-11-12, calendar: loading in place, neighbouring periods
 
-Built on `main` after PR #68. Read `2026-11-12-calendar-improvements.md` first; its lessons hold. Decisions: `decisions.md`, "Calendar: loading in place, neighbouring periods".
+Built on `main` after PR #68; this is PR #69. Read `2026-11-12-calendar-improvements.md` first; its lessons hold. Decisions: `decisions.md`, "Calendar: loading in place, neighbouring periods".
 
 ## Authorization
 
