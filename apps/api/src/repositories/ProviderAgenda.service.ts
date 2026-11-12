@@ -6,6 +6,7 @@ import { canMarkNoShow, presentedStatus } from './AppointmentOutcome.utils.js';
 import { blockProjection, presentBlocks } from './TimeBlocks.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { dayFreeTime, presentFreeGap } from '../scheduling/free-time.js';
+import { openHours } from '../scheduling/open-hours.js';
 
 /**
  * One day's free time and whether the business is closed, for the home's cards (decisions.md, "The business day as cards").
@@ -47,10 +48,16 @@ export async function readProviderAgenda(context: AuthorizedBusinessContext, dat
       tx.timeBlock.findMany({ where: { businessId: context.businessId, startsAt: { lt: endsAt }, endsAt: { gt: startsAt } }, orderBy: [{ startsAt: 'asc' }, { id: 'asc' }], select: blockProjection }),
       tx.staff.findMany({ where: { businessId: context.businessId, active: true }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }], select: { id: true, displayName: true, parallelCapacity: true } }),
     ]);
+    // When each day is open, for the calendar's grid; the same reading of "closed" as the home's day cards.
+    const [businessHours, staffHours] = await Promise.all([
+      tx.businessWeeklyAvailability.findMany({ where: { businessId: context.businessId }, select: { weekday: true, startLocal: true, endLocal: true } }),
+      tx.staff.findMany({ where: { businessId: context.businessId, active: true }, select: { availability: { select: { weekday: true, startLocal: true, endLocal: true } } } }),
+    ]);
+    const hours = openHours(Array.from({ length: days }, (_, index) => first.add({ days: index }).toString()), businessHours, staffHours.map(row => ({ windows: row.availability })));
     // Only a single day has cards; the weekly view keeps its list.
     const day = days === 1 ? await readDayFreeTime(tx, context.businessId, business.timezone, first, startsAt, endsAt, now) : null;
     const revenue: Record<string, number> = {}, at = now.getTime();
     for (const row of rows) if (['CONFIRMED', 'COMPLETED'].includes(row.status) && row.serviceCurrency && row.servicePriceMinor !== null) revenue[row.serviceCurrency] = (revenue[row.serviceCurrency] ?? 0) + row.servicePriceMinor;
-    return { business, day, fromDate: first.toString(), toDate: end.subtract({ days: 1 }).toString(), staff, blocks: presentBlocks(blocks, business.timezone), summary: { appointments: rows.filter(row => row.status !== 'CANCELLED').length, revenue }, bookings: rows.map(row => ({ id: row.id, source: row.source, manualReason: row.manualReason, revision: row.revision, status: presentedStatus(row, at), canMarkNoShow: canMarkNoShow(row, at), startsAt: row.startsAt, endsAt: row.endsAt, customer: { displayName: row.customerName, phone: row.customerPhone, email: row.customerEmail }, service: bookingServiceSnapshot(row), staff: row.staff })) };
+    return { business, day, hours, fromDate: first.toString(), toDate: end.subtract({ days: 1 }).toString(), staff, blocks: presentBlocks(blocks, business.timezone), summary: { appointments: rows.filter(row => row.status !== 'CANCELLED').length, revenue }, bookings: rows.map(row => ({ id: row.id, source: row.source, manualReason: row.manualReason, revision: row.revision, status: presentedStatus(row, at), canMarkNoShow: canMarkNoShow(row, at), startsAt: row.startsAt, endsAt: row.endsAt, customer: { displayName: row.customerName, phone: row.customerPhone, email: row.customerEmail }, service: bookingServiceSnapshot(row), staff: row.staff })) };
   }, { isolationLevel: 'RepeatableRead', maxWait: 5000, timeout: 10000 });
 }

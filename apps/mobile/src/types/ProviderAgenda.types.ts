@@ -2,6 +2,7 @@ import type { AppointmentStatus } from './AppointmentLifecycle.types';
 import type { AuthProfile } from './flows';
 import type { MessageKey } from '../i18n/messages';
 import type { TimeBlock } from './TimeBlocks.types';
+import type { DayHours } from '../lib/CalendarGrid';
 import type { AgendaItem, FreeGap } from '../lib/AgendaToday.utils';
 import type { BlockRemovalState, TimeBlockDialogState } from '../lib/TimeBlocks.hook';
 import type { ManualBookingView } from './ManualBooking.types';
@@ -10,6 +11,8 @@ export type ProviderAgenda = {
   summary: { appointments: number; revenue: Record<string, number> }; staff: { id: string; displayName: string; parallelCapacity: number }[];
   bookings: { source?: string; manualReason?: string | null; id: string; status: AppointmentStatus; canMarkNoShow?: boolean; revision: number; startsAt: string; endsAt: string; customer: { displayName: string | null; phone: string | null; email: string | null }; service: { name: string }; staff: { displayName: string } }[];
   blocks: TimeBlock[];
+  /** When someone works on each day of the range, in local time; no windows means closed. */
+  hours: DayHours[];
   /** Today's free time and whether the business is closed by its weekly hours; null for a week. */
   day?: { closed: boolean; free: FreeGap[] } | null;
 };

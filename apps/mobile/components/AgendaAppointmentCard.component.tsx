@@ -12,14 +12,16 @@ type Props = Pick<ProviderAgendaView, 't' | 'contact'> & {
   booking: AgendaAppointment; span: string;
   /** The status, outcome buttons and change history, built by the agenda because Storybook cannot bundle their data hook. */
   lifecycle: ReactNode;
+  /** Unfolded from the start: the calendar opens a tapped appointment in a sheet. */
+  initiallyOpen?: boolean;
 };
 
 /**
  * One appointment on the business home, folded to its time, customer and service so a day fits on a screen.
  * A tap anywhere on it opens the rest in place: who serves it, how to reach the customer, and what can be done with it.
  */
-export function AgendaAppointmentCard({ booking, span, lifecycle, t, contact }: Props) {
-  const [open, setOpen] = useState(false);
+export function AgendaAppointmentCard({ booking, span, lifecycle, t, contact, initiallyOpen = false }: Props) {
+  const [open, setOpen] = useState(initiallyOpen);
   const customer = booking.customer.displayName ?? booking.customer.phone ?? booking.customer.email ?? t('dashboard.customer');
   const phone = booking.customer.phone;
   return <View testID={`agenda-booking-${booking.id}`} className="overflow-hidden rounded-card border border-line bg-surface">

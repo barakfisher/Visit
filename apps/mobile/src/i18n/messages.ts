@@ -7,6 +7,7 @@ import { compactEn, compactHe } from './compactBooking.utils';
 import { contactEn, contactHe } from './contactMessages.utils';
 import { setupEn, setupHe } from './setupMessages';
 import { dashboardEn, dashboardHe } from './dashboardMessages';
+import { calendarEn, calendarHe } from './calendarMessages';
 import { hoursEn, hoursHe } from './hoursMessages';
 import { blocksEn, blocksHe } from './blockMessages';
 import { staffEn, staffHe } from './staffMessages';
@@ -23,6 +24,7 @@ export const en = {
   ...lifecycleEn,
   ...bookingDetailsEn,
   ...dashboardEn,
+  ...calendarEn,
   ...hoursEn,
   ...blocksEn,
   ...staffEn,
@@ -325,6 +327,7 @@ export const he: Record<MessageKey, string> = {
   ...lifecycleHe,
   ...bookingDetailsHe,
   ...dashboardHe,
+  ...calendarHe,
   ...hoursHe,
   ...blocksHe,
   ...staffHe,
