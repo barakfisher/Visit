@@ -27,10 +27,10 @@ const blocks: TimeBlock[] = [
   { id: 'off', startsAt: at('2026-11-13', '00:00'), endsAt: at('2026-11-14', '00:00'), allDay: true, reason: 'חופש', staff: null, fromDate: '2026-11-13', toDate: '2026-11-13' },
 ];
 
-function Calendar({ mode, date, empty, chooseSlot, openEntry, openDay, previous, next }: { mode: CalendarMode; date: string; empty?: boolean; chooseSlot: () => void; openEntry: () => void; openDay: () => void; previous: () => void; next: () => void }) {
+function Calendar({ mode, date, empty, loading, chooseSlot, openEntry, openDay, previous, next }: { mode: CalendarMode; date: string; empty?: boolean; loading?: boolean; chooseSlot: () => void; openEntry: () => void; openDay: () => void; previous: () => void; next: () => void }) {
   const dates = periodDates(date, mode), from = dates[0]!, to = dates[dates.length - 1]!;
-  const { columns, grid } = calendarColumns({ agenda: empty ? { bookings: [], blocks: [], hours } : { bookings, blocks, hours }, dates, timezone: zone, today, now, locale: 'he' });
-  const props = { t: he, mode, columns, grid, clock: { today, minute: 13 * 60 + 20 }, chooseSlot, openEntry, openDay };
+  const { columns, grid } = calendarColumns({ agenda: loading ? { bookings: [], blocks: [], hours: [] } : empty ? { bookings: [], blocks: [], hours } : { bookings, blocks, hours }, dates, timezone: zone, today, now, locale: 'he' });
+  const props = { t: he, mode, status: loading ? 'loading' as const : 'ready' as const, columns, grid, clock: { today, minute: 13 * 60 + 20 }, chooseSlot, openEntry, openDay };
   return <View style={{ maxWidth: 390, height: 760 }}>
     <CalendarHeader t={he} mode={mode} setMode={fn()} monthTitle={calendarMonthTitle(from, to, 'he')} rangeTitle={mode === 'day' ? fullDate(date, 'he') : dateRange(from, to, 'he')} previous={previous} next={next} goToday={fn()} showsToday={dates.includes(today)} />
     <CalendarDayHeaders {...props} />
@@ -69,6 +69,11 @@ export const ThreeDays: Story = { args: { mode: 'threeDays', date: '2026-11-12' 
 } };
 // A week with nothing booked still shows its hours, shaded outside them.
 export const EmptyWeek: Story = { args: { empty: true, date: '2026-11-18' } };
+// A period still loading: its dates on a plain grid, nothing shaded and nothing to tap until its hours arrive.
+export const Loading: Story = { args: { loading: true, date: '2026-11-18' }, play: async ({ canvas }) => {
+  await expect(canvas.getByTestId('calendar-day-2026-11-18')).toBeVisible();
+  await expect(canvas.queryByTestId('calendar-slot-2026-11-18-10:00')).toBeNull();
+} };
 // Saturday has no hours: its whole column is in the unavailable shade and nothing in it is a button.
 export const ClosedDay: Story = { args: { mode: 'day', date: '2026-11-14' }, play: async ({ canvas }) => {
   await expect(canvas.queryByTestId('calendar-slot-2026-11-14-10:00')).toBeNull();

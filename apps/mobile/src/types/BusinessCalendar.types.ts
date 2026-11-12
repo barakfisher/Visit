@@ -24,11 +24,11 @@ export type BusinessCalendarView = {
   monthTitle: string; rangeTitle: string;
   previous: () => void; next: () => void; goToday: () => void; showsToday: boolean;
   openDay: (date: string) => void;
+  /** While `loading`, the period's dates are drawn on an empty grid of the previous period's hours, and nothing in it can be tapped. */
   status: 'loading' | 'error' | 'ready'; retry: () => void;
   columns: CalendarColumn[]; grid: { start: number; end: number };
   /** Today and the minute of day in the business's zone: the "now" line, and slots before it cannot start an appointment. */
   clock: { today: string; minute: number };
-  empty: boolean;
   /** A tapped slot asks what to start there; `slot` is the one asked about, or null when no choice is open. */
   chooseSlot: (date: string, localTime: string) => void; closeSlot: () => void;
   slot: { date: string; localTime: string; title: string } | null;

@@ -7,7 +7,7 @@ export const calendarEn = {
   'calendar.slotAt': 'Add or block, {date} {time}', 'calendar.slotTitle': '{date} · {time}',
   'calendar.slotAdd': 'Add appointment', 'calendar.slotBlock': 'Block time',
   'calendar.loading': 'Loading calendar…', 'calendar.loadFailure': 'The calendar could not load. Check your connection and retry.',
-  'calendar.emptyWeek': 'No appointments on these days.', 'calendar.emptyDay': 'No appointments on this day.', 'calendar.closedDay': 'Closed on this day.',
+  'calendar.closedDay': 'Closed on this day.',
   'calendar.appointmentTitle': 'Appointment',
 } as const;
 export const calendarHe: Record<keyof typeof calendarEn, string> = {
@@ -18,6 +18,6 @@ export const calendarHe: Record<keyof typeof calendarEn, string> = {
   'calendar.slotAt': 'הוספה או חסימה, {date} {time}', 'calendar.slotTitle': '{date} · {time}',
   'calendar.slotAdd': 'הוספת תור', 'calendar.slotBlock': 'חסימת זמן',
   'calendar.loading': 'טוענים את היומן…', 'calendar.loadFailure': 'לא הצלחנו לטעון את היומן. בדקו את החיבור ונסו שוב.',
-  'calendar.emptyWeek': 'אין תורים בימים האלה.', 'calendar.emptyDay': 'אין תורים ביום הזה.', 'calendar.closedDay': 'העסק סגור ביום הזה.',
+  'calendar.closedDay': 'העסק סגור ביום הזה.',
   'calendar.appointmentTitle': 'תור',
 };
