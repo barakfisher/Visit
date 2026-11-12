@@ -1,4 +1,4 @@
-# Visit handoff — 2026-11-12, login plan and Google sign-in in the browser
+# Visit handoff — 2026-11-12, login plan and Google sign-in in the browser (PR #70)
 
 Built on `main` after PR #69. Documentation only; no code changed, so `VERSION` is untouched. Decisions: `decisions.md`, "Login plan and Google sign-in in the browser".
 

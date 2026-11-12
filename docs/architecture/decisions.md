@@ -697,7 +697,7 @@ PR #69. After PR #68 the user saw every swipe replace the calendar with "Loading
 
 ## Login plan and Google sign-in in the browser — 2026-11-12
 
-PR number to be added when the PR opens. The user asked for phone verification, email verification, Google sign-in and one-time-code sign-in, ordered from the simplest to the most complex. Measured first: all four were already built (google-authentication.md, email-authentication.md, phone-authentication.md, account-security.md) and had run only against local fakes. What was missing was real provider configuration.
+PR #70. The user asked for phone verification, email verification, Google sign-in and one-time-code sign-in, ordered from the simplest to the most complex. Measured first: all four were already built (google-authentication.md, email-authentication.md, phone-authentication.md, account-security.md) and had run only against local fakes. What was missing was real provider configuration.
 
 - **Choice: the order in [login-plan.md](login-plan.md): Google in the browser, real email verification, email code sign-in, phone/SMS, then Google on the phone.** Google comes first because it needs no domain and no paid account. *Rejected:* email first, which waits for a domain and DNS; phone first, which costs money per SMS and needs fraud limits before anyone can test it.
 - **Choice: Google is turned on by local configuration only:** an OAuth web client in Testing mode with the user's test users, callback `http://localhost:3000/api/auth/google/callback`, and the three `GOOGLE_*` values in the main checkout's untracked `.env`. No code changed. The client secret never left the user's machine or reached the chat.
