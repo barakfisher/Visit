@@ -17,7 +17,7 @@ const flat = { minHeight: 0, minWidth: 0 };
 /** A spacer as wide as the hours column, so headers line up with the grid in both directions (a padding's side flips differently on web). */
 const Gutter = () => <View style={{ width: GUTTER_WIDTH }} />;
 
-type GridProps = Pick<BusinessCalendarView, 't' | 'mode' | 'columns' | 'grid' | 'clock' | 'chooseSlot' | 'openEntry' | 'openDay'>;
+type GridProps = Pick<BusinessCalendarView, 't' | 'mode' | 'status' | 'columns' | 'grid' | 'clock' | 'chooseSlot' | 'openEntry' | 'openDay'>;
 
 /** The weekday and date over each column; with several days a tap opens that day. Visible text is each button's name: a separate label fails axe's label-content-name-mismatch. */
 export function CalendarDayHeaders({ mode, columns, openDay }: Pick<GridProps, 'mode' | 'columns' | 'openDay'>) {
@@ -77,11 +77,13 @@ function AllDayBlocks({ column, t, openEntry }: { column: CalendarColumn } & Pic
   </Control>)}</>;
 }
 
-function Column({ column, grid, clock, mode, t, chooseSlot, openEntry }: { column: CalendarColumn } & Omit<GridProps, 'columns' | 'openDay'>) {
+function Column({ column, grid, clock, mode, status, t, chooseSlot, openEntry }: { column: CalendarColumn } & Omit<GridProps, 'columns' | 'openDay'>) {
   const blockedAllDay = column.allDay.length > 0;
   return <View testID={`calendar-column-${column.date}`} className="relative flex-1 border-s border-line">
     {gridSlots(grid).map(localTime => {
       const minute = minutesOf(localTime), line = minute % 60 === 0 ? 'border-t border-line' : '', height = HOUR_HEIGHT / (60 / SLOT_MINUTES);
+      // While the period loads its hours are unknown: every slot is plain and nothing can be tapped yet.
+      if (status === 'loading') return <View key={localTime} className={`bg-surface ${line}`} style={{ height }} />;
       // A slot something can start in offers Add appointment or Block time; any other is only drawn, in the unavailable shade.
       return slotAvailable({ date: column.date, minute, hours: column.hours, blockedAllDay, clock })
         ? <Control key={localTime} testID={`calendar-slot-${column.date}-${localTime}`} accessibilityRole="button" accessibilityLabel={t('calendar.slotAt', { date: column.fullDate, time: isolateLtr(localTime) })} onPress={() => chooseSlot(column.date, localTime)}

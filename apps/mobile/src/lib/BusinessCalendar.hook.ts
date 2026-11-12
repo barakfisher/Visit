@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
 import { SHEET_LEAVE_MS } from '../../components/FormDialog';
 import { useProviderWorkspace } from '../../components/ProviderAccess';
@@ -13,11 +13,17 @@ import { useManualBooking } from './ManualBooking.hook';
 import { appointmentSpan, dateRange, fullDate } from './appointmentTime';
 import { isolateLtr } from '../i18n/messages';
 import { calendarColumns, calendarMonthTitle } from './CalendarColumns';
-import { CALENDAR_MODES, PERIOD_DAYS, SWIPE_TAP_GUARD_MS, localPoint, periodDates, stepPeriod, swipeStep, type CalendarMode } from './CalendarGrid';
+import { CALENDAR_MODES, PERIOD_DAYS, SWIPE_TAP_GUARD_MS, localPoint, neighbourStarts, periodDates, stepPeriod, swipeStep, type CalendarMode } from './CalendarGrid';
 import type { BusinessCalendarView } from '../types/BusinessCalendar.types';
 
 /** The "now" line moves on this beat; the agenda's own data is re-read by live signals, not by this timer. */
 export const CALENDAR_CLOCK_MS = 60_000;
+/**
+ * A prefetched neighbouring period counts as fresh this long, so moving back and forth does not read it again each
+ * time. Opening it still re-reads it in the background (the screen's own query has no stale time); its cached copy
+ * shows at once meanwhile.
+ */
+export const CALENDAR_PREFETCH_FRESH_MS = 30_000;
 const validDate = (value: string | undefined): value is string => Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`)));
 
 /**
@@ -46,6 +52,16 @@ export function useBusinessCalendar(): BusinessCalendarView {
     queryKey: ['provider', business.id, 'agenda', identity, version, mode, from],
     queryFn: ({ signal }) => readProviderAgenda(business.id, from, signal, PERIOD_DAYS[mode]), enabled: focused, staleTime: 0,
   });
+  // Once a period has loaded, the one before and the one after are read too, so the next swipe or arrow shows its
+  // appointments at once instead of loading (decisions.md, "Calendar: loading in place, neighbouring periods").
+  const client = useQueryClient(), loaded = agenda.data !== undefined;
+  useEffect(() => {
+    if (!focused || !loaded) return;
+    for (const start of neighbourStarts(from, mode)) void client.prefetchQuery({
+      queryKey: ['provider', business.id, 'agenda', identity, version, mode, start],
+      queryFn: ({ signal }) => readProviderAgenda(business.id, start, signal, PERIOD_DAYS[mode]), staleTime: CALENDAR_PREFETCH_FRESH_MS,
+    });
+  }, [client, focused, loaded, business.id, identity, version, mode, from]);
   useLiveAgenda(business.id, focused);
   const removal = useBlockRemoval(business.id);
   const { removeFailure, ...blockRemoval } = removal;
@@ -77,7 +93,12 @@ export function useBusinessCalendar(): BusinessCalendarView {
   }
 
   const data = agenda.data;
-  const { bookings, columns, grid } = calendarColumns({ agenda: data ?? { bookings: [], blocks: [], hours: [] }, dates, timezone: business.timezone, today: clock.date, now, locale });
+  const { columns, grid } = calendarColumns({ agenda: data ?? { bookings: [], blocks: [], hours: [] }, dates, timezone: business.timezone, today: clock.date, now, locale });
+
+  // A period still loading keeps the hours of the one shown before it, so the grid does not jump when its data arrives.
+  const [shownGrid, setShownGrid] = useState<{ start: number; end: number } | null>(null);
+  if (data && (shownGrid?.start !== grid.start || shownGrid.end !== grid.end)) setShownGrid(grid);
+  const drawnGrid = data ? grid : shownGrid ?? grid;
 
   // Looked up among all bookings, cancelled included, so cancelling from the sheet keeps it open on the result.
   const openAppointment = opened?.kind === 'appointment' ? data?.bookings.find(booking => booking.id === opened.id) ?? null : null;
@@ -96,7 +117,7 @@ export function useBusinessCalendar(): BusinessCalendarView {
     goToday: () => go({ date: clock.date }), showsToday: dates.includes(clock.date),
     openDay: day => { if (tapAllowed()) go({ date: day, mode: 'day' }); },
     status: agenda.isError ? 'error' : !data ? 'loading' : 'ready', retry: () => { if (focused) void agenda.refetch(); },
-    columns, grid, clock: { today: clock.date, minute: clock.minute }, empty: data ? bookings.length === 0 : false,
+    columns, grid: drawnGrid, clock: { today: clock.date, minute: clock.minute },
     chooseSlot: (day, localTime) => { if (tapAllowed()) setSlot({ date: day, localTime }); }, closeSlot: () => setSlot(null),
     slot: slot ? { ...slot, title: t('calendar.slotTitle', { date: fullDate(slot.date, locale), time: isolateLtr(slot.localTime) }) } : null,
     // No staff from a slot: a staff member left over from a free-time card would narrow the times.
