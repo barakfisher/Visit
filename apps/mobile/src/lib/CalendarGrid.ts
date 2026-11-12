@@ -32,6 +32,8 @@ export const periodStart = (date: string, mode: CalendarMode) => mode === 'week'
 export const periodDates = (date: string, mode: CalendarMode) => Array.from({ length: PERIOD_DAYS[mode] }, (_, index) => addDays(periodStart(date, mode), index));
 /** The next or previous period from `date`; a week always lands on its Sunday, three days move three days. */
 export const stepPeriod = (date: string, mode: CalendarMode, direction: 1 | -1) => addDays(periodStart(date, mode), PERIOD_DAYS[mode] * direction);
+/** The first dates of the periods just before and just after `date`'s, the ones a swipe or an arrow reaches next. */
+export const neighbourStarts = (date: string, mode: CalendarMode): readonly [string, string] => [stepPeriod(date, mode, -1), stepPeriod(date, mode, 1)];
 
 export const minutesOf = (local: string) => Number(local.slice(0, 2)) * 60 + Number(local.slice(3, 5));
 export const localClock = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;

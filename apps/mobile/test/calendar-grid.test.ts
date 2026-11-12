@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { DEFAULT_GRID_HOURS, PERIOD_DAYS, SLOT_MINUTES, SWIPE_DISTANCE, SWIPE_VELOCITY, addDays, slotAvailable, swipeStep, daySegments, gridHours, isOpen, localPoint, periodDates, placeSegments, gridSlots, stepPeriod, weekStart, type Segment } from '../src/lib/CalendarGrid';
+import { DEFAULT_GRID_HOURS, PERIOD_DAYS, SLOT_MINUTES, SWIPE_DISTANCE, SWIPE_VELOCITY, addDays, slotAvailable, swipeStep, daySegments, gridHours, isOpen, localPoint, neighbourStarts, periodDates, placeSegments, gridSlots, stepPeriod, weekStart, type Segment } from '../src/lib/CalendarGrid';
 
 const zone = 'Asia/Jerusalem';
 // 2026-11-11 is a Wednesday; its week starts Sunday 2026-11-08. Israel is UTC+2 in November.
@@ -24,6 +24,14 @@ test('three days start on the chosen date, not its Sunday, and step three days',
   assert.equal(periodDates(wednesday, 'threeDays').length, PERIOD_DAYS.threeDays);
   assert.equal(stepPeriod(wednesday, 'threeDays', 1), addDays(wednesday, PERIOD_DAYS.threeDays));
   assert.equal(stepPeriod(wednesday, 'threeDays', -1), addDays(wednesday, -PERIOD_DAYS.threeDays));
+});
+
+test('the neighbouring periods start where the arrows land, in each mode', () => {
+  // Prefetched under the same first date the screen's own query uses, so a swipe finds them in the cache.
+  assert.deepEqual(neighbourStarts(wednesday, 'week'), [addDays(sunday, -PERIOD_DAYS.week), addDays(sunday, PERIOD_DAYS.week)]);
+  assert.deepEqual(neighbourStarts(wednesday, 'threeDays'), [addDays(wednesday, -PERIOD_DAYS.threeDays), addDays(wednesday, PERIOD_DAYS.threeDays)]);
+  assert.deepEqual(neighbourStarts(wednesday, 'day'), [addDays(wednesday, -PERIOD_DAYS.day), addDays(wednesday, PERIOD_DAYS.day)]);
+  for (const mode of ['week', 'threeDays', 'day'] as const) for (const start of neighbourStarts(wednesday, mode)) assert.equal(periodDates(start, mode)[0], start);
 });
 
 test('a slot can start something only ahead, inside working hours and on a day not blocked whole', () => {

@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import { GestureDetector, GestureHandlerRootView, usePanGesture } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import { tokens } from '@/src/design/tokens';
 import { CALENDAR_MODES, type CalendarMode } from '@/src/lib/CalendarGrid';
 import type { BusinessCalendarView } from '@/src/types/BusinessCalendar.types';
 import { ActionButton } from './ActionButton';
@@ -87,15 +88,20 @@ export function BusinessCalendar(view: BusinessCalendarView) {
     <View className="mx-auto w-full flex-1" style={{ maxWidth: 960 }}>
       <CalendarHeader {...view} />
       {status === 'error' ? <View className="gap-2 p-4"><Text accessibilityRole="alert">{t('calendar.loadFailure')}</Text><ActionButton secondary label={t('common.retry')} onPress={view.retry} /></View>
-        : status === 'loading' ? <Text role="status" className="p-4 text-body">{t('calendar.loading')}</Text>
         : <>
-          {closedDay ? <Text testID="calendar-closed" className="px-4 pt-2 text-sm text-muted">{t('calendar.closedDay')}</Text>
-            : view.empty ? <Text testID="calendar-empty" className="px-4 pt-2 text-sm text-muted">{t(mode === 'day' ? 'calendar.emptyDay' : 'calendar.emptyWeek')}</Text> : null}
+          {closedDay ? <Text testID="calendar-closed" className="px-4 pt-2 text-sm text-muted">{t('calendar.closedDay')}</Text> : null}
           {view.feedback ? <Text accessibilityRole="alert" className="px-4 pt-2 text-danger">{view.feedback}</Text> : null}
           <Swipeable swipe={view.swipe}>
             <CalendarDayHeaders {...view} />
             {/* Focusable itself: a closed day has no button inside, and a keyboard must still be able to scroll it (axe scrollable-region-focusable). */}
             <ScrollView focusable className="flex-1" contentContainerClassName="pb-10 pt-2"><CalendarTimeGrid {...view} /></ScrollView>
+            {/* Over the grid, not above it: the grid keeps its place while the period loads and when it arrives. */}
+            {status === 'loading' ? <View testID="calendar-loading" pointerEvents="none" className="absolute inset-x-0 top-14 items-center">
+              <View role="status" className="flex-row items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5">
+                <ActivityIndicator size="small" color={tokens.color.brand} />
+                <Text className="text-sm text-body">{t('calendar.loading')}</Text>
+              </View>
+            </View> : null}
           </Swipeable>
         </>}
     </View>
