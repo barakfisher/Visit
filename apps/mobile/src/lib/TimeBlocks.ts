@@ -20,9 +20,18 @@ export type BlockForm = { staffId: string; kind: BlockKind; date: string; startL
 export type BlockFormError = 'date' | 'format' | 'order' | 'range' | 'tooLong' | 'past';
 export type BlockFormErrors = Partial<Record<'date' | 'startLocal' | 'endLocal' | 'fromDate' | 'toDate', BlockFormError>>;
 
-/** A new block starts as a midday hour for the whole business on the chosen date. */
-export function emptyBlockForm(date: string): BlockForm {
-  return { staffId: '', kind: 'hours', date, startLocal: '12:00', endLocal: '13:00', fromDate: date, toDate: date, reasons: [] };
+/** A block started from a calendar slot lasts this long, unless the day ends first. */
+export const SLOT_BLOCK_MINUTES = 60;
+const LAST_MINUTE = 23 * 60 + 59;
+const clockOf = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+
+/**
+ * A new block for the whole business on the chosen date: a midday hour, or `SLOT_BLOCK_MINUTES` from a calendar
+ * slot's time (ending at 23:59 at the latest, since a block's end is a clock time of the same day).
+ */
+export function emptyBlockForm(date: string, startLocal?: string): BlockForm {
+  const start = startLocal && TIME.test(startLocal) ? Number(startLocal.slice(0, 2)) * 60 + Number(startLocal.slice(3, 5)) : 12 * 60;
+  return { staffId: '', kind: 'hours', date, startLocal: clockOf(start), endLocal: clockOf(Math.min(start + SLOT_BLOCK_MINUTES, LAST_MINUTE)), fromDate: date, toDate: date, reasons: [] };
 }
 
 const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000);

@@ -9,6 +9,8 @@ import { AppText } from './AppText';
 
 /** Long enough to read as motion, short enough not to keep anyone waiting; Reanimated skips it under reduce motion. */
 const SHEET_MOTION = { duration: 260, easing: Easing.out(Easing.cubic) };
+/** How long a closing sheet stays mounted; a second sheet opened from the first waits this long, so iOS never presents two at once. */
+export const SHEET_LEAVE_MS = SHEET_MOTION.duration;
 /** How far a sheet travels in from below; it is under the screen edge before it starts, whatever its own height. */
 const SHEET_TRAVEL = 600;
 // The panel moves but never fades: its text keeps full contrast at every frame, and only the backdrop fades.

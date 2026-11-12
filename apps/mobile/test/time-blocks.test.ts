@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ApiError } from '../src/lib/apiClient';
-import { BLOCK_CONFLICT, BLOCK_REASONS, MAX_BLOCK_DAYS, MAX_BLOCK_REASON, blockConflicts, blockDates, blockInput, emptyBlockForm, toggleBlockReason, validateBlockForm, type BlockForm, type BlockReason } from '../src/lib/TimeBlocks';
+import { BLOCK_CONFLICT, BLOCK_REASONS, MAX_BLOCK_DAYS, MAX_BLOCK_REASON, SLOT_BLOCK_MINUTES, blockConflicts, blockDates, blockInput, emptyBlockForm, toggleBlockReason, validateBlockForm, type BlockForm, type BlockReason } from '../src/lib/TimeBlocks';
 import { translate } from '../src/i18n/messages';
 import { addBookingDays } from '../src/lib/CompactBooking.utils';
 
@@ -14,6 +14,14 @@ test('a new block is an hour on the chosen date for the whole business', () => {
   assert.deepEqual(emptyBlockForm('2026-11-05'), { staffId: '', kind: 'hours', date: '2026-11-05', startLocal: '12:00', endLocal: '13:00', fromDate: '2026-11-05', toDate: '2026-11-05', reasons: [] });
   assert.deepEqual(validateBlockForm(hours(), today), {});
   assert.deepEqual(validateBlockForm(days(), today), {});
+});
+
+test('a block started from a calendar slot starts at its time and lasts SLOT_BLOCK_MINUTES, ending by 23:59', () => {
+  const clock = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+  const fromSlot = emptyBlockForm('2026-11-05', '14:30');
+  assert.deepEqual([fromSlot.startLocal, fromSlot.endLocal], ['14:30', clock(14 * 60 + 30 + SLOT_BLOCK_MINUTES)]);
+  assert.equal(emptyBlockForm('2026-11-05', '23:30').endLocal, '23:59');
+  assert.deepEqual(validateBlockForm(emptyBlockForm('2026-11-05', '23:30'), today), {});
 });
 
 test('hours need a real date that has not passed and an increasing HH:mm range', () => {

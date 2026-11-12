@@ -182,6 +182,10 @@ test('provider agenda and schedule edits preserve private bookings and occupied 
       const empty = await readProviderAgenda(context, '2027-03-22', 1);
       assert.deepEqual(empty.bookings, []); assert.deepEqual(empty.blocks, []);
       assert.deepEqual(empty.summary, { appointments: 0, revenue: {} });
+      // The calendar's three days start on the chosen date (a Wednesday here), not on its week's Sunday.
+      const three = await readProviderAgenda(context, '2027-03-17', 3);
+      assert.deepEqual([three.fromDate, three.toDate, three.hours.map(day => day.date)], ['2027-03-17', '2027-03-19', ['2027-03-17', '2027-03-18', '2027-03-19']]);
+      assert.equal((await app.inject({ url: `/api/provider/agenda?businessId=${business.id}&date=2027-03-17&days=3`, headers })).statusCode, 200);
       assert.equal((await app.inject({ url: `/api/provider/agenda?businessId=${business.id}&date=2027-03-15` })).statusCode, 401);
       for (const query of ['date=invalid', 'date=2027-03-15&days=2', 'date=2027-03-15&identityId=forged']) {
         assert.equal((await app.inject({ url: `/api/provider/agenda?businessId=${business.id}&${query}`, headers })).statusCode, 400);

@@ -8,7 +8,10 @@
 export type LocalWindow = { startLocal: string; endLocal: string };
 /** When someone works on a day, as the agenda API reads it; no windows means closed. */
 export type DayHours = { date: string; windows: LocalWindow[] };
-export type CalendarMode = 'week' | 'day';
+export type CalendarMode = 'week' | 'threeDays' | 'day';
+/** How many days each mode shows, which is also how far its arrows and swipes step. */
+export const PERIOD_DAYS: Record<CalendarMode, 1 | 3 | 7> = { day: 1, threeDays: 3, week: 7 };
+export const CALENDAR_MODES: readonly CalendarMode[] = ['week', 'threeDays', 'day'];
 
 /** The rows shown when the period has no hours and nothing booked: a working day, so the grid is never empty. */
 export const DEFAULT_GRID_HOURS = { start: 8, end: 20 } as const;
@@ -24,9 +27,11 @@ export const addDays = (date: string, days: number) => formatDate(parseDate(date
 export const weekday = (date: string) => new Date(parseDate(date)).getUTCDay();
 /** Weeks start on Sunday, as the agenda API's `days=7` does. */
 export const weekStart = (date: string) => addDays(date, -weekday(date));
-export const periodDates = (date: string, mode: CalendarMode) => mode === 'day' ? [date] : Array.from({ length: 7 }, (_, index) => addDays(weekStart(date), index));
-/** The next or previous week or day from `date`; a week always lands on its Sunday. */
-export const stepPeriod = (date: string, mode: CalendarMode, direction: 1 | -1) => mode === 'day' ? addDays(date, direction) : addDays(weekStart(date), 7 * direction);
+/** The first date a period shows: a week's Sunday; a day and three days start on the date itself. */
+export const periodStart = (date: string, mode: CalendarMode) => mode === 'week' ? weekStart(date) : date;
+export const periodDates = (date: string, mode: CalendarMode) => Array.from({ length: PERIOD_DAYS[mode] }, (_, index) => addDays(periodStart(date, mode), index));
+/** The next or previous period from `date`; a week always lands on its Sunday, three days move three days. */
+export const stepPeriod = (date: string, mode: CalendarMode, direction: 1 | -1) => addDays(periodStart(date, mode), PERIOD_DAYS[mode] * direction);
 
 export const minutesOf = (local: string) => Number(local.slice(0, 2)) * 60 + Number(local.slice(3, 5));
 export const localClock = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
@@ -92,6 +97,32 @@ export function placeSegments<T>(segments: readonly Segment<T>[]): Placed<T>[] {
 
 /** Whether a minute of a day is inside its working hours; outside them the grid is shaded. */
 export const isOpen = (day: DayHours | undefined, minute: number) => Boolean(day?.windows.some(window => minutesOf(window.startLocal) <= minute && minute < minutesOf(window.endLocal)));
+
+/**
+ * Whether a slot can start something (decisions.md, "Calendar: three days, swipe, whole-day blocks, slot choices"):
+ * not once it has started, not outside working hours (Add appointment offers only free times inside them), and not
+ * on a day blocked whole. Every slot that cannot is drawn in the one "unavailable" shade.
+ */
+export function slotAvailable(input: { date: string; minute: number; hours: DayHours | undefined; blockedAllDay: boolean; clock: { today: string; minute: number } }) {
+  const { date, minute, hours, blockedAllDay, clock } = input;
+  const started = date < clock.today || date === clock.today && minute < clock.minute;
+  return !started && !blockedAllDay && isOpen(hours, minute);
+}
+
+/** A horizontal drag this long, or a flick this fast (points per second), moves to the next or previous period. */
+export const SWIPE_DISTANCE = 64;
+export const SWIPE_VELOCITY = 600;
+/** A press that lands this soon after a swipe ends is the swipe's own release, not a tap (seen on web: the slot under the finger opened). */
+export const SWIPE_TAP_GUARD_MS = 350;
+/**
+ * Which way a finished horizontal swipe moves the calendar, or 0 for none. Later days sit to the right in
+ * left-to-right languages and to the left in Hebrew, so a drag that pulls the later side into view goes forward.
+ */
+export function swipeStep(translationX: number, velocityX: number, direction: 'ltr' | 'rtl'): 1 | -1 | 0 {
+  const forward = direction === 'rtl' ? 1 : -1;
+  const moved = Math.abs(translationX) >= SWIPE_DISTANCE ? Math.sign(translationX) : Math.abs(velocityX) >= SWIPE_VELOCITY ? Math.sign(velocityX) : 0;
+  return moved === 0 ? 0 : moved === forward ? 1 : -1;
+}
 
 /** The local start of each empty slot a tap can turn into a new appointment, from the grid's first row to its last. */
 export const gridSlots = (hours: { start: number; end: number }) => Array.from({ length: (hours.end - hours.start) * 60 / SLOT_MINUTES }, (_, index) => localClock(hours.start * 60 + index * SLOT_MINUTES));

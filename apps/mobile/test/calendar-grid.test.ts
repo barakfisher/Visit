@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { DEFAULT_GRID_HOURS, SLOT_MINUTES, addDays, daySegments, gridHours, isOpen, localPoint, periodDates, placeSegments, gridSlots, stepPeriod, weekStart, type Segment } from '../src/lib/CalendarGrid';
+import { DEFAULT_GRID_HOURS, PERIOD_DAYS, SLOT_MINUTES, SWIPE_DISTANCE, SWIPE_VELOCITY, addDays, slotAvailable, swipeStep, daySegments, gridHours, isOpen, localPoint, periodDates, placeSegments, gridSlots, stepPeriod, weekStart, type Segment } from '../src/lib/CalendarGrid';
 
 const zone = 'Asia/Jerusalem';
 // 2026-11-11 is a Wednesday; its week starts Sunday 2026-11-08. Israel is UTC+2 in November.
@@ -17,6 +17,35 @@ test('a week runs Sunday to Saturday and steps a week at a time; a day steps a d
   assert.equal(stepPeriod(wednesday, 'week', -1), addDays(sunday, -7));
   assert.equal(stepPeriod(wednesday, 'day', -1), '2026-11-10');
   assert.equal(addDays('2026-12-31', 1), '2027-01-01');
+});
+
+test('three days start on the chosen date, not its Sunday, and step three days', () => {
+  assert.deepEqual(periodDates(wednesday, 'threeDays'), [wednesday, '2026-11-12', '2026-11-13']);
+  assert.equal(periodDates(wednesday, 'threeDays').length, PERIOD_DAYS.threeDays);
+  assert.equal(stepPeriod(wednesday, 'threeDays', 1), addDays(wednesday, PERIOD_DAYS.threeDays));
+  assert.equal(stepPeriod(wednesday, 'threeDays', -1), addDays(wednesday, -PERIOD_DAYS.threeDays));
+});
+
+test('a slot can start something only ahead, inside working hours and on a day not blocked whole', () => {
+  const hours = { date: wednesday, windows: [{ startLocal: '09:00', endLocal: '17:00' }] };
+  const clock = { today: wednesday, minute: 12 * 60 };
+  const slot = (patch: Partial<Parameters<typeof slotAvailable>[0]>) => slotAvailable({ date: wednesday, minute: 14 * 60, hours, blockedAllDay: false, clock, ...patch });
+  assert.equal(slot({}), true);
+  assert.equal(slot({ minute: 11 * 60 }), false, 'already started today');
+  assert.equal(slot({ date: '2026-11-10', hours: { ...hours, date: '2026-11-10' } }), false, 'an earlier day');
+  assert.equal(slot({ minute: 18 * 60 }), false, 'outside working hours');
+  assert.equal(slot({ hours: undefined }), false, 'a closed day');
+  assert.equal(slot({ blockedAllDay: true }), false, 'a day blocked whole');
+});
+
+test('a swipe pulls the later side into view to go forward: leftwards in English, rightwards in Hebrew', () => {
+  assert.equal(swipeStep(-SWIPE_DISTANCE, 0, 'ltr'), 1);
+  assert.equal(swipeStep(SWIPE_DISTANCE, 0, 'ltr'), -1);
+  assert.equal(swipeStep(SWIPE_DISTANCE, 0, 'rtl'), 1);
+  assert.equal(swipeStep(-SWIPE_DISTANCE, 0, 'rtl'), -1);
+  // A short, fast flick counts; a short, slow drag does not.
+  assert.equal(swipeStep(SWIPE_DISTANCE / 2, SWIPE_VELOCITY, 'rtl'), 1);
+  assert.equal(swipeStep(SWIPE_DISTANCE / 2, SWIPE_VELOCITY / 2, 'rtl'), 0);
 });
 
 test('instants are read in the business zone, not the device zone', () => {
@@ -68,7 +97,7 @@ const booking = (id: string, startsAt: string, endsAt: string, status: AgendaApp
 const timedBlock: TimeBlock = { id: 'lunch', startsAt: '2026-11-11T11:00:00Z', endsAt: '2026-11-11T11:30:00Z', allDay: false, reason: null, staff: null, fromDate: wednesday, toDate: wednesday, startLocal: '13:00', endLocal: '13:30' };
 const holiday: TimeBlock = { id: 'off', startsAt: '2026-11-11T22:00:00Z', endsAt: '2026-11-13T22:00:00Z', allDay: true, reason: null, staff: null, fromDate: '2026-11-12', toDate: '2026-11-13' };
 
-test('columns leave cancelled appointments out, grey ended ones and lift whole-day blocks above the grid', () => {
+test('columns leave cancelled appointments out, grey ended ones and give each day its whole-day blocks', () => {
   const now = Date.parse('2026-11-11T09:00:00Z');
   const { bookings, columns } = calendarColumns({ locale: 'en', timezone: zone, today: wednesday, now, dates: periodDates(wednesday, 'week'), agenda: {
     hours: [], blocks: [timedBlock, holiday],
