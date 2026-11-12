@@ -129,9 +129,9 @@ export async function registerScreenFlows(app: FastifyInstance) {
     return { released: true };
   });
   app.get('/api/provider/agenda', async request => {
-    const { businessId, date, days } = z.strictObject({ businessId: z.string().optional(), date: z.string().date(), days: z.enum(['1', '7']).default('1') }).parse(request.query);
+    const { businessId, date, days } = z.strictObject({ businessId: z.string().optional(), date: z.string().date(), days: z.enum(['1', '3', '7']).default('1') }).parse(request.query);
     const context = await providerContext(request, businessId);
-    return readProviderAgenda(await requireBusinessMembership(context.identity.id, context.businessId, ['OWNER', 'MANAGER']), date, days === '7' ? 7 : 1);
+    return readProviderAgenda(await requireBusinessMembership(context.identity.id, context.businessId, ['OWNER', 'MANAGER']), date, Number(days) as 1 | 3 | 7);
   });
   app.get('/api/provider/block-time', async request => {
     const { businessId } = z.strictObject({ businessId: z.string().optional() }).parse(request.query);

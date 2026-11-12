@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 import { tokens } from '@/src/design/tokens';
 import { isolateLtr } from '@/src/i18n/messages';
-import { SLOT_MINUTES, gridSlots, isOpen, localClock, minutesOf } from '@/src/lib/CalendarGrid';
+import { SLOT_MINUTES, gridSlots, localClock, minutesOf, slotAvailable } from '@/src/lib/CalendarGrid';
 import type { BusinessCalendarView, CalendarColumn, CalendarEntry } from '@/src/types/BusinessCalendar.types';
 import type { Placed } from '@/src/lib/CalendarGrid';
 import { AppText as Text } from './AppText';
@@ -17,9 +17,9 @@ const flat = { minHeight: 0, minWidth: 0 };
 /** A spacer as wide as the hours column, so headers line up with the grid in both directions (a padding's side flips differently on web). */
 const Gutter = () => <View style={{ width: GUTTER_WIDTH }} />;
 
-type GridProps = Pick<BusinessCalendarView, 't' | 'mode' | 'columns' | 'grid' | 'clock' | 'addAt' | 'openEntry' | 'openDay'>;
+type GridProps = Pick<BusinessCalendarView, 't' | 'mode' | 'columns' | 'grid' | 'clock' | 'chooseSlot' | 'openEntry' | 'openDay'>;
 
-/** The weekday and date over each column; in the week a tap opens that day. Visible text is each button's name: a separate label fails axe's label-content-name-mismatch. */
+/** The weekday and date over each column; with several days a tap opens that day. Visible text is each button's name: a separate label fails axe's label-content-name-mismatch. */
 export function CalendarDayHeaders({ mode, columns, openDay }: Pick<GridProps, 'mode' | 'columns' | 'openDay'>) {
   return <View className="flex-row border-b border-line bg-surface">
     <Gutter />
@@ -30,24 +30,10 @@ export function CalendarDayHeaders({ mode, columns, openDay }: Pick<GridProps, '
           <Text className={`text-base font-bold ${column.today ? 'text-white' : 'text-ink'}`}>{column.dayOfMonth}</Text>
         </View>
       </>;
-      return mode === 'week'
+      return mode !== 'day'
         ? <Control key={column.date} testID={`calendar-day-${column.date}`} accessibilityRole="button" onPress={() => openDay(column.date)} className="flex-1 items-center gap-0.5 py-1 active:bg-brand-soft" style={flat}>{label}</Control>
         : <View key={column.date} testID={`calendar-day-${column.date}`} className="flex-1 items-center gap-0.5 py-1">{label}</View>;
     })}
-  </View>;
-}
-
-/** Whole-day blocks, above the grid like Google Calendar's all-day row. Shown only when the period has one. */
-export function CalendarAllDayRow({ t, columns, openEntry }: Pick<GridProps, 't' | 'columns' | 'openEntry'>) {
-  if (!columns.some(column => column.allDay.length)) return null;
-  return <View className="flex-row border-b border-line bg-surface py-1">
-    <Gutter />
-    {columns.map(column => <View key={column.date} className="flex-1 gap-0.5 px-0.5">
-      {column.allDay.map(block => <Control key={block.id} testID={`calendar-allday-${column.date}-${block.id}`} accessibilityRole="button" onPress={() => openEntry({ kind: 'block', startsAt: block.startsAt, endsAt: block.endsAt, block })}
-        className="rounded-md border border-amber-300 bg-amber-100 px-1 py-0.5 active:bg-amber-200" style={flat}>
-        <Text numberOfLines={1} className="text-xs font-semibold text-warning">{block.reason || t('dashboard.blocked')}</Text>
-      </Control>)}
-    </View>)}
   </View>;
 }
 
@@ -67,23 +53,42 @@ function Entry({ piece, grid, mode, t, openEntry }: { piece: Placed<CalendarEntr
   return <Control testID={`calendar-entry-${piece.key}`} accessibilityRole="button" onPress={() => openEntry(entry)}
     className={`absolute overflow-hidden rounded-md px-1 py-0.5 ${look}`}
     style={{ ...flat, top, height, width: `${100 / piece.lanes}%`, start: `${piece.lane * 100 / piece.lanes}%`, borderWidth: entry.kind === 'appointment' && !entry.ended ? 0 : undefined }}>
-    {mode === 'day' ? <>
+    {/* Three columns leave room for a name, not for a name after the time: the name leads, then the time. */}
+    {mode === 'threeDays' ? <>
+      <Text numberOfLines={1} className={`text-xs font-bold ${ink}`}>{title}</Text>
+      {lines > 1 ? <Text numberOfLines={1} className={`text-xs ${ink}`}>{time}</Text> : null}
+      {lines > 2 && detail ? <Text numberOfLines={lines - 2} className={`text-xs ${ink}`}>{detail}</Text> : null}
+    </> : mode === 'day' ? <>
       <Text numberOfLines={1} className={`text-xs font-bold ${ink}`}>{time} · {title}</Text>
       {lines > 1 && detail ? <Text numberOfLines={lines - 1} className={`text-xs ${ink}`}>{detail}</Text> : null}
     </> : <Text numberOfLines={lines} className={`text-xs font-semibold ${ink}`} style={{ lineHeight: 16 }}>{title}</Text>}
   </Control>;
 }
 
-function Column({ column, grid, clock, mode, t, addAt, openEntry }: { column: CalendarColumn } & Omit<GridProps, 'columns' | 'openDay'>) {
-  const past = (localTime: string) => column.date < clock.today || column.date === clock.today && minutesOf(localTime) < clock.minute;
+/** The shade of every slot nothing can start in, past or outside working hours alike, so one colour means "not here". */
+const UNAVAILABLE = 'bg-slate-100';
+
+/** A day blocked whole is filled with its block, from the grid's top to its bottom; a tap opens the block. */
+function AllDayBlocks({ column, t, openEntry }: { column: CalendarColumn } & Pick<GridProps, 't' | 'openEntry'>) {
+  const count = column.allDay.length;
+  return <>{column.allDay.map((block, index) => <Control key={block.id} testID={`calendar-allday-${column.date}-${block.id}`} accessibilityRole="button" onPress={() => openEntry({ kind: 'block', startsAt: block.startsAt, endsAt: block.endsAt, block })}
+    className="absolute inset-y-0 border border-amber-300 bg-amber-100 px-1 py-1 active:bg-amber-200" style={{ ...flat, width: `${100 / count}%`, start: `${index * 100 / count}%` }}>
+    <Text className="text-xs font-semibold text-warning">{block.reason || t('dashboard.blocked')}</Text>
+  </Control>)}</>;
+}
+
+function Column({ column, grid, clock, mode, t, chooseSlot, openEntry }: { column: CalendarColumn } & Omit<GridProps, 'columns' | 'openDay'>) {
+  const blockedAllDay = column.allDay.length > 0;
   return <View testID={`calendar-column-${column.date}`} className="relative flex-1 border-s border-line">
     {gridSlots(grid).map(localTime => {
-      const minute = minutesOf(localTime), shade = isOpen(column.hours, minute) ? 'bg-surface' : 'bg-slate-100', line = minute % 60 === 0 ? 'border-t border-line' : '';
-      // An empty slot ahead starts a new appointment there; a slot already past is only drawn.
-      return past(localTime) ? <View key={localTime} className={`${shade} ${line}`} style={{ height: HOUR_HEIGHT / (60 / SLOT_MINUTES) }} />
-        : <Control key={localTime} testID={`calendar-slot-${column.date}-${localTime}`} accessibilityRole="button" accessibilityLabel={t('calendar.addAt', { date: column.fullDate, time: isolateLtr(localTime) })} onPress={() => addAt(column.date, localTime)}
-          className={`${shade} ${line} active:bg-brand-soft`} style={{ ...flat, height: HOUR_HEIGHT / (60 / SLOT_MINUTES) }} />;
+      const minute = minutesOf(localTime), line = minute % 60 === 0 ? 'border-t border-line' : '', height = HOUR_HEIGHT / (60 / SLOT_MINUTES);
+      // A slot something can start in offers Add appointment or Block time; any other is only drawn, in the unavailable shade.
+      return slotAvailable({ date: column.date, minute, hours: column.hours, blockedAllDay, clock })
+        ? <Control key={localTime} testID={`calendar-slot-${column.date}-${localTime}`} accessibilityRole="button" accessibilityLabel={t('calendar.slotAt', { date: column.fullDate, time: isolateLtr(localTime) })} onPress={() => chooseSlot(column.date, localTime)}
+          className={`bg-surface ${line} active:bg-brand-soft`} style={{ ...flat, height }} />
+        : <View key={localTime} className={`${UNAVAILABLE} ${line}`} style={{ height }} />;
     })}
+    <AllDayBlocks column={column} t={t} openEntry={openEntry} />
     {column.entries.map(piece => <Entry key={piece.key} piece={piece} grid={grid} mode={mode} t={t} openEntry={openEntry} />)}
     {column.today && clock.minute >= grid.start * 60 && clock.minute <= grid.end * 60 ? <View testID="calendar-now" accessible={false} pointerEvents="none" className="absolute inset-x-0 flex-row items-center" style={{ top: (clock.minute - grid.start * 60) / 60 * HOUR_HEIGHT - 4 }}>
       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: tokens.color.danger }} />
@@ -94,7 +99,8 @@ function Column({ column, grid, clock, mode, t, addAt, openEntry }: { column: Ca
 
 /**
  * The hours of the period as rows and its days as columns (decisions.md, "The calendar screen" — 2026-11-11).
- * Outside working hours is shaded. Appointments are brand-filled until they end, then grey; blocks are amber, as on the home.
+ * Slots nothing can start in share one shade; a day blocked whole is filled with its block. Appointments are
+ * brand-filled until they end, then grey; blocks are amber, as on the home.
  */
 export function CalendarTimeGrid(props: GridProps) {
   const { grid, columns } = props;

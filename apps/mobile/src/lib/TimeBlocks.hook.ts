@@ -45,9 +45,10 @@ export function useTimeBlockDialog(businessId: string, timezone: string | undefi
   const [failure, setFailure] = useState<MessageKey | ''>('');
   const [busy, setBusy] = useState(false);
 
-  function openDialog(date?: string) {
+  /** A calendar slot passes its time too, and the block starts there. */
+  function openDialog(date?: string, startLocal?: string) {
     if (operation.current || !timezone) return;
-    setForm(emptyBlockForm(date ?? localDate(timezone))); setErrors({}); setConflicts(null); setFailure(''); setOpen(true);
+    setForm(emptyBlockForm(date ?? localDate(timezone), startLocal)); setErrors({}); setConflicts(null); setFailure(''); setOpen(true);
   }
   /** A pending save keeps the dialog open, so its result lands where the owner is looking. */
   function close() { if (!operation.current) setOpen(false); }

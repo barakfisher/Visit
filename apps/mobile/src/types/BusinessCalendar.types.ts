@@ -1,6 +1,6 @@
 import type { Locale } from '../i18n/messages';
 import type { CalendarMode, DayHours, Placed } from '../lib/CalendarGrid';
-import type { BlockRemovalState } from '../lib/TimeBlocks.hook';
+import type { BlockRemovalState, TimeBlockDialogState } from '../lib/TimeBlocks.hook';
 import type { ManualBookingView } from './ManualBooking.types';
 import type { AgendaAppointment, ProviderAgendaView } from './ProviderAgenda.types';
 import type { TimeBlock } from './TimeBlocks.types';
@@ -29,8 +29,14 @@ export type BusinessCalendarView = {
   /** Today and the minute of day in the business's zone: the "now" line, and slots before it cannot start an appointment. */
   clock: { today: string; minute: number };
   empty: boolean;
-  /** Opens Add appointment on this calendar at a slot's date and time. */
-  addAt: (date: string, localTime: string) => void;
+  /** A tapped slot asks what to start there; `slot` is the one asked about, or null when no choice is open. */
+  chooseSlot: (date: string, localTime: string) => void; closeSlot: () => void;
+  slot: { date: string; localTime: string; title: string } | null;
+  /** From the slot's choice: Add appointment, or Block time, at that date and time. */
+  addAtSlot: () => void; blockAtSlot: () => void;
+  blockDialog: TimeBlockDialogState; staff: readonly { id: string; displayName: string }[];
+  /** A horizontal swipe on the grid, in its own pixels; it follows the finger until it is let go. */
+  swipe: { direction: 'ltr' | 'rtl'; onStart: () => void; onEnd: (translationX: number, velocityX: number) => void };
   /** The appointment or block whose sheet is open. */
   openEntry: (entry: CalendarEntry) => void; closeEntry: () => void;
   openAppointment: AgendaAppointment | null; openBlock: TimeBlock | null;

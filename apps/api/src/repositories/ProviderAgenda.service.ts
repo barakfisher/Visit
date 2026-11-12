@@ -36,10 +36,11 @@ async function readDayFreeTime(tx: Prisma.TransactionClient, businessId: string,
   }) });
   return { closed: result.closed, free: result.free.map(gap => presentFreeGap(gap, timezone, before)) };
 }
-export async function readProviderAgenda(context: AuthorizedBusinessContext, date: string, days: 1 | 7, now = new Date()) {
+export async function readProviderAgenda(context: AuthorizedBusinessContext, date: string, days: 1 | 3 | 7, now = new Date()) {
   await validateBusinessContext(context, ['OWNER', 'MANAGER']);
   return prisma.$transaction(async tx => {
     const business = await tx.business.findUniqueOrThrow({ where: { id: context.businessId }, select: { id: true, name: true, timezone: true } });
+    // A week starts on its Sunday; a day and the calendar's three days start on the chosen date.
     const chosen = Temporal.PlainDate.from(date), first = days === 7 ? chosen.subtract({ days: chosen.dayOfWeek % 7 }) : chosen, end = first.add({ days });
     const startsAt = new Date(Number(first.toZonedDateTime({ timeZone: business.timezone, plainTime: '00:00' }).epochMilliseconds));
     const endsAt = new Date(Number(end.toZonedDateTime({ timeZone: business.timezone, plainTime: '00:00' }).epochMilliseconds));
