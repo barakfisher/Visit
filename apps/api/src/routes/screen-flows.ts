@@ -4,17 +4,18 @@ import { runBookingAttempt } from '../scheduling/booking-attempts.service.js';
 import { reviewedServiceSchema } from '../scheduling/booking-consent.utils.js';
 import { publicBusinessWhere } from '../security/business-eligibility.js';
 import { withBusinessConfiguration } from '../repositories/publication.js';
-import { requireOwnedReschedule } from '../security/tenant-context.js';
+import { requireOwnedReschedule, requireBusinessPermission } from '../security/tenant-context.js';
 import { getBusinessAvailability, getBusinessBookingCalendar } from '../repositories/availability.js';
 import type { FastifyInstance, FastifyRequest, HTTPMethods } from 'fastify';
 import { z } from 'zod';
 import { parseService } from '../repositories/services.js';
 import { prisma } from '../db/client.js';
 import { authenticate } from '../security/sessions.js';
-import { requirePublicBusiness, requireBusinessMembership } from '../security/tenant-context.js';
+import { requirePublicBusiness } from '../security/tenant-context.js';
 import { AppError, conflict, notFound } from '../http/errors.js';
 import { requireHold, releaseHold } from '../scheduling/reservations.js';
 import { listActiveCustomerBookings } from '../repositories/bookings.js';
+import { BusinessPermission, rolesWith } from '../security/business-permissions.js';
 
 // Compatibility boundary: reuse the existing validated, tenant-scoped v1 handlers.
 // Error details are not forwarded: a v1 handler's details must not reach a route with other callers.
@@ -28,11 +29,11 @@ async function providerContext(request: FastifyRequest, supplied?: string) {
   const { identity } = await authenticate(request);
   let businessId = supplied;
   if (!businessId) {
-    const memberships = await prisma.membership.findMany({ where: { identityId: identity.id, status: 'ACTIVE', role: { in: ['OWNER', 'MANAGER'] }, business: { approvalStatus: 'APPROVED' } }, select: { businessId: true } });
+    const memberships = await prisma.membership.findMany({ where: { identityId: identity.id, status: 'ACTIVE', role: { in: rolesWith(BusinessPermission.WORKSPACE) }, business: { approvalStatus: 'APPROVED' } }, select: { businessId: true } });
     if (memberships.length !== 1) throw new AppError(400, 'CHOOSE_BUSINESS', 'Choose the business you want to manage.');
     businessId = memberships[0]!.businessId;
   }
-  await requireBusinessMembership(identity.id, businessId, ['OWNER', 'MANAGER']);
+  await requireBusinessPermission(identity.id, businessId, BusinessPermission.WORKSPACE);
   const business = await prisma.business.findUniqueOrThrow({ where: { id: businessId } });
   if (business.approvalStatus !== 'APPROVED') throw notFound();
   return { businessId, business, identity };
@@ -131,24 +132,24 @@ export async function registerScreenFlows(app: FastifyInstance) {
   app.get('/api/provider/agenda', async request => {
     const { businessId, date, days } = z.strictObject({ businessId: z.string().optional(), date: z.string().date(), days: z.enum(['1', '3', '7']).default('1') }).parse(request.query);
     const context = await providerContext(request, businessId);
-    return readProviderAgenda(await requireBusinessMembership(context.identity.id, context.businessId, ['OWNER', 'MANAGER']), date, Number(days) as 1 | 3 | 7);
+    return readProviderAgenda(await requireBusinessPermission(context.identity.id, context.businessId, BusinessPermission.SEE_ALL_CALENDARS), date, Number(days) as 1 | 3 | 7);
   });
   app.get('/api/provider/block-time', async request => {
     const { businessId } = z.strictObject({ businessId: z.string().optional() }).parse(request.query);
     const context = await providerContext(request, businessId);
-    return listTimeBlocks(await requireBusinessMembership(context.identity.id, context.businessId, ['OWNER', 'MANAGER']));
+    return listTimeBlocks(await requireBusinessPermission(context.identity.id, context.businessId, BusinessPermission.SEE_ALL_CALENDARS));
   });
   app.post('/api/provider/block-time', async (request, reply) => {
     const session = await authenticate(request), input = timeBlockSchema.parse(request.body);
     const { businessId } = await providerContext(request, input.businessId);
-    const result = await createTimeBlock(await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']), input, session);
+    const result = await createTimeBlock(await requireBusinessPermission(session.identity.id, businessId, BusinessPermission.ACT_ON_ALL_CALENDARS), input, session);
     reply.code(201); return result;
   });
   app.delete('/api/provider/block-time/:blockId', async request => {
     const session = await authenticate(request);
     const { businessId } = await providerContext(request, z.object({ businessId: z.string().optional() }).parse(request.query).businessId);
     const { blockId } = z.object({ blockId: z.string().min(1) }).parse(request.params);
-    return deleteTimeBlock(await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']), blockId, session);
+    return deleteTimeBlock(await requireBusinessPermission(session.identity.id, businessId, BusinessPermission.ACT_ON_ALL_CALENDARS), blockId, session);
   });
   app.post('/api/provider/services', async (request, reply) => {
     const { businessId, identity } = await providerContext(request, (request.query as { businessId?: string }).businessId);
@@ -157,7 +158,7 @@ export async function registerScreenFlows(app: FastifyInstance) {
     const input = parseService(fields);
     if ('active' in input) throw new AppError(400, 'VALIDATION_ERROR', 'New services start active.');
     const staffIds = [...new Set(assigned)];
-    const service = await withBusinessConfiguration(await requireBusinessMembership(identity.id, businessId, ['OWNER', 'MANAGER']), async (tx) => {
+    const service = await withBusinessConfiguration(await requireBusinessPermission(identity.id, businessId, BusinessPermission.BUSINESS_SETUP), async (tx) => {
       // Checked under the configuration lock, so a staff member removed meanwhile cannot be linked.
       if (await tx.staff.count({ where: { businessId, id: { in: staffIds }, active: true, archivedAt: null } }) !== staffIds.length) throw notFound();
       const service = await tx.service.create({ data: { businessId, name: input.name.trim(), description: input.description?.trim() ?? null, durationMinutes: input.durationMinutes, priceMinor: input.priceMinor ?? null, currency: input.currency ?? null } });

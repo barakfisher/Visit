@@ -4,9 +4,10 @@ import { validateAuthenticatedSession, type AuthenticatedSession } from './sessi
 import { MembershipRole, MembershipStatus } from '../generated/prisma/client.js';
 import { prisma } from '../db/client.js';
 import { conflict, forbidden, notFound, rescheduleCutoff } from '../http/errors.js';
+import { BusinessPermission, ROLE_PRIORITY, rolesWith } from './business-permissions.js';
 
-/** Who runs a business: they see its agenda and are told about its bookings. Staff are not linked to an account's inbox. */
-export const MANAGING_ROLES = ['OWNER', 'MANAGER'] as const;
+/** Who sees the whole business: they see its agenda and are told about all of its bookings. */
+export const MANAGING_ROLES: readonly MembershipRole[] = Object.freeze(rolesWith(BusinessPermission.SEE_ALL_CALENDARS));
 
 const contextBrand: unique symbol = Symbol('AuthorizedBusinessContext');
 const publicContextBrand: unique symbol = Symbol('PublicBusinessContext');
@@ -37,11 +38,16 @@ export async function requireBusinessMembership(
     },
     select: { role: true },
   });
-  const membership = ['OWNER', 'MANAGER', 'STAFF'].map(role => memberships.find(m => m.role === role)).find(Boolean);
+  const membership = ROLE_PRIORITY.map(role => memberships.find(m => m.role === role)).find(Boolean);
   if (!membership) throw forbidden();
   const context = Object.freeze({ identityId, businessId, role: membership.role, [contextBrand]: true as const });
   issuedMembershipContexts.add(context);
   return context;
+}
+
+/** The member's context for a business, if they hold the permission there. */
+export function requireBusinessPermission(identityId: string, businessId: string, permission: BusinessPermission) {
+  return requireBusinessMembership(identityId, businessId, rolesWith(permission));
 }
 
 export async function requirePublicBusiness(businessId: string): Promise<PublicBusinessContext> {
@@ -64,6 +70,11 @@ export async function validateBusinessContext(context: AuthorizedBusinessContext
   if (roles) assertMembershipRole(context, roles);
   // Contexts are in-process capabilities, not permanent membership grants.
   await requireBusinessMembership(context.identityId, context.businessId, [context.role]);
+}
+
+/** Rechecks an issued context against the member's current permission. */
+export function validateBusinessPermission(context: AuthorizedBusinessContext, permission: BusinessPermission) {
+  return validateBusinessContext(context, rolesWith(permission));
 }
 
 export async function validatePublicBusinessContext(context: PublicBusinessContext) {

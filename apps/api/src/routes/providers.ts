@@ -11,10 +11,11 @@ import { BusinessApprovalStatus, MembershipRole, MembershipStatus, PlatformRole 
 import { prisma } from '../db/client.js';
 import { AppError, conflict, forbidden, notFound } from '../http/errors.js';
 import { authenticate } from '../security/sessions.js';
-import { requireBusinessMembership, requirePublicBusiness } from '../security/tenant-context.js';
+import { requireBusinessMembership, requirePublicBusiness, requireBusinessPermission } from '../security/tenant-context.js';
 import { parseService, createBusinessService, deleteBusinessService, getBusinessService, listBusinessServices, listPublicServices, updateBusinessService } from '../repositories/services.js';
 
 import { getBusinessSettings, getBusinessPolicy, saveBusinessPolicy, getBusinessAvailability, saveBusinessAvailability, listBusinessStaff, createBusinessStaff, saveStaffAvailability, getStaffAvailability, removeBusinessStaff, updateBusinessStaff } from '../repositories/provider-settings.js';
+import { BusinessPermission } from '../security/business-permissions.js';
 
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const businessIdParams = z.object({ businessId: z.string().min(1) });
@@ -55,14 +56,14 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
   app.get('/v1/provider/businesses/:businessId/publication', async request => {
     const { businessId } = businessIdParams.parse(request.params);
     const { identity } = await authenticate(request);
-    await requireBusinessMembership(identity.id, businessId, ['OWNER', 'MANAGER']);
+    await requireBusinessPermission(identity.id, businessId, BusinessPermission.BUSINESS_SETUP);
     // hasAppointments keeps the agenda in reach of a business that was set up before (decisions.md, 2026-11-01 setup guide).
     return prisma.$transaction(async tx => ({ ...await publicationReadiness(tx, businessId), hasAppointments: !!await tx.booking.findFirst({ where: { businessId, status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'] } }, select: { id: true } }) }), { isolationLevel: 'RepeatableRead', timeout: 15000 });
   });
   app.get('/v1/provider/businesses/:businessId/sharing', async request => {
     const { businessId } = businessIdParams.parse(request.params);
     const { identity } = await authenticate(request);
-    await requireBusinessMembership(identity.id, businessId, ['OWNER', 'MANAGER']);
+    await requireBusinessPermission(identity.id, businessId, BusinessPermission.BUSINESS_SETUP);
     const business = await prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { slug: true, approvalStatus: true, publishedAt: true, deletedAt: true } });
     const path = providerSharePath(business.slug);
     const available = !!path && business.approvalStatus === 'APPROVED' && !!business.publishedAt && !business.deletedAt;
@@ -72,13 +73,13 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
     const { businessId } = businessIdParams.parse(request.params);
     const { published } = z.strictObject({ published: z.boolean() }).parse(request.body);
     const { identity } = await authenticate(request);
-    return setPublication(await requireBusinessMembership(identity.id, businessId, ['OWNER', 'MANAGER']), published);
+    return setPublication(await requireBusinessPermission(identity.id, businessId, BusinessPermission.BUSINESS_SETUP), published);
   });
   app.patch('/v1/provider/businesses/:businessId', async request => {
     const { businessId } = businessIdParams.parse(request.params);
     const input = z.strictObject({ name: z.string().trim().min(2).max(120).optional(), location: z.string().trim().min(2).max(200).optional(), category: z.string().trim().min(2).max(80).optional(), description: z.string().trim().max(2000).nullable().optional(), contactEmail: z.string().trim().email().max(254).nullable().optional(), contactPhone: z.string().regex(/^\+[1-9]\d{7,14}$/).nullable().optional() }).refine(value => Object.keys(value).length > 0).parse(request.body);
     const { identity } = await authenticate(request);
-    const context = await requireBusinessMembership(identity.id, businessId, ['OWNER', 'MANAGER']);
+    const context = await requireBusinessPermission(identity.id, businessId, BusinessPermission.BUSINESS_SETUP);
     return withBusinessConfiguration(context, tx => tx.business.update({ where: { id: businessId }, data: { ...(input.name !== undefined ? { name: input.name } : {}), ...(input.location !== undefined ? { location: input.location } : {}), ...(input.category !== undefined ? { category: input.category } : {}), ...(input.description !== undefined ? { description: input.description } : {}), ...(input.contactEmail !== undefined ? { contactEmail: input.contactEmail } : {}), ...(input.contactPhone !== undefined ? { contactPhone: input.contactPhone } : {}) }, select: { id: true, name: true, location: true, category: true, description: true, contactEmail: true, contactPhone: true } }));
   });
 
@@ -158,7 +159,7 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
     const input = parseService(request.body);
     if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
-    const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
+    const context = await requireBusinessPermission(identity.id, params.data.businessId, BusinessPermission.BUSINESS_SETUP);
     reply.code(201);
     return createBusinessService(context, input);
   });
@@ -176,7 +177,7 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
     const input = parseService(request.body, true);
     if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
-    const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
+    const context = await requireBusinessPermission(identity.id, params.data.businessId, BusinessPermission.BUSINESS_SETUP);
     return updateBusinessService(context, params.data.serviceId, input);
   });
 
@@ -184,7 +185,7 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
     const params = serviceParams.safeParse(request.params);
     if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
-    const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
+    const context = await requireBusinessPermission(identity.id, params.data.businessId, BusinessPermission.BUSINESS_SETUP);
     return deleteBusinessService(context, params.data.serviceId);
   });
 
@@ -192,7 +193,7 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
     const params = businessIdParams.safeParse(request.params);
     if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
-    const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
+    const context = await requireBusinessPermission(identity.id, params.data.businessId, BusinessPermission.BUSINESS_SETUP);
     return getBusinessPolicy(context);
   });
 
@@ -200,7 +201,7 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
     const params = businessIdParams.safeParse(request.params);
     if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
-    const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
+    const context = await requireBusinessPermission(identity.id, params.data.businessId, BusinessPermission.BUSINESS_SETUP);
     return saveBusinessPolicy(context, request.body as Parameters<typeof saveBusinessPolicy>[1]);
   });
 
@@ -208,14 +209,14 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
     const params = businessIdParams.safeParse(request.params);
     if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
-    const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
+    const context = await requireBusinessPermission(identity.id, params.data.businessId, BusinessPermission.BUSINESS_SETUP);
     return getBusinessAvailability(context);
   });
 
   app.post('/v1/provider/businesses/:businessId/availability-rules/preview', async request => {
     const { businessId, staffId } = z.object({ businessId: z.string().min(1), staffId: z.string().min(1).optional() }).parse(request.params);
     const session = await authenticate(request);
-    return previewSchedule(await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']), request.body, staffId, session);
+    return previewSchedule(await requireBusinessPermission(session.identity.id, businessId, BusinessPermission.BUSINESS_SETUP), request.body, staffId, session);
   });
 
   app.put('/v1/provider/businesses/:businessId/availability-rules', async (request) => {
@@ -223,7 +224,7 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
     if (!params.success) throw notFound();
     const session = await authenticate(request);
     const { identity } = session;
-    const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
+    const context = await requireBusinessPermission(identity.id, params.data.businessId, BusinessPermission.BUSINESS_SETUP);
     return saveBusinessAvailability(context, request.body, z.string().regex(/^[a-f0-9]{64}$/).optional().parse(request.headers['x-visit-schedule-preview']), session);
   });
 
@@ -231,7 +232,7 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
     const params = businessIdParams.safeParse(request.params);
     if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
-    const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
+    const context = await requireBusinessPermission(identity.id, params.data.businessId, BusinessPermission.BUSINESS_SETUP);
     return listBusinessStaff(context);
   });
 
@@ -240,7 +241,7 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
     const body = z.strictObject({ displayName: z.string().trim().min(2).max(120), serviceIds: z.array(z.string().min(1)).min(1).max(100), parallelCapacity: z.number().int().min(1).max(100).optional(), creationKey: z.string().uuid().optional() }).safeParse(request.body);
     if (!params.success || !body.success || new Set(body.data.serviceIds).size !== body.data.serviceIds.length) throw new AppError(400, 'VALIDATION_ERROR', 'Provide a staff name and one or more unique services.');
     const { identity } = await authenticate(request);
-    const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
+    const context = await requireBusinessPermission(identity.id, params.data.businessId, BusinessPermission.BUSINESS_SETUP);
     reply.code(201);
     return createBusinessStaff(context, body.data);
   });
@@ -248,7 +249,7 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
   app.post('/v1/provider/businesses/:businessId/staff/:staffId/availability-rules/preview', async request => {
     const { businessId, staffId } = z.object({ businessId: z.string().min(1), staffId: z.string().min(1).optional() }).parse(request.params);
     const session = await authenticate(request);
-    return previewSchedule(await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']), request.body, staffId, session);
+    return previewSchedule(await requireBusinessPermission(session.identity.id, businessId, BusinessPermission.BUSINESS_SETUP), request.body, staffId, session);
   });
 
   app.put('/v1/provider/businesses/:businessId/staff/:staffId/availability-rules', async (request) => {
@@ -256,24 +257,24 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
     if (!params.success) throw notFound();
     const session = await authenticate(request);
     const { identity } = session;
-    const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
+    const context = await requireBusinessPermission(identity.id, params.data.businessId, BusinessPermission.BUSINESS_SETUP);
     return saveStaffAvailability(context, params.data.staffId, request.body, z.string().regex(/^[a-f0-9]{64}$/).optional().parse(request.headers['x-visit-schedule-preview']), session);
   });
   app.get('/v1/provider/businesses/:businessId/staff/:staffId/availability-rules', async request => {
     const { businessId, staffId } = z.strictObject({ businessId: z.string().min(1), staffId: z.string().min(1) }).parse(request.params);
     const { identity } = await authenticate(request);
-    return getStaffAvailability(await requireBusinessMembership(identity.id, businessId, ['OWNER', 'MANAGER']), staffId);
+    return getStaffAvailability(await requireBusinessPermission(identity.id, businessId, BusinessPermission.BUSINESS_SETUP), staffId);
   });
   app.patch('/v1/provider/businesses/:businessId/staff/:staffId', async request => {
     const { businessId, staffId } = z.strictObject({ businessId: z.string().min(1), staffId: z.string().min(1) }).parse(request.params);
     const input = z.strictObject({ displayName: z.string().trim().min(2).max(120).optional(), active: z.boolean().optional(), parallelCapacity: z.number().int().min(1).max(100).optional(), serviceIds: z.array(z.string().min(1)).max(100).optional() }).refine(v => Object.keys(v).length > 0).parse(request.body);
     const { identity } = await authenticate(request);
-    return updateBusinessStaff(await requireBusinessMembership(identity.id, businessId, ['OWNER', 'MANAGER']), staffId, input);
+    return updateBusinessStaff(await requireBusinessPermission(identity.id, businessId, BusinessPermission.BUSINESS_SETUP), staffId, input);
   });
   app.delete('/v1/provider/businesses/:businessId/staff/:staffId', async request => {
     const params = z.strictObject({ businessId: z.string().min(1), staffId: z.string().min(1) }).safeParse(request.params);
     if (!params.success) throw notFound();
     const session = await authenticate(request);
-    return removeBusinessStaff(await requireBusinessMembership(session.identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]), params.data.staffId, session);
+    return removeBusinessStaff(await requireBusinessPermission(session.identity.id, params.data.businessId, BusinessPermission.BUSINESS_SETUP), params.data.staffId, session);
   });
 }

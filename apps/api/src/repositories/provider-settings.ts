@@ -11,10 +11,10 @@ import { isDatabaseCapacityError } from '../scheduling/booking-transaction.js';
 import { releaseHold } from '../scheduling/reservations.js';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { validateBusinessContext, type AuthorizedBusinessContext } from '../security/tenant-context.js';
+import { validateBusinessContext, type AuthorizedBusinessContext, validateBusinessPermission } from '../security/tenant-context.js';
 import { env } from '../env.js';
+import { BusinessPermission } from '../security/business-permissions.js';
 
-const managers = ['OWNER', 'MANAGER'] as const;
 const staffProjection = { id: true, businessId: true, displayName: true, active: true, parallelCapacity: true } as const;
 export type AvailabilityRules = {
   weekly: { weekday: number; intervals: { startLocal: string; endLocal: string }[] }[];
@@ -34,14 +34,14 @@ export async function getBusinessSettings(context: AuthorizedBusinessContext) {
 }
 
 export async function getBusinessPolicy(context: AuthorizedBusinessContext) {
-  await validateBusinessContext(context, managers);
+  await validateBusinessPermission(context, BusinessPermission.BUSINESS_SETUP);
   return { policy: await prisma.bookingPolicy.findUnique({ where: { businessId: context.businessId } }), defaults: DEFAULT_BOOKING_POLICY };
 }
 
 export const VERIFIED_PHONE_UNAVAILABLE = 'VERIFIED_PHONE_UNAVAILABLE';
 // Without SMS delivery no customer can prove a phone, so the requirement would make the business unbookable (decisions.md, 2026-11-03 verified phone).
 export async function saveBusinessPolicy(context: AuthorizedBusinessContext, input: PolicyInput, { phoneVerification = env.SMS_DELIVERY_MODE !== 'disabled' }: { phoneVerification?: boolean } = {}) {
-  await validateBusinessContext(context, managers);
+  await validateBusinessPermission(context, BusinessPermission.BUSINESS_SETUP);
   input = parseBookingPolicy(input);
   if (input.requireVerifiedPhone && !phoneVerification) throw new AppError(409, VERIFIED_PHONE_UNAVAILABLE, 'Phone verification is not available yet, so customers could not meet this requirement.');
   const data = {
@@ -65,12 +65,12 @@ export async function saveBusinessPolicy(context: AuthorizedBusinessContext, inp
 }
 
 export async function getBusinessAvailability(context: AuthorizedBusinessContext) {
-  await validateBusinessContext(context, managers);
+  await validateBusinessPermission(context, BusinessPermission.BUSINESS_SETUP);
   return { weekly: await prisma.businessWeeklyAvailability.findMany({ where: { businessId: context.businessId }, orderBy: [{ weekday: 'asc' }, { startLocal: 'asc' }] }) };
 }
 
 export async function saveBusinessAvailability(context: AuthorizedBusinessContext, input: unknown, expectedToken?: string, session?: AuthenticatedSession) {
-  await validateBusinessContext(context, managers);
+  await validateBusinessPermission(context, BusinessPermission.BUSINESS_SETUP);
   const businessId = context.businessId;
   const rules = parseAvailabilityRules(input);
   const weekly = rules.weekly.flatMap(day => day.intervals.map(hours => ({ businessId, weekday: day.weekday, startLocal: hours.startLocal, endLocal: hours.endLocal })));
@@ -84,12 +84,12 @@ export async function saveBusinessAvailability(context: AuthorizedBusinessContex
 }
 
 export async function listBusinessStaff(context: AuthorizedBusinessContext) {
-  await validateBusinessContext(context, managers);
+  await validateBusinessPermission(context, BusinessPermission.BUSINESS_SETUP);
   return { staff: await prisma.staff.findMany({ where: { businessId: context.businessId, archivedAt: null }, select: { ...staffProjection, services: { include: { service: { select: { id: true, name: true } } } } }, orderBy: { displayName: 'asc' } }) };
 }
 
 export async function createBusinessStaff(context: AuthorizedBusinessContext, input: { displayName: string; serviceIds: string[]; parallelCapacity?: number | undefined; creationKey?: string | undefined }) {
-  await validateBusinessContext(context, managers);
+  await validateBusinessPermission(context, BusinessPermission.BUSINESS_SETUP);
   input = z.strictObject({ displayName: z.string().trim().min(2).max(120), serviceIds: z.array(z.string().min(1)).min(1).max(100), parallelCapacity: z.number().int().min(1).max(100).optional(), creationKey: z.string().uuid().optional() }).parse(input);
   const businessId = context.businessId;
   const ids = [...new Set(input.serviceIds)];
@@ -110,7 +110,7 @@ export async function createBusinessStaff(context: AuthorizedBusinessContext, in
 }
 
 export async function saveStaffAvailability(context: AuthorizedBusinessContext, staffId: string, input: unknown, expectedToken?: string, session?: AuthenticatedSession) {
-  await validateBusinessContext(context, managers);
+  await validateBusinessPermission(context, BusinessPermission.BUSINESS_SETUP);
   const businessId = context.businessId;
   if (!await prisma.staff.findFirst({ where: { id: staffId, businessId, archivedAt: null }, select: { id: true } })) throw notFound();
   const rules = parseAvailabilityRules(input);
@@ -125,14 +125,14 @@ export async function saveStaffAvailability(context: AuthorizedBusinessContext, 
 }
 
 export async function getStaffAvailability(context: AuthorizedBusinessContext, staffId: string) {
-  await validateBusinessContext(context, managers);
+  await validateBusinessPermission(context, BusinessPermission.BUSINESS_SETUP);
   const businessId = context.businessId;
   if (!await prisma.staff.findFirst({ where: { id: staffId, businessId, archivedAt: null }, select: { id: true } })) throw notFound();
   return { weekly: await prisma.staffWeeklyAvailability.findMany({ where: { businessId, staffId }, orderBy: [{ weekday: 'asc' }, { startLocal: 'asc' }] }) };
 }
 
 export async function updateBusinessStaff(context: AuthorizedBusinessContext, staffId: string, input: { displayName?: string | undefined; active?: boolean | undefined; parallelCapacity?: number | undefined; serviceIds?: string[] | undefined }) {
-  await validateBusinessContext(context, managers);
+  await validateBusinessPermission(context, BusinessPermission.BUSINESS_SETUP);
   input = z.strictObject({ displayName: z.string().trim().min(2).max(120).optional(), active: z.boolean().optional(), parallelCapacity: z.number().int().min(1).max(100).optional(), serviceIds: z.array(z.string().min(1)).max(100).optional() }).refine(v => Object.keys(v).length > 0).parse(input);
   const businessId = context.businessId;
   try {
@@ -161,7 +161,7 @@ export async function updateBusinessStaff(context: AuthorizedBusinessContext, st
 export const STAFF_HAS_APPOINTMENTS = 'STAFF_HAS_APPOINTMENTS';
 
 export async function removeBusinessStaff(context: AuthorizedBusinessContext, staffId: string, session?: AuthenticatedSession, now = new Date()) {
-  await validateBusinessContext(context, managers);
+  await validateBusinessPermission(context, BusinessPermission.BUSINESS_SETUP);
   const businessId = context.businessId;
   const result = await withBusinessConfiguration(context, async tx => {
     await fenceScheduleSession(tx, session);

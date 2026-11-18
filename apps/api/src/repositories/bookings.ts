@@ -4,7 +4,8 @@ import { prisma } from '../db/client.js';
 import { validateAuthenticatedSession, type AuthenticatedSession } from '../security/sessions.js';
 import { canMarkNoShow, presentedStatus } from './AppointmentOutcome.utils.js';
 import { customerBookingActions } from './BookingActions.utils.js';
-import { validateBusinessContext, type AuthorizedBusinessContext } from '../security/tenant-context.js';
+import { type AuthorizedBusinessContext, validateBusinessPermission } from '../security/tenant-context.js';
+import { BusinessPermission } from '../security/business-permissions.js';
 
 export async function listCustomerBookings(session: AuthenticatedSession) {
   await validateAuthenticatedSession(session);
@@ -37,7 +38,7 @@ export async function listActiveCustomerBookings(session: AuthenticatedSession) 
 }
 
 export async function listProviderBookings(context: AuthorizedBusinessContext) {
-  await validateBusinessContext(context, ['OWNER', 'MANAGER']);
+  await validateBusinessPermission(context, BusinessPermission.SEE_ALL_CALENDARS);
   const bookings = await prisma.booking.findMany({ where: { businessId: context.businessId, status: { in: ['CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'] }, events: { some: {} } }, include: { staff: { select: { displayName: true } } }, orderBy: [{ startsAt: 'asc' }, { id: 'asc' }] });
   const now = Date.now();
   return bookings.map(booking => ({ ...booking, status: presentedStatus(booking, now), canMarkNoShow: canMarkNoShow(booking, now), service: bookingServiceSnapshot(booking) }));

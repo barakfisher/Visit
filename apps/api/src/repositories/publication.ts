@@ -4,8 +4,9 @@ import { Temporal } from '@js-temporal/polyfill';
 import { prisma } from '../db/client.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { AppError, forbidden, notFound } from '../http/errors.js';
-import { validateBusinessContext, type AuthorizedBusinessContext } from '../security/tenant-context.js';
+import { type AuthorizedBusinessContext, validateBusinessPermission } from '../security/tenant-context.js';
 import { workingWindows } from '../scheduling/availability.js';
+import { BusinessPermission, rolesWith } from '../security/business-permissions.js';
 export async function publicationReadiness(tx: Prisma.TransactionClient, businessId: string) {
   const business = await tx.business.findUnique({ where: { id: businessId }, include: { bookingPolicy: true, weeklyAvailability: true, services: { where: { active: true }, include: { staff: { where: { staff: { active: true } }, include: { staff: { include: { availability: true } } } } } } } });
   if (!business) throw notFound();
@@ -45,11 +46,11 @@ export async function publicationReadiness(tx: Prisma.TransactionClient, busines
   }
   return { ready: !Object.keys(blockers).length, blockers, publishedAt: business.publishedAt, state: business.publishedAt ? 'PUBLISHED' : business.approvalStatus === 'APPROVED' ? 'APPROVED' : 'DRAFT' };
 }
-export async function lockBusinessConfiguration(tx: Prisma.TransactionClient, context: AuthorizedBusinessContext) {
+export async function lockBusinessConfiguration(tx: Prisma.TransactionClient, context: AuthorizedBusinessContext, permission: BusinessPermission = BusinessPermission.BUSINESS_SETUP) {
   await tx.$queryRaw`SELECT id FROM "Business" WHERE id = ${context.businessId} FOR UPDATE`;
-  const membership = await tx.membership.findFirst({ where: { businessId: context.businessId, identityId: context.identityId, role: { in: ['OWNER', 'MANAGER'] }, status: 'ACTIVE', business: { approvalStatus: 'APPROVED' } } });
+  const membership = await tx.membership.findFirst({ where: { businessId: context.businessId, identityId: context.identityId, role: { in: rolesWith(permission) }, status: 'ACTIVE', business: { approvalStatus: 'APPROVED' } } });
   if (!membership) throw forbidden();
-  const locked = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "Membership" WHERE "businessId" = ${context.businessId} AND "identityId" = ${context.identityId} AND status = 'ACTIVE' AND role IN ('OWNER','MANAGER') FOR SHARE`;
+  const locked = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "Membership" WHERE "businessId" = ${context.businessId} AND "identityId" = ${context.identityId} AND status = 'ACTIVE' AND role = ANY(${rolesWith(permission)}::"MembershipRole"[]) FOR SHARE`;
   if (!locked.length) throw forbidden();
 }
 async function expireBusinessHolds(tx: Prisma.TransactionClient, businessId: string) {
@@ -60,10 +61,10 @@ async function expireBusinessHolds(tx: Prisma.TransactionClient, businessId: str
 async function releaseExpired(holds: { id: string; customerId: string | null }[]) {
   await Promise.allSettled(holds.flatMap(hold => hold.customerId ? [releaseHold(hold.id, hold.customerId)] : []));
 }
-export async function withBusinessConfiguration<T>(context: AuthorizedBusinessContext, work: (tx: Prisma.TransactionClient) => Promise<T>) {
-  await validateBusinessContext(context, ['OWNER', 'MANAGER']);
+export async function withBusinessConfiguration<T>(context: AuthorizedBusinessContext, work: (tx: Prisma.TransactionClient) => Promise<T>, permission: BusinessPermission = BusinessPermission.BUSINESS_SETUP) {
+  await validateBusinessPermission(context, permission);
   const result = await prisma.$transaction(async tx => {
-    await lockBusinessConfiguration(tx, context);
+    await lockBusinessConfiguration(tx, context, permission);
     const value = await work(tx);
     // Booking transactions waiting on this lock must retry with the new
     // hours/blocks instead of continuing on a snapshot taken before the edit.
@@ -80,7 +81,7 @@ export async function withBusinessConfiguration<T>(context: AuthorizedBusinessCo
   return result.value;
 }
 export async function setPublication(context: AuthorizedBusinessContext, published: boolean) {
-  await validateBusinessContext(context, ['OWNER', 'MANAGER']);
+  await validateBusinessPermission(context, BusinessPermission.BUSINESS_SETUP);
   const result = await prisma.$transaction(async tx => {
     await lockBusinessConfiguration(tx, context);
     const readiness = await publicationReadiness(tx, context.businessId);

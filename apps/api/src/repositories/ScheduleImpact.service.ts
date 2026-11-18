@@ -3,12 +3,13 @@ import { Temporal } from '@js-temporal/polyfill';
 import type { Prisma } from '../generated/prisma/client.js';
 import { prisma } from '../db/client.js';
 import { AppError, notFound, unauthenticated } from '../http/errors.js';
-import { validateBusinessContext, type AuthorizedBusinessContext } from '../security/tenant-context.js';
+import { type AuthorizedBusinessContext, validateBusinessPermission } from '../security/tenant-context.js';
 import type { AuthenticatedSession } from '../security/sessions.js';
 import { lockBusinessConfiguration } from './publication.js';
 import { parseAvailabilityRules } from '../scheduling/rules.js';
 import { containsInterval, workingWindows } from '../scheduling/availability.js';
 import type { AvailabilityRules } from './provider-settings.js';
+import { BusinessPermission } from '../security/business-permissions.js';
 export async function fenceScheduleSession(tx: Prisma.TransactionClient, session?: AuthenticatedSession) {
   if (!session) return;
   await tx.$queryRaw`SELECT id FROM "Session" WHERE id = ${session.sessionId} FOR SHARE`;
@@ -41,7 +42,7 @@ export async function assertSafeSchedule(tx: Prisma.TransactionClient, businessI
   if (!impact.canSave) throw new AppError(409, 'SCHEDULE_CONFLICT', 'This edit would invalidate appointments or active reservations. Resolve them before saving.');
 }
 export async function previewSchedule(context: AuthorizedBusinessContext, input: unknown, staffId?: string, session?: AuthenticatedSession) {
-  await validateBusinessContext(context, ['OWNER', 'MANAGER']);
+  await validateBusinessPermission(context, BusinessPermission.BUSINESS_SETUP);
   return prisma.$transaction(async tx => {
     await fenceScheduleSession(tx, session);
     await lockBusinessConfiguration(tx, context);

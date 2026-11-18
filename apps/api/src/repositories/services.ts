@@ -2,8 +2,9 @@ import { withBusinessConfiguration } from './publication.js';
 import { validateService, type ServiceInput } from '@visit/contracts';
 import { prisma } from '../db/client.js';
 import type { AuthorizedBusinessContext, PublicBusinessContext } from '../security/tenant-context.js';
-import { validateBusinessContext, validatePublicBusinessContext } from '../security/tenant-context.js';
+import { validateBusinessContext, validatePublicBusinessContext, validateBusinessPermission } from '../security/tenant-context.js';
 import { AppError, notFound } from '../http/errors.js';
+import { BusinessPermission } from '../security/business-permissions.js';
 
 export function parseService(input: unknown, partial = false) {
   const errors = validateService(input, partial);
@@ -39,7 +40,7 @@ export async function createBusinessService(
   context: AuthorizedBusinessContext,
   input: ServiceInput,
 ) {
-  await validateBusinessContext(context, ['OWNER', 'MANAGER']);
+  await validateBusinessPermission(context, BusinessPermission.BUSINESS_SETUP);
   parseService(input);
   if ('active' in input) throw new AppError(400, 'VALIDATION_ERROR', 'New services start active.');
   return withBusinessConfiguration(context, tx => tx.service.create({ data: { ...input, name: input.name.trim(), description: input.description?.trim() ?? null, priceMinor: input.priceMinor ?? null, currency: input.currency ?? null, businessId: context.businessId } }));
@@ -50,7 +51,7 @@ export async function updateBusinessService(
   serviceId: string,
   input: Partial<ServiceInput>,
 ) {
-  await validateBusinessContext(context, ['OWNER', 'MANAGER']);
+  await validateBusinessPermission(context, BusinessPermission.BUSINESS_SETUP);
   parseService(input, true);
   return withBusinessConfiguration(context, async tx => {
     // Serialize read/merge/write so partial price edits cannot produce a mismatched pair.
@@ -63,7 +64,7 @@ export async function updateBusinessService(
 }
 
 export async function deleteBusinessService(context: AuthorizedBusinessContext, serviceId: string) {
-  await validateBusinessContext(context, ['OWNER', 'MANAGER']);
+  await validateBusinessPermission(context, BusinessPermission.BUSINESS_SETUP);
   return withBusinessConfiguration(context, async tx => {
   const where = { id: serviceId, businessId: context.businessId };
   const archive = async () => {
