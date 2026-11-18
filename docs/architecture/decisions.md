@@ -706,7 +706,7 @@ PR #70. The user asked for phone verification, email verification, Google sign-i
 
 ## Worker access design — 2026-11-18
 
-Design only; nothing built yet ([worker-access.md](worker-access.md)). The user found no flow for a worker (STAFF): an invited worker got a membership that opened nothing and was tied to no calendar. This entry answers the "Open" point about what an invited Staff member can see.
+PR #71. Design only; nothing built yet ([worker-access.md](worker-access.md)). The user found no flow for a worker (STAFF): an invited worker got a membership that opened nothing and was tied to no calendar. This entry answers the "Open" point about what an invited Staff member can see.
 
 - **Choice: a worker invitation is tied to one staff row, and accepting links the account to it (the user's call).** *Rejected:* keeping invitations and staff rows apart, as business-access.md had it; the app could not tell which calendar is the worker's, and the owner would match people to calendars in their head.
 - **Choice: a worker can do everything on their own calendar and nothing on another's: add, move, cancel, block time, mark outcomes (the user's call, "for now").** *Rejected:* view and outcomes only, which sends every client call back to the owner. The booking history already records who made each change.
@@ -717,7 +717,7 @@ Design only; nothing built yet ([worker-access.md](worker-access.md)). The user 
 
 ## Member privileges design — 2026-11-18
 
-Design only; nothing built yet ([worker-access.md](worker-access.md), Privileges). Follows "Worker access design" above, whose parked privileges point it answers.
+PR #71. Design only; nothing built yet ([worker-access.md](worker-access.md), Privileges). Follows "Worker access design" above, whose parked privileges point it answers.
 
 - **Choice: four on/off switches per member, preset by role (the user's call):** see other calendars, act on other calendars, business setup, manage team. *Rejected:* custom named roles, too much setup for 1–5 person businesses; one switch per action, too many to understand; a separate customer-phone switch, which search by phone already defeats.
 - **Choice: only the owner changes switches (the user's call).** *Rejected:* letting "manage team" holders change switches within their own; without "only what you hold, never yourself" rules and tests for each, a manager could raise a colleague or a second account of their own.
@@ -725,7 +725,7 @@ Design only; nothing built yet ([worker-access.md](worker-access.md), Privileges
 
 ## Named permissions in place of role lists — 2026-11-18
 
-Worker access slice 1 (worker-access.md, Build plan). No behaviour change.
+PR #71. Worker access slice 1 (worker-access.md, Build plan). No behaviour change.
 
 - **Choice: every provider check names a permission** (`security/business-permissions.ts`: WORKSPACE, SEE_ALL_CALENDARS, ACT_ON_ALL_CALENDARS, SEARCH_CUSTOMERS, BUSINESS_SETUP, MANAGE_TEAM), **and the roles holding it come from one table** (`rolesWith`). Today Owner and Manager hold all six and Staff none, so every call site allows exactly the roles it did. Slice 5 replaces the table with stored switches without touching call sites. *Rejected:* adding switches straight into each check, which would mix a 40-site refactor with a behaviour change in one review.
 - **Choice: staff rows, their hours and services are BUSINESS_SETUP; MANAGE_TEAM is app access only** (invite, remove). This matches the owner's two screens: Roster is setup, Team access is people.

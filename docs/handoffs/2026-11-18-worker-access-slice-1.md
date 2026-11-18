@@ -1,4 +1,4 @@
-# Visit handoff — 2026-11-18, worker access design and slice 1 (named permissions)
+# Visit handoff — 2026-11-18, worker access design and slice 1 (named permissions) (PR #71)
 
 Built on `main` after PR #70. Decisions: `decisions.md`, "Worker access design", "Member privileges design", "Named permissions in place of role lists".
 
@@ -20,7 +20,7 @@ The user's global working agreement governs. The user asked for the UX and flow 
 
 ## Not verified
 
-- **Checked:** API typecheck clean; full API suite (see the PR for the final count) including the new `business-permissions.test.ts`, which proves every permission's routes allow the owner and a manager and refuse staff, a pending owner, an outsider and the other business's owner. Independent `bf-security-reviewer` pass: no findings; its quick fixes (frozen grant tables, enum-typed SQL array, unused imports) are applied.
+- **Checked:** API typecheck clean; full API suite 409/409 including the new `business-permissions.test.ts`, which proves every permission's routes allow the owner and a manager and refuse staff, a pending owner, an outsider and the other business's owner. Independent `bf-security-reviewer` pass: no findings; its quick fixes (frozen grant tables, enum-typed SQL array, unused imports) are applied.
 - **Not checked:** the mobile app (no client code changed). `tsconfig.test.json` fails on `test/booking-operations.test.ts:140` (implicit `any`); this fails identically on `main` at `3cc4da4` and is not from this change.
 
 ## Debt
