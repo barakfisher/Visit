@@ -11,7 +11,8 @@ import { apiRequest, ApiError } from '@/src/lib/api';
 import { useSessionStore } from '@/src/state/session';
 import { useAppLocale } from '@/src/i18n/LocaleContext';
 import { accessEn, accessHe } from '@/src/i18n/accessMessages';
-type Team = { role: string; members: { id: string; identityId: string; role: string; label: string }[]; invitations: { id: string; role: string; recipientHint: string; expiresAt: string; acceptedAt: string | null; revokedAt: string | null }[] };
+import type { Team } from '@/src/lib/StaffAccess';
+import { teamQueryKey } from '@/src/lib/StaffAccess.hook';
 export default function TeamScreen() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const identity = useSessionStore(s => s.identityId), version = useSessionStore(s => s.contextVersion);
@@ -21,7 +22,7 @@ function TeamContent({ businessId }: { businessId: string }) {
   const { locale, t } = useAppLocale(), m = locale === 'he' ? accessHe : accessEn;
   const identity = useSessionStore(s => s.identityId), bootstrap = useSessionStore(s => s.bootstrapStatus);
   const base = `/v1/provider/businesses/${encodeURIComponent(businessId)}`;
-  const query = useQuery({ queryKey: ['provider', businessId, 'team'], queryFn: () => apiRequest<Team>(`${base}/team`), enabled: !!identity, retry: false });
+  const query = useQuery({ queryKey: teamQueryKey(businessId), queryFn: () => apiRequest<Team>(`${base}/team`), enabled: !!identity, retry: false });
   const [recipient, setRecipient] = useState(''), [channel, setChannel] = useState<'email' | 'phone'>('email'), [role, setRole] = useState<'MANAGER' | 'STAFF'>('STAFF'), [busy, setBusy] = useState(false), [feedback, setFeedback] = useState(''), [link, setLink] = useState(''), [confirm, setConfirm] = useState('');
   const running = useRef(false);
   const roleLabel = (value: string) => value === 'OWNER' ? m.owner : value === 'MANAGER' ? m.manager : m.staff;
@@ -46,11 +47,11 @@ function TeamContent({ businessId }: { businessId: string }) {
         {link ? <><AppText>{m.once}</AppText><AppText testID="private-invitation-link" selectable style={{ writingDirection: 'ltr' }}>{link}</AppText><ActionButton secondary label={m.copy} onPress={() => void Clipboard.setStringAsync(link).then(ok => setFeedback(ok ? m.copied : m.failure)).catch(() => setFeedback(m.failure))} /></> : null}
       </View>
       <AppText accessibilityRole="header" className="text-xl font-semibold">{m.members}</AppText>
-      {query.data.members.map(member => <View key={member.id} testID={`team-member-${member.identityId}`} className="gap-3 rounded-card border border-line bg-surface p-card"><AppText>{roleLabel(member.role)} · {member.label}</AppText>
+      {query.data.members.map(member => <View key={member.id} testID={`team-member-${member.identityId}`} className="gap-3 rounded-card border border-line bg-surface p-card"><AppText>{roleLabel(member.role)} · {member.name ?? member.label}</AppText><AppText testID={`team-member-calendar-${member.identityId}`} className="text-body">{member.staff ? m.calendarLine.replace('{name}', member.staff.displayName) : m.noCalendar}</AppText>
         {member.role !== 'OWNER' && (query.data?.role === 'OWNER' || member.role === 'STAFF') && !query.data?.members.some(other => other.identityId === member.identityId && other.role === 'OWNER') ? confirm === member.id ? <><AppText>{m.removeHint}</AppText><ActionButton label={m.confirmRemove} disabled={busy} onPress={() => void act(`members/${member.id}`)} /><ActionButton secondary label={m.cancel} onPress={() => setConfirm('')} /></> : <ActionButton secondary label={m.remove} disabled={busy} onPress={() => setConfirm(member.id)} /> : null}
       </View>)}
       <AppText accessibilityRole="header" className="text-xl font-semibold">{m.invitations}</AppText>
-      {query.data.invitations.map(item => <View key={item.id} className="gap-3 rounded-card border border-line bg-surface p-card"><AppText>{item.recipientHint} · {roleLabel(item.role)}</AppText><AppText>{item.acceptedAt ? m.accepted : item.revokedAt ? m.revoked : new Date(item.expiresAt) <= new Date() ? m.expired : m.pending} · {new Date(item.expiresAt).toLocaleString(locale === 'he' ? 'he-IL' : 'en-GB', { timeZone: 'Asia/Jerusalem' })}</AppText>{!item.acceptedAt && !item.revokedAt && (query.data?.role === 'OWNER' || item.role === 'STAFF') ? <ActionButton secondary label={m.revoke} disabled={busy} onPress={() => void act(`invitations/${item.id}`)} /> : null}</View>)}
+      {query.data.invitations.map(item => <View key={item.id} className="gap-3 rounded-card border border-line bg-surface p-card"><AppText>{item.recipientHint} · {roleLabel(item.role)}{item.staff ? ` · ${m.calendarLine.replace('{name}', item.staff.displayName)}` : ''}</AppText><AppText>{item.acceptedAt ? m.accepted : item.revokedAt ? m.revoked : new Date(item.expiresAt) <= new Date() ? m.expired : m.pending} · {new Date(item.expiresAt).toLocaleString(locale === 'he' ? 'he-IL' : 'en-GB', { timeZone: 'Asia/Jerusalem' })}</AppText>{!item.acceptedAt && !item.revokedAt && (query.data?.role === 'OWNER' || item.role === 'STAFF') ? <ActionButton secondary label={m.revoke} disabled={busy} onPress={() => void act(`invitations/${item.id}`)} /> : null}</View>)}
     </>}
     {feedback ? <AppText accessibilityRole="alert">{feedback}</AppText> : null}<ActionButton secondary label={m.retry} disabled={busy} onPress={() => void query.refetch()} /><Link href={{ pathname: '/provider/dashboard', params: { businessId } }}>{t('setup.backAgenda')}</Link>
   </ScrollView>;

@@ -11,11 +11,13 @@ import { useStaffRoster } from '@/src/lib/StaffRoster.hook';
 import type { StaffRemovalConflicts } from '@/src/lib/StaffRoster';
 import { AppText } from './AppText';
 import { StaffRosterView } from './StaffRoster.component';
+import { StaffAccessSection } from './StaffAccess.component';
 
 type Data = 'staff' | 'empty' | 'noServices' | 'failed';
 function Roster({ conflicts }: { conflicts?: StaffRemovalConflicts }) {
   const state = useStaffRoster('preview', () => 'preview-key');
-  return <StaffRosterView {...state} {...(conflicts ? { removing: 'noa', conflicts } : {})} hours={staffId => <AppText testID={`hours-${staffId}`}>WeeklyHours</AppText>} />;
+  return <StaffRosterView {...state} {...(conflicts ? { removing: 'noa', conflicts } : {})} hours={staffId => <AppText testID={`hours-${staffId}`}>WeeklyHours</AppText>}
+    access={row => <StaffAccessSection businessId="preview" row={row} copy={async () => true} />} />;
 }
 function RosterPreview({ locale, data = 'staff', conflicts }: { locale: Locale; data?: Data; conflicts?: StaffRemovalConflicts }) {
   const [client] = useState(() => {
@@ -28,7 +30,13 @@ function RosterPreview({ locale, data = 'staff', conflicts }: { locale: Locale; 
     client.setQueryData(['provider', 'preview', 'staff'], { staff: data !== 'staff' ? [] : [
       { id: 'noa', displayName: he ? 'נועה' : 'Noa', active: true, parallelCapacity: 2, services: [{ serviceId: 'cut', service: cut }, { serviceId: 'colour', service: colour }] },
       { id: 'dan', displayName: he ? 'דן' : 'Dan', active: false, parallelCapacity: 1, services: [{ serviceId: 'cut', service: cut }] },
+      { id: 'maya', displayName: he ? 'מאיה' : 'Maya', active: true, parallelCapacity: 1, services: [{ serviceId: 'cut', service: cut }] },
     ] });
+    // Noa works in the app, Dan has a pending link, Maya was never invited.
+    const later = new Date(Date.now() + 86400000).toISOString();
+    client.setQueryData(['provider', 'preview', 'team'], { role: 'OWNER',
+      members: [{ id: 'm-owner', identityId: 'owner', role: 'OWNER', label: 'o***@example.test', name: he ? 'דנה' : 'Dana', staff: null }, { id: 'm-noa', identityId: 'noa-account', role: 'STAFF', label: 'n***@example.test', name: he ? 'נועה כהן' : 'Noa Cohen', staff: { id: 'noa', displayName: he ? 'נועה' : 'Noa', membershipId: 'm-noa' } }],
+      invitations: [{ id: 'i-dan', role: 'STAFF', recipientHint: '***4567', createdAt: later, expiresAt: later, acceptedAt: null, revokedAt: null, staff: { id: 'dan', displayName: he ? 'דן' : 'Dan' } }] });
     return client;
   });
   return <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, bottom: 0, left: 0, right: 0 } }}><LocalePreview locale={locale}><QueryClientProvider client={client}><View style={{ maxWidth: 600, padding: 16 }}><Roster conflicts={conflicts} /></View></QueryClientProvider></LocalePreview></SafeAreaProvider>;
@@ -51,7 +59,8 @@ export const English: Story = { args: { locale: 'en' }, play: async ({ canvas })
   // The form opens only from the header button; each card has one Edit and one Remove.
   await expect(canvas.queryByLabelText('Name', { exact: true })).toBeNull();
   const card = within(canvas.getByTestId('staff-card-noa'));
-  await expect(card.getAllByRole('button')).toHaveLength(2);
+  // Edit, Remove, and Noa's "Remove app access".
+  await expect(card.getAllByRole('button')).toHaveLength(3);
   await expect(card.getByRole('button', { name: 'Edit Noa' })).toHaveAttribute('aria-expanded', 'false');
   await expect(card.getByRole('button', { name: 'Remove Noa' })).toBeVisible();
   await expect(canvas.queryByText('Not available for new appointments', { exact: true })).toBeVisible();
@@ -124,4 +133,31 @@ export const RemoveRefused: Story = { args: { locale: 'en', conflicts: { total, 
   await expect(list.getAllByText(/Dana · Haircut/)).toHaveLength(listed.length);
   await expect(list.getByText(`And ${total - listed.length} more.`)).toBeVisible();
   await expect(within(canvas.getByTestId('staff-card-noa')).getByRole('button', { name: 'Confirm' })).toBeDisabled();
+} };
+export const AccessBadges: Story = { args: { locale: 'he' }, play: async ({ canvas }) => {
+  await expect(within(canvas.getByTestId('staff-card-noa')).getByTestId('staff-access-badge-noa')).toHaveTextContent('פעיל · נועה כהן · עובד');
+  await expect(within(canvas.getByTestId('staff-card-dan')).getByTestId('staff-access-badge-dan')).toHaveTextContent('הזמנה ממתינה · ***4567');
+  await expect(within(canvas.getByTestId('staff-card-maya')).getByTestId('staff-access-badge-maya')).toHaveTextContent('לא הוזמן לאפליקציה');
+  await expect(canvas.getByRole('button', { name: 'הסרת גישה לאפליקציה: נועה' })).toBeVisible();
+  await expect(canvas.getByRole('button', { name: 'ביטול ההזמנה' })).toBeVisible();
+  await expect(canvas.getByRole('button', { name: 'הזמנה לאפליקציה: מאיה' })).toBeVisible();
+} };
+export const InviteToApp: Story = { args: { locale: 'en' }, play: async ({ canvas }) => {
+  const card = within(canvas.getByTestId('staff-card-maya'));
+  await userEvent.click(card.getByRole('button', { name: 'Invite to app: Maya' }));
+  const form = within(card.getByTestId('staff-invite-form'));
+  await expect(form.getByRole('radio', { name: 'Worker' })).toHaveAttribute('aria-checked', 'true');
+  const create = form.getByRole('button', { name: 'Create invite link' });
+  await expect(create).toBeDisabled();
+  await userEvent.type(form.getByLabelText('Their email', { exact: false }), 'maya@example.test');
+  await expect(create).toBeEnabled();
+  await userEvent.click(form.getByRole('button', { name: 'Cancel' }));
+  await expect(card.queryByTestId('staff-invite-form')).toBeNull();
+} };
+export const RemoveAccessConfirmation: Story = { args: { locale: 'en' }, play: async ({ canvas }) => {
+  const card = within(canvas.getByTestId('staff-card-noa'));
+  await userEvent.click(card.getByRole('button', { name: 'Remove app access: Noa' }));
+  await expect(card.getByText(/The calendar, its hours and its appointments stay\./)).toBeVisible();
+  await userEvent.click(card.getByRole('button', { name: 'Cancel' }));
+  await expect(card.getByRole('button', { name: 'Remove app access: Noa' })).toBeVisible();
 } };

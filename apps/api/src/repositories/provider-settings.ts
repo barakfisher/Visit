@@ -159,6 +159,7 @@ export async function updateBusinessStaff(context: AuthorizedBusinessContext, st
 }
 
 export const STAFF_HAS_APPOINTMENTS = 'STAFF_HAS_APPOINTMENTS';
+export const STAFF_HAS_APP_ACCESS = 'STAFF_HAS_APP_ACCESS';
 
 export async function removeBusinessStaff(context: AuthorizedBusinessContext, staffId: string, session?: AuthenticatedSession, now = new Date()) {
   await validateBusinessPermission(context, BusinessPermission.BUSINESS_SETUP);
@@ -167,6 +168,8 @@ export async function removeBusinessStaff(context: AuthorizedBusinessContext, st
     await fenceScheduleSession(tx, session);
     await tx.$queryRaw`SELECT id FROM "Staff" WHERE id = ${staffId} AND "businessId" = ${businessId} FOR UPDATE`;
     if (!await tx.staff.findFirst({ where: { id: staffId, businessId, archivedAt: null }, select: { id: true } })) throw notFound();
+    // App access is the team permission's to remove, so removing a calendar never takes away someone's account access.
+    if (await tx.membership.count({ where: { businessId, staffId, status: 'ACTIVE' } })) throw new AppError(409, STAFF_HAS_APP_ACCESS, 'This calendar has app access. Remove app access first.');
     // Removal never cancels: there is no email delivery yet, so a customer would arrive for a cancelled appointment.
     const upcoming = { businessId, staffId, status: 'CONFIRMED' as const, occupiedUntil: { gt: now } };
     const [total, rows] = await Promise.all([
@@ -174,8 +177,11 @@ export async function removeBusinessStaff(context: AuthorizedBusinessContext, st
       tx.booking.findMany({ where: upcoming, orderBy: [{ startsAt: 'asc' }, { id: 'asc' }], take: MAX_REPORTED_CONFLICTS, select: { id: true, startsAt: true, endsAt: true, customerName: true, serviceName: true, staff: { select: { displayName: true } } } }),
     ]);
     if (total) throw new AppError(409, STAFF_HAS_APPOINTMENTS, 'This staff member has upcoming appointments. Move or cancel them first.', undefined, { total, timezone: (await tx.business.findUniqueOrThrow({ where: { id: businessId }, select: { timezone: true } })).timezone, conflicts: rows.map(row => ({ kind: 'APPOINTMENT' as const, id: row.id, startsAt: row.startsAt, endsAt: row.endsAt, staffName: row.staff.displayName, customerName: row.customerName, serviceName: row.serviceName })) });
-    // Any booking row, even a cancelled or expired one, holds a restrictive foreign key to its staff member.
-    if (!await tx.booking.count({ where: { businessId, staffId } })) {
+    // An unused invitation link for this calendar dies with it.
+    await tx.businessInvitation.updateMany({ where: { businessId, staffId, acceptedAt: null, revokedAt: null }, data: { revokedAt: now, revokedByIdentityId: context.identityId } });
+    // Any booking row, even a cancelled or expired one, and any invitation or membership that named it, holds a foreign key to its staff member.
+    const [bookings, invitations, memberships] = await Promise.all([tx.booking.count({ where: { businessId, staffId } }), tx.businessInvitation.count({ where: { businessId, staffId } }), tx.membership.count({ where: { businessId, staffId } })]);
+    if (!bookings && !invitations && !memberships) {
       await tx.staff.delete({ where: { id: staffId, businessId } });
       return { deleted: true, archived: false, expired: [] };
     }

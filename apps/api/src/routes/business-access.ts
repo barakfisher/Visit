@@ -7,7 +7,7 @@ const tokenBody = z.strictObject({ token: z.string().regex(/^[A-Za-z0-9_-]{43}$/
 export async function registerBusinessAccess(app: FastifyInstance) {
   app.get('/v1/provider/businesses/:businessId/team', async request => team(await authenticate(request), businessParams.parse(request.params).businessId));
   app.post('/v1/provider/businesses/:businessId/invitations', async request => {
-    const input = z.strictObject({ role: z.enum(['MANAGER', 'STAFF']), channel: z.enum(['email', 'phone']), recipient: z.string().trim().min(8).max(254) }).superRefine((v, ctx) => { if (v.channel === 'email' && !z.email().safeParse(v.recipient).success) ctx.addIssue({ code: 'custom', message: 'Invalid email.' }); }).parse(request.body);
+    const input = z.strictObject({ role: z.enum(['MANAGER', 'STAFF']), channel: z.enum(['email', 'phone']), recipient: z.string().trim().min(8).max(254), staffId: z.string().min(1).max(64).optional() }).superRefine((v, ctx) => { if (v.channel === 'email' && !z.email().safeParse(v.recipient).success) ctx.addIssue({ code: 'custom', message: 'Invalid email.' }); }).parse(request.body);
     return createInvitation(await authenticate(request), businessParams.parse(request.params).businessId, input);
   });
   app.delete('/v1/provider/businesses/:businessId/invitations/:id', async request => { const p = businessParams.parse(request.params); return revokeInvitation(await authenticate(request), p.businessId, p.id!); });
