@@ -6,6 +6,7 @@ import { useAppLocale } from '../i18n/LocaleContext';
 import type { MessageKey } from '../i18n/messages';
 import { useSessionStore } from '../state/session';
 import type { AccountNavigation } from './navigation';
+import { isApiCode, STAFF_HAS_APP_ACCESS } from './StaffAccess';
 import { emptyStaffDraft, selfStaffDraft, isCapacityInUse, staffDraft, staffInput, staffRemovalConflicts, validateStaffDraft, type RosterService, type RosterStaff, type StaffDraft, type StaffDraftErrors, type StaffRemovalConflicts } from './StaffRoster';
 
 export type StaffTab = 'general' | 'hours';
@@ -54,7 +55,10 @@ export function useStaffRoster(businessId: string, newKey: () => string) {
     onError: (error, action) => {
       if (action.kind === 'remove') {
         const listed = staffRemovalConflicts(error);
-        if (listed) setConflicts(listed); else setMessage('roster.removeFailed');
+        if (listed) { setConflicts(listed); return; }
+        // Nothing to confirm until access is removed, so the card's confirmation closes.
+        if (isApiCode(error, STAFF_HAS_APP_ACCESS)) { setRemoving(null); setMessage('roster.hasAccess'); }
+        else setMessage('roster.removeFailed');
         return;
       }
       if (isCapacityInUse(error)) { setErrors({ capacity: 'capacityInUse' }); return; }

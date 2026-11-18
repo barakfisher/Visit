@@ -11,8 +11,10 @@ import { FormDialog } from './FormDialog';
 import { StaffForm } from './StaffForm.component';
 import type { ReactNode } from 'react';
 
+const ROSTER_ALERTS: string[] = ['roster.removeFailed', 'roster.hasAccess'];
+
 /** The "Hours" tab's content, supplied by the screen so this view stays free of router hooks (Storybook cannot bundle them). */
-type RosterProps = StaffRosterState & { hours: (staffId: string) => ReactNode };
+type RosterProps = StaffRosterState & { hours: (staffId: string) => ReactNode; access: (row: RosterStaff) => ReactNode };
 
 /** The staff settings screen: a list of cards, an add dialog, and one card's settings open at a time. */
 export function StaffRosterView(state: RosterProps) {
@@ -33,7 +35,7 @@ export function StaffRosterView(state: RosterProps) {
           {canAddSelf ? <View testID="staff-add-self" className="gap-3 rounded-control border border-line bg-canvas p-3"><AppText className="text-body">{t('roster.addSelfHint')}</AppText><ActionButton label={t('roster.addSelf')} disabled={busy} onPress={openAddSelf} /></View> : null}
         </> : staff.data.staff.map(row => <StaffCard key={row.id} row={row} {...state} />)}
       </>}
-    {message ? <AppText role={message === 'roster.removeFailed' ? 'alert' : 'status'} className={message === 'roster.removeFailed' ? 'text-danger' : 'text-ink'}>{t(message)}</AppText> : null}
+    {message ? <AppText role={ROSTER_ALERTS.includes(message) ? 'alert' : 'status'} className={ROSTER_ALERTS.includes(message) ? 'text-danger' : 'text-ink'}>{t(message)}</AppText> : null}
     {/* The add dialog and an open card share one draft, so the dialog never opens over an open card. */}
     <FormDialog title={t('roster.add')} open={addOpen && expanded === null} onClose={cancelAdd} testID="staff-dialog"><StaffForm testID="staff-add-form" {...state} /></FormDialog>
   </View>;
@@ -49,6 +51,7 @@ function StaffCard({ row, ...state }: RosterProps & { row: RosterStaff }) {
     <View className="flex-row flex-wrap gap-2">
       {assignedServiceNames(row, locale).map(name => <AppText key={name} className="rounded-full border border-line bg-canvas px-3 py-1 text-sm text-ink">{name}</AppText>)}
     </View>
+    {state.access(row)}
     {removing === row.id ? <View className="gap-3 rounded-control border border-line bg-canvas p-3">
       <AppText>{t('roster.removeHelp', { name: row.displayName })}</AppText>
       {conflicts ? <AppointmentConflicts testID="staff-conflicts" title={t('roster.conflicts', { count: conflicts.total })} total={conflicts.total} conflicts={conflicts.conflicts} when={when} /> : null}
