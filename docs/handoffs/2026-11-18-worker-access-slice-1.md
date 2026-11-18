@@ -4,7 +4,7 @@ Built on `main` after PR #70. Decisions: `decisions.md`, "Worker access design",
 
 ## Authorization
 
-The user's global working agreement governs. The user asked for the UX and flow of the worker ("privileged user") type, decided each design question in chat, asked for the build plan, and said "Start slice 1". No commit, push or PR was requested yet.
+The user's global working agreement governs. The user asked for the UX and flow of the worker ("privileged user") type, decided each design question in chat, asked for the build plan, said "Start slice 1", then asked for this PR (Create PR).
 
 ## Where things stand
 
