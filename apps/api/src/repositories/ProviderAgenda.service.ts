@@ -1,12 +1,13 @@
 import { Temporal } from '@js-temporal/polyfill';
 import { prisma } from '../db/client.js';
-import { validateBusinessContext, type AuthorizedBusinessContext } from '../security/tenant-context.js';
+import { type AuthorizedBusinessContext, validateBusinessPermission } from '../security/tenant-context.js';
 import { bookingServiceSnapshot } from './bookings.js';
 import { canMarkNoShow, presentedStatus } from './AppointmentOutcome.utils.js';
 import { blockProjection, presentBlocks } from './TimeBlocks.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { dayFreeTime, presentFreeGap } from '../scheduling/free-time.js';
 import { openHours } from '../scheduling/open-hours.js';
+import { BusinessPermission } from '../security/business-permissions.js';
 
 /**
  * One day's free time and whether the business is closed, for the home's cards (decisions.md, "The business day as cards").
@@ -37,7 +38,7 @@ async function readDayFreeTime(tx: Prisma.TransactionClient, businessId: string,
   return { closed: result.closed, free: result.free.map(gap => presentFreeGap(gap, timezone, before)) };
 }
 export async function readProviderAgenda(context: AuthorizedBusinessContext, date: string, days: 1 | 3 | 7, now = new Date()) {
-  await validateBusinessContext(context, ['OWNER', 'MANAGER']);
+  await validateBusinessPermission(context, BusinessPermission.SEE_ALL_CALENDARS);
   return prisma.$transaction(async tx => {
     const business = await tx.business.findUniqueOrThrow({ where: { id: context.businessId }, select: { id: true, name: true, timezone: true } });
     // A week starts on its Sunday; a day and the calendar's three days start on the chosen date.

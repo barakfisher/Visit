@@ -12,14 +12,14 @@ import { publicBusinessWhere } from '../security/business-eligibility.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { Temporal } from '@js-temporal/polyfill';
-import { BookingStatus, MembershipRole } from '../generated/prisma/client.js';
+import { BookingStatus } from '../generated/prisma/client.js';
 import { prisma } from '../db/client.js';
 import { AppError, conflict, notFound, slotTaken } from '../http/errors.js';
 import { occupiedInterval, assertCapacity } from '../scheduling/intervals.js';
 import { localDateTimeToInstant } from '../scheduling/local-time.js';
 import { acquireIntervalLocks } from '../scheduling/redis-slot-lock.js';
 import { authenticate } from '../security/sessions.js';
-import { requireBusinessMembership, requirePublicBusiness } from '../security/tenant-context.js';
+import { requirePublicBusiness, requireBusinessPermission } from '../security/tenant-context.js';
 import { assertWorkingHours } from '../scheduling/WorkingHours.service.js';
 import { rescheduleBooking, rescheduleInputSchema } from '../repositories/BookingReschedule.service.js';
 import { getBusinessAvailability } from '../repositories/availability.js';
@@ -27,6 +27,7 @@ import { withBookingTransaction } from '../scheduling/booking-transaction.js';
 import { listCustomerBookings, listProviderBookings } from '../repositories/bookings.js';
 import { listCustomerHistory } from '../repositories/AppointmentHistory.service.js';
 import { blocksCovering } from '../scheduling/time-blocks.js';
+import { BusinessPermission } from '../security/business-permissions.js';
 
 const activeStatuses = [BookingStatus.HELD, BookingStatus.CONFIRMED, BookingStatus.COMPLETED, BookingStatus.NO_SHOW];
 const asError = (error: unknown) => error instanceof Error ? error.message : 'Invalid time.';
@@ -260,7 +261,7 @@ export async function registerBookingRoutes(app: FastifyInstance, { acquireLocks
     const params = z.object({ businessId: z.string().min(1) }).safeParse(request.params);
     if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
-    const context = await requireBusinessMembership(identity.id, params.data.businessId, [MembershipRole.OWNER, MembershipRole.MANAGER]);
+    const context = await requireBusinessPermission(identity.id, params.data.businessId, BusinessPermission.SEE_ALL_CALENDARS);
     return { bookings: await listProviderBookings(context) };
   });
 }

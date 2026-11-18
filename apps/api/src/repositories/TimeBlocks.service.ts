@@ -4,11 +4,12 @@ import { prisma } from '../db/client.js';
 import { signalAgendaChanged } from '../infra/live-signals.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { AppError, notFound } from '../http/errors.js';
-import { validateBusinessContext, type AuthorizedBusinessContext } from '../security/tenant-context.js';
+import { type AuthorizedBusinessContext, validateBusinessPermission } from '../security/tenant-context.js';
 import type { AuthenticatedSession } from '../security/sessions.js';
 import { withBusinessConfiguration } from './publication.js';
 import { fenceScheduleSession } from './ScheduleImpact.service.js';
 import { localDateTimeToInstant } from '../scheduling/local-time.js';
+import { BusinessPermission } from '../security/business-permissions.js';
 
 export const BLOCK_CONFLICT = 'BLOCK_CONFLICT';
 export const MAX_BLOCK_DAYS = 366;
@@ -47,7 +48,7 @@ export const blockProjection = { id: true, startsAt: true, endsAt: true, allDay:
 export const presentBlocks = <T extends Parameters<typeof presentBlock>[0]>(blocks: T[], timezone: string) => blocks.map(block => presentBlock(block, timezone));
 
 export async function listTimeBlocks(context: AuthorizedBusinessContext, now = new Date()) {
-  await validateBusinessContext(context, ['OWNER', 'MANAGER']);
+  await validateBusinessPermission(context, BusinessPermission.SEE_ALL_CALENDARS);
   const business = await prisma.business.findUniqueOrThrow({ where: { id: context.businessId }, select: { timezone: true } });
   const blocks = await prisma.timeBlock.findMany({ where: { businessId: context.businessId, endsAt: { gt: now } }, orderBy: [{ startsAt: 'asc' }, { id: 'asc' }], take: MAX_LISTED_BLOCKS, select: blockProjection });
   return { timezone: business.timezone, blocks: presentBlocks(blocks, business.timezone) };
@@ -65,8 +66,8 @@ async function blockConflicts(tx: Prisma.TransactionClient, businessId: string, 
 }
 
 /** Signals open agendas once a business configuration change has committed. */
-export async function changingAgenda<T>(context: AuthorizedBusinessContext, work: Parameters<typeof withBusinessConfiguration<T>>[1]) {
-  const result = await withBusinessConfiguration(context, work);
+export async function changingAgenda<T>(context: AuthorizedBusinessContext, work: Parameters<typeof withBusinessConfiguration<T>>[1], permission: BusinessPermission = BusinessPermission.BUSINESS_SETUP) {
+  const result = await withBusinessConfiguration(context, work, permission);
   signalAgendaChanged(context.businessId);
   return result;
 }
@@ -83,7 +84,7 @@ export async function createTimeBlock(context: AuthorizedBusinessContext, input:
     if (total) throw new AppError(409, BLOCK_CONFLICT, 'This block overlaps appointments or reservations. Move or cancel them first.', undefined, { total, conflicts });
     const block = await tx.timeBlock.create({ data: { businessId: context.businessId, staffId: input.staffId ?? null, ...range, reason: input.reason || null }, select: blockProjection });
     return presentBlock(block, business.timezone);
-  });
+  }, BusinessPermission.ACT_ON_ALL_CALENDARS);
 }
 
 export async function deleteTimeBlock(context: AuthorizedBusinessContext, id: string, session: AuthenticatedSession) {
@@ -91,5 +92,5 @@ export async function deleteTimeBlock(context: AuthorizedBusinessContext, id: st
     await fenceScheduleSession(tx, session);
     if (!(await tx.timeBlock.deleteMany({ where: { id, businessId: context.businessId } })).count) throw notFound();
     return { deleted: true };
-  });
+  }, BusinessPermission.ACT_ON_ALL_CALENDARS);
 }

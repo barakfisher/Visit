@@ -4,7 +4,8 @@ import type { CustomerCard, Prisma } from '../generated/prisma/client.js';
 import { prisma } from '../db/client.js';
 import { AppError } from '../http/errors.js';
 import { validateAuthenticatedSession, type AuthenticatedSession } from '../security/sessions.js';
-import { requireBusinessMembership } from '../security/tenant-context.js';
+import { requireBusinessPermission } from '../security/tenant-context.js';
+import { BusinessPermission } from '../security/business-permissions.js';
 
 /** Suggestions one search returns: enough to tell same-named customers apart on a phone screen. */
 export const CUSTOMER_CARD_SUGGESTIONS = 8;
@@ -25,7 +26,7 @@ const likePattern = (text: string) => `%${text.replace(/[\\%_]/g, character => `
  */
 export async function searchCustomerCards(session: AuthenticatedSession, businessId: string, query: string) {
   await validateAuthenticatedSession(session);
-  await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']);
+  await requireBusinessPermission(session.identity.id, businessId, BusinessPermission.SEARCH_CUSTOMERS);
   const text = query.trim(), { byName, byPhone, digits } = customerSearchKind(text);
   if (!byPhone && !byName) return { cards: [] };
   // A phone is typed the local way (050…) and stored as E.164 (+97250…): match it without the trunk zero too.

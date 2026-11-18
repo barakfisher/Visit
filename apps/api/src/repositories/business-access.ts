@@ -7,6 +7,7 @@ import type { Prisma, MembershipRole, BusinessInvitation } from '../generated/pr
 import { lockIdentitySecurity, lockRecentAccountSession, requireRecentAccountAuth } from '../security/account-security.js';
 import { newOpaqueToken, tokenDigest, validateAuthenticatedSession, type AuthenticatedSession } from '../security/sessions.js';
 import { ensureRedisReady, redis } from '../infra/redis.js';
+import { BusinessPermission, rolesWith } from '../security/business-permissions.js';
 
 export const permittedInvite = (actor: MembershipRole, role: MembershipRole) => actor === 'OWNER' ? role === 'MANAGER' || role === 'STAFF' : actor === 'MANAGER' && role === 'STAFF';
 export const recipientDigest = (channel: string, recipient: string) => createHmac('sha256', env.SESSION_SECRET).update(`business-invite:${channel}:${recipient}`).digest('hex');
@@ -33,7 +34,7 @@ async function businessLock(tx: Prisma.TransactionClient, businessId: string) {
   return business;
 }
 async function manager(tx: Prisma.TransactionClient, identityId: string, businessId: string) {
-  const memberships = await tx.membership.findMany({ where: { identityId, businessId, status: 'ACTIVE', role: { in: ['OWNER', 'MANAGER'] } } });
+  const memberships = await tx.membership.findMany({ where: { identityId, businessId, status: 'ACTIVE', role: { in: rolesWith(BusinessPermission.MANAGE_TEAM) } } });
   const membership = memberships.find(m => m.role === 'OWNER') ?? memberships[0];
   if (!membership) throw forbidden();
   return membership;

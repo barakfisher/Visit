@@ -6,7 +6,7 @@ import { prisma } from '../db/client.js';
 import { signalAppointmentChanged } from '../infra/live-signals.js';
 import { AppError, conflict, notFound } from '../http/errors.js';
 import { validateAuthenticatedSession, type AuthenticatedSession } from '../security/sessions.js';
-import { requireBusinessMembership } from '../security/tenant-context.js';
+import { requireBusinessPermission } from '../security/tenant-context.js';
 import { publicBusinessWhere } from '../security/business-eligibility.js';
 import { withBookingTransaction } from '../scheduling/booking-transaction.js';
 import { acquireIntervalLocks } from '../scheduling/redis-slot-lock.js';
@@ -20,6 +20,7 @@ import { reviewedServiceSchema } from '../scheduling/booking-consent.utils.js';
 import { blocksCovering } from '../scheduling/time-blocks.js';
 import { customerCardExists, findCardByPhone } from './CustomerCards.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
+import { BusinessPermission, rolesWith } from '../security/business-permissions.js';
 
 export const manualBookingSchema = z.strictObject({
   finalConsent: z.literal(true), idempotencyKey: z.string().uuid(), serviceId: z.string().min(1).max(256), staffId: z.string().min(1).max(256),
@@ -33,7 +34,7 @@ type ManualInput = z.infer<typeof manualBookingSchema>;
 function result(booking: Booking) { return { customerCard: booking.customerCardId ? { id: booking.customerCardId } : null, id: booking.id, status: booking.status, startsAt: booking.startsAt, endsAt: booking.endsAt, revision: booking.revision, source: 'MANUAL', contactVerification: 'UNVERIFIED', notification: 'NOT_SENT' }; }
 export async function createManualBooking(session: AuthenticatedSession, businessId: string, input: ManualInput) {
   await validateAuthenticatedSession(session);
-  await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']);
+  await requireBusinessPermission(session.identity.id, businessId, BusinessPermission.ACT_ON_ALL_CALENDARS);
   const fingerprint = createHash('sha256').update(JSON.stringify(input)).digest('hex');
   // A private actor-owned namespace prevents collisions with consumer booking attempts.
   const key = `manual:${session.identity.id}:${input.idempotencyKey}`;
@@ -55,7 +56,7 @@ export async function createManualBooking(session: AuthenticatedSession, busines
       await fenceScheduleSession(tx, session);
       await tx.$queryRaw`SELECT id FROM "Business" WHERE id = ${businessId} FOR SHARE`;
       await tx.$queryRaw`SELECT id FROM "Membership" WHERE "businessId" = ${businessId} AND "identityId" = ${session.identity.id} FOR SHARE`;
-      if (!await tx.membership.findFirst({ where: { businessId, identityId: session.identity.id, status: 'ACTIVE', role: { in: ['OWNER', 'MANAGER'] }, business: { approvalStatus: 'APPROVED', deletedAt: null } } })) throw notFound();
+      if (!await tx.membership.findFirst({ where: { businessId, identityId: session.identity.id, status: 'ACTIVE', role: { in: rolesWith(BusinessPermission.ACT_ON_ALL_CALENDARS) }, business: { approvalStatus: 'APPROVED', deletedAt: null } } })) throw notFound();
       // Update the attempt row in the same commit as the booking. A waiting stale
       // worker must retry before it can interpret an availability error.
       await tx.$queryRaw`SELECT id FROM "ManualBookingAttempt" WHERE id = ${registered.id} FOR UPDATE`;
@@ -116,7 +117,7 @@ export async function createManualBooking(session: AuthenticatedSession, busines
       }).catch(() => { throw new AppError(503, 'MANUAL_ATTEMPT_PENDING', 'Retry this same appointment to recover its result.'); });
       if (committed) {
         await validateAuthenticatedSession(session);
-        await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']);
+        await requireBusinessPermission(session.identity.id, businessId, BusinessPermission.ACT_ON_ALL_CALENDARS);
         signalAppointmentChanged({ businessId, customerId: null });
         return recover(committed);
       }
@@ -127,7 +128,7 @@ export async function createManualBooking(session: AuthenticatedSession, busines
 
 export async function readManualBookingOptions(session: AuthenticatedSession, businessId: string) {
   await validateAuthenticatedSession(session);
-  await requireBusinessMembership(session.identity.id, businessId, ['OWNER', 'MANAGER']);
+  await requireBusinessPermission(session.identity.id, businessId, BusinessPermission.ACT_ON_ALL_CALENDARS);
   return prisma.$transaction(async tx => {
     const business = await tx.business.findFirst({ where: { id: businessId, approvalStatus: 'APPROVED', deletedAt: null }, select: { timezone: true, publishedAt: true, bookingPolicy: { select: { id: true } }, services: { where: { active: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }], select: { id: true, name: true, durationMinutes: true, priceMinor: true, currency: true, staff: { where: { staff: { active: true } }, select: { staff: { select: { id: true, displayName: true, parallelCapacity: true } } } } } } } });
     if (!business) throw notFound();

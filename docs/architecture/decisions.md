@@ -145,7 +145,7 @@ See [Identity, provider capability and navigation](identity-and-navigation.md) f
 - **Choice: publishing is the sixth step and shows only the publication card.** Sharing (link, system share, QR) moved to `/provider/[businessId]/share`, opened by a "Share your business" link on the agenda that appears only once the business is published. Before then the agenda shows a small amber warning that links to the publish step. *Rejected:* sharing on Account (the account belongs to a person who may manage several businesses) or as a permanent menu item (an occasional action holding a standing slot).
 - **Choice: the agenda's Service Catalog and Working Hours tabs are removed.** Settings are reachable from the menu on every provider screen, and keeping a second copy of each editor would double the work in the planned services and hours redesigns. The cost is one more tap to change a price or hours, which owners do rarely.
 - **Choice: in provider mode, Home opens the active business's agenda, and Team access is a menu item** instead of a link inside settings. Team access is about people, not business configuration. The separate Agenda menu item is dropped, because Home now goes there. Leaving provider mode stays the explicit "Switch to customer mode" item.
-- **Open:** what an invited Staff member can see. Today Staff access links no scheduling resource and opens no workspace (business-access.md); a Staff screen and people working in several businesses are a separate piece of work.
+- **Open:** what an invited Staff member can see. Today Staff access links no scheduling resource and opens no workspace (business-access.md); a Staff screen and people working in several businesses are a separate piece of work. Designed in [worker-access.md](worker-access.md) (2026-11-18).
 
 ## Services and booking policy settings — 2026-11-02
 
@@ -703,3 +703,31 @@ PR #70. The user asked for phone verification, email verification, Google sign-i
 - **Choice: Google is turned on by local configuration only:** an OAuth web client in Testing mode with the user's test users, callback `http://localhost:3000/api/auth/google/callback`, and the three `GOOGLE_*` values in the main checkout's untracked `.env`. No code changed. The client secret never left the user's machine or reached the chat.
 - **Choice: Google on the phone waits for the domain (stage 5).** Expo Go deliberately disables Google (`googleNativeAvailable`), so the phone needs a development build. The server also has one callback: pointing it at the Tailscale address would break the browser on `localhost`, the same cookie split as "One Metro for the phone and the browser". *Rejected:* a temporary Tailscale callback, which needs either the browser on the Tailscale address or a code change to accept two callbacks in a security-sensitive flow, both to be thrown away once a domain exists.
 - **Unchanged:** email and password stay first on the login screen. A Google address that matches an existing account still answers "link required" and never merges; linking happens from Account after signing in.
+
+## Worker access design — 2026-11-18
+
+PR #71. Design only; nothing built yet ([worker-access.md](worker-access.md)). The user found no flow for a worker (STAFF): an invited worker got a membership that opened nothing and was tied to no calendar. This entry answers the "Open" point about what an invited Staff member can see.
+
+- **Choice: a worker invitation is tied to one staff row, and accepting links the account to it (the user's call).** *Rejected:* keeping invitations and staff rows apart, as business-access.md had it; the app could not tell which calendar is the worker's, and the owner would match people to calendars in their head.
+- **Choice: a worker can do everything on their own calendar and nothing on another's: add, move, cancel, block time, mark outcomes (the user's call, "for now").** *Rejected:* view and outcomes only, which sends every client call back to the owner. The booking history already records who made each change.
+- **Choice: two screens, Roster and Team access; the invite starts from the Roster card (the user's call).** Most businesses are one person who is owner, manager and worker; they use the Roster ("Add myself") and never open Team access. *Rejected:* one merged Team screen, which adds complexity for that common case.
+- **Choice: a worker searches all of this business's customer cards (the user's call).** *Rejected:* only customers already booked with them, which makes a worker booking a new or a colleague's client create a duplicate card.
+- **Choice: a worker is notified of bookings, moves and cancellations on their own calendar, and owners and managers keep receiving all of them (the user's call).** *Rejected:* owners only, who would have to pass every change on by hand.
+- **Parked:** editable per-worker privileges (after the UX work), and one worker working at several businesses.
+
+## Member privileges design — 2026-11-18
+
+PR #71. Design only; nothing built yet ([worker-access.md](worker-access.md), Privileges). Follows "Worker access design" above, whose parked privileges point it answers.
+
+- **Choice: four on/off switches per member, preset by role (the user's call):** see other calendars, act on other calendars, business setup, manage team. *Rejected:* custom named roles, too much setup for 1–5 person businesses; one switch per action, too many to understand; a separate customer-phone switch, which search by phone already defeats.
+- **Choice: only the owner changes switches (the user's call).** *Rejected:* letting "manage team" holders change switches within their own; without "only what you hold, never yourself" rules and tests for each, a manager could raise a colleague or a second account of their own.
+- **Choice: Worker and Manager are only a starting preset; switches are the single source of truth (the user's call).** *Rejected:* fixed roles plus switches, where every check asks "role or switch?" and two sources of truth hide authorization bugs. Existing members migrate to the preset of their current role, so nothing changes on the day.
+
+## Named permissions in place of role lists — 2026-11-18
+
+PR #71. Worker access slice 1 (worker-access.md, Build plan). No behaviour change.
+
+- **Choice: every provider check names a permission** (`security/business-permissions.ts`: WORKSPACE, SEE_ALL_CALENDARS, ACT_ON_ALL_CALENDARS, SEARCH_CUSTOMERS, BUSINESS_SETUP, MANAGE_TEAM), **and the roles holding it come from one table** (`rolesWith`). Today Owner and Manager hold all six and Staff none, so every call site allows exactly the roles it did. Slice 5 replaces the table with stored switches without touching call sites. *Rejected:* adding switches straight into each check, which would mix a 40-site refactor with a behaviour change in one review.
+- **Choice: staff rows, their hours and services are BUSINESS_SETUP; MANAGE_TEAM is app access only** (invite, remove). This matches the owner's two screens: Roster is setup, Team access is people.
+- **Choice: time-block create and delete are ACT_ON_ALL_CALENDARS** although they run inside the business configuration lock; `withBusinessConfiguration`, `lockBusinessConfiguration` and `changingAgenda` take the permission, defaulting to BUSINESS_SETUP. *Rejected:* leaving blocks under BUSINESS_SETUP, which would deny a worker blocking their own time in slice 3.
+- **Unchanged:** `GET /v1/provider/businesses/:id` still accepts any active member, Staff included, as before; `permittedInvite` still decides which role a member may invite by role, until slice 5.
