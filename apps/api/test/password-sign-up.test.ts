@@ -8,7 +8,7 @@ import { redis } from '../src/infra/redis.js';
 import { env } from '../src/env.js';
 import { AppError } from '../src/http/errors.js';
 import { passwordMatches, PASSWORD_MIN_LENGTH, SIGN_UP_LIMIT } from '../src/security/password-login.js';
-import { createPasswordSignUpService, SIGN_UP_ADDRESS_LIMIT, SIGN_UP_CODE_ATTEMPTS, SIGN_UP_CODE_SECONDS, SIGN_UP_RESEND_SECONDS, SIGN_UP_VERIFY_LIMIT } from '../src/security/password-sign-up.js';
+import { createPasswordSignUpService, SIGN_UP_ADDRESS_LIMIT, SIGN_UP_CODE_ATTEMPTS, SIGN_UP_CODE_SECONDS, SIGN_UP_RESEND_SECONDS, SIGN_UP_VERIFY_LIMIT, SIGN_UP_WRONG_CODES_PER_ADDRESS } from '../src/security/password-sign-up.js';
 import { createLocalSignUpDelivery, createSignUpDelivery, signUpEmail, type SignUpDelivery } from '../src/security/sign-up-delivery.js';
 import { registerAuthRoutes } from '../src/routes/auth.js';
 import { createEmailLoginService, createLocalEmailDelivery } from '../src/security/email-login.js';
@@ -137,6 +137,23 @@ test('resend gives fresh attempts and keeps the hourly cap per address', async (
   await clearCooldown(address);
   await assert.rejects(service.resend(pending.pendingId, randomUUID()), denied(429, 'RATE_LIMITED'));
   assert.ok((await service.verify({ pendingId: pending.pendingId, code: await code(pending.pendingId) }, randomUUID())).token);
+});
+
+test('wrong codes for one address are capped over a day across resends and IPs, registered or not', async () => {
+  const { service, code, clearCooldown } = fixture();
+  for (const registered of [false, true]) {
+    const address = email();
+    if (registered) await prisma.identity.create({ data: { email: address, emailVerifiedAt: new Date() } });
+    let pending = await service.signUp({ email: address, password, displayName: 'Dana' }, randomUUID());
+    const guess = async () => { const value = registered ? '123456' : wrong(await code(pending.pendingId)); return service.verify({ pendingId: pending.pendingId, code: value }, randomUUID()); };
+    for (let attempt = 0; attempt < SIGN_UP_WRONG_CODES_PER_ADDRESS.maximum; attempt++) {
+      if (attempt && attempt % SIGN_UP_CODE_ATTEMPTS === 0) { await clearCooldown(address); pending = await service.signUp({ email: address, password, displayName: 'Dana' }, randomUUID()); }
+      await assert.rejects(guess(), denied(400));
+    }
+    await clearCooldown(address); pending = await service.signUp({ email: address, password, displayName: 'Dana' }, randomUUID());
+    await assert.rejects(guess(), denied(429, 'RATE_LIMITED'));
+    if (!registered) await assert.rejects(service.verify({ pendingId: pending.pendingId, code: await code(pending.pendingId) }, randomUUID()), denied(429, 'RATE_LIMITED'));
+  }
 });
 
 test('an address taken while the code was pending answers "sign in" only after the right code, and never a second account', async () => {

@@ -18,6 +18,9 @@ export const SIGN_UP_CODE_ATTEMPTS = 5;
 export const SIGN_UP_RESEND_SECONDS = 30;
 export const SIGN_UP_ADDRESS_LIMIT = { maximum: 5, seconds: 3600 } as const;
 export const SIGN_UP_VERIFY_LIMIT = { maximum: 20, seconds: 900 } as const;
+// Resend gives fresh attempts, so wrong codes are also capped per address over a day, whatever the IP: without it
+// a botnet could keep guessing one address at 25 codes an hour forever. Counted for registered addresses alike.
+export const SIGN_UP_WRONG_CODES_PER_ADDRESS = { maximum: 20, seconds: 86400 } as const;
 export const signUpLocaleSchema = z.enum(['he', 'en']).default('he');
 export const PENDING_SIGN_UP_HANDLE = /^[A-Za-z0-9_-]{43}$/;
 
@@ -112,6 +115,8 @@ export function createPasswordSignUpService({ delivery = signUpDelivery, namespa
       if (!/^\d{6}$/.test(input.code)) throw wrongCode();
       const found = await prisma.pendingSignUp.findUnique({ where: { handleHash: tokenDigest(input.pendingId) }, select: { id: true, email: true } });
       if (!found) throw signUpExpired();
+      const wrongCodesKey = `${namespace}:sign-up:wrong-codes:${hash(found.email)}`;
+      await guarded(async () => { if (Number(await redis.get(wrongCodesKey) ?? 0) >= SIGN_UP_WRONG_CODES_PER_ADDRESS.maximum) throw rateLimited(); });
       const rawSessionToken = newOpaqueToken(), current = new Date(now());
       // Attempts commit before the answer, so a wrong code always counts.
       const outcome = await prisma.$transaction(async tx => {
@@ -138,6 +143,7 @@ export function createPasswordSignUpService({ delivery = signUpDelivery, namespa
         throw error;
       });
       if (outcome.kind === 'expired') throw signUpExpired();
+      if (outcome.kind === 'wrong' || outcome.kind === 'exhausted') await guarded(() => redis.eval("local n = redis.call('INCR', KEYS[1]); if n == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end return n", 1, wrongCodesKey, SIGN_UP_WRONG_CODES_PER_ADDRESS.seconds));
       if (outcome.kind === 'wrong') throw wrongCode();
       if (outcome.kind === 'exhausted') throw tooManyAttempts();
       if (outcome.kind === 'taken') throw accountExists();
