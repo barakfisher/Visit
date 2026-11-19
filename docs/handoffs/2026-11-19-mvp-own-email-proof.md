@@ -1,4 +1,4 @@
-# Visit handoff — 2026-11-19, an MVP account proves its own address (bug 2) (PR #TBD)
+# Visit handoff — 2026-11-19, an MVP account proves its own address (bug 2) (PR #81)
 
 Built on `main` after PR #79. Decisions: `decisions.md`, "An MVP account proves its own address".
 
