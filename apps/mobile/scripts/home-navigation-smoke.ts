@@ -97,7 +97,7 @@ export async function homeNavigationSmoke({ browser, webUrl, apiUrl, prisma, run
       await applicant.context.close();
     }
     const manager = await person('manager');
-    await prisma.membership.createMany({ data: [targetId, otherId].map(businessId => ({ identityId: manager.identity.id, businessId, role: 'MANAGER' as const, status: 'ACTIVE' as const })) });
+    await prisma.membership.createMany({ data: [targetId, otherId].map(businessId => ({ identityId: manager.identity.id, businessId, role: 'MEMBER' as const, seeAllCalendars: true, actOnAllCalendars: true, businessSetup: true, manageTeam: true, status: 'ACTIVE' as const })) });
     await application(manager.identity.id, 'PENDING');
     await manager.page.goto(`${webUrl}/account`); await manager.page.getByRole('link', { name: 'Application status', exact: true }).waitFor();
     await manager.page.goto(webUrl); await manager.page.getByRole('switch', { name: 'Business management mode', exact: true }).click();

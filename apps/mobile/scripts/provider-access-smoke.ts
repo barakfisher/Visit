@@ -42,7 +42,7 @@ export async function providerAccessSmoke({ browser, webUrl, apiUrl }: { browser
     await page.goto(`${webUrl}/provider/dashboard?businessId=foreign-business`); await page.getByRole('alert').filter({ hasText: 'An approved provider account is required' }).waitFor(); assert.equal(await page.getByTestId(/^(setup-guide|dashboard)-/).count(), 0);
     await page.goto(`${webUrl}/provider/team/${businesses[0]}`); await page.getByLabel('Verified recipient contact').waitFor();
     await page.getByRole('button', { name: 'Manager', exact: true }).waitFor();
-    await prisma.membership.updateMany({ where: { identityId: id.id, businessId: businesses[0] }, data: { role: 'MANAGER' } });
+    await prisma.membership.updateMany({ where: { identityId: id.id, businessId: businesses[0] }, data: { role: 'MEMBER' } }); // keeps the owner's four switches: the Manager preset (decisions.md, "Switches")
     await page.getByRole('button', { name: 'Manager', exact: true }).waitFor({ state: 'hidden' });
     await page.getByLabel('Verified recipient contact').waitFor();
     assert.equal(await page.getByLabel('Verified recipient contact').count(), 1, 'role downgrade keeps permitted Staff invitations available');
