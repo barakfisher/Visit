@@ -33,6 +33,9 @@ Most of the code already exists and was tested only against local fakes:
 2. **Real email verification.** Needs an owned domain, a Resend account and DNS records;
    `EMAIL_DELIVERY_MODE=resend`. Ask accounts whose email was accepted without proof to verify it
    with the existing code. Adds password reset, which needs real delivery.
+   **Status 2026-11-19:** domain `my-visit.xyz` (Spaceship); sending subdomain `mail.my-visit.xyz`
+   verified in Resend (eu-west-1, tracking off). Tests can no longer pick up a provider key from
+   `.env` (decision log). Next: a sending-only API key in the local `.env`, one real sign-in email.
 3. **Email one-time code sign-in.** A new six-digit code sign-in, built on the account-verification
    code. Open decision: replace the link or offer both.
 4. **Phone verification and SMS OTP sign-in.** Twilio account, cost per SMS, geo/fraud
