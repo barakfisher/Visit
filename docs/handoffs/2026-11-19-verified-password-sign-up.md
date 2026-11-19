@@ -1,4 +1,4 @@
-# Visit handoff — 2026-11-19, login plan stage 2 slice 1 (verified password sign-up) (PR #TBD)
+# Visit handoff — 2026-11-19, login plan stage 2 slice 1 (verified password sign-up) (PR #80)
 
 Built on `main` after PR #78 and merged with PR #77. Plan: [login-plan-stage-2.md](../architecture/login-plan-stage-2.md), slice 1. Decisions: `decisions.md`, "Verified password sign-up".
 

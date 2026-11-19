@@ -811,7 +811,7 @@ PR #77. Worker access slice 5 ([worker-access.md](worker-access.md), Build plan)
 
 ## Verified password sign-up — 2026-11-19
 
-PR #TBD. Login plan stage 2, slice 1 ([login-plan-stage-2.md](login-plan-stage-2.md)). Replaces "the email is marked verified at sign-up" for new accounts; the MVP's trusted accounts are unchanged. The user approved the acceptance criteria and answered four questions while building.
+PR #80. Login plan stage 2, slice 1 ([login-plan-stage-2.md](login-plan-stage-2.md)). Replaces "the email is marked verified at sign-up" for new accounts; the MVP's trusted accounts are unchanged. The user approved the acceptance criteria and answered four questions while building.
 
 - **Choice: a pending sign-up in its own table (`PendingSignUp`), not an unverified `Identity`.** It holds the name, address, scrypt hash, HMAC of the code, expiry, attempts and delivery state; the identity, the password (with no `unprovenEmail`) and the session are created in one transaction under the address lock only after the right code. *Rejected:* reusing `EmailChallenge` (no name or password hash, and its rows are login proofs) or `AccountContactChallenge` (bound to an existing identity and session).
 - **Choice: a registered address gets a row too**, with no password and no code, and the email "you already have an account". Every later step (resend, attempts, expiry, the 202) then behaves the same for both, and verification of that row always fails. The password is hashed in both cases so timing does not differ. *Rejected:* answering a registered address without a row, which makes resend and attempt counts differ and so reveals it.
