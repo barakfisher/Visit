@@ -37,8 +37,10 @@ Most of the code already exists and was tested only against local fakes:
    verified in Resend (eu-west-1, tracking off). Tests can no longer pick up a provider key from
    `.env` (decision log). The local `.env` now sends through Resend (sending-only key restricted to
    `mail.my-visit.xyz`, from `Visit <login@mail.my-visit.xyz>`); a real sign-in link reached the
-   user's inbox and signed them in. Remaining: stop trusting the sign-up email without proof, ask
-   unproven accounts to verify, password reset. Scope to be agreed before building.
+   user's inbox and signed them in. Remaining, agreed 2026-11-19 in
+   [login-plan-stage-2.md](login-plan-stage-2.md): three slices, (1) sign-up proves the email with
+   a six-digit code before the account exists, (2) password reset with a code, (3) change or set
+   the password from Account. The existing trusted test accounts stay verified.
 3. **Email one-time code sign-in.** A new six-digit code sign-in, built on the account-verification
    code. Open decision: replace the link or offer both.
 4. **Phone verification and SMS OTP sign-in.** Twilio account, cost per SMS, geo/fraud
