@@ -6,6 +6,7 @@ import { useBookingContactDraft } from './BookingContactDraft.store';
 import type { AuthProfile } from '../types/flows';
 import { create } from 'zustand';
 import { queryClient } from '../lib/queryClient';
+import { workspaceKey } from '../lib/providerWorkspace';
 
 type SessionState = {
   bootstrapStatus: 'loading' | 'ready' | 'error';
@@ -43,7 +44,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (useBookingAttempt.getState().attempt?.identityId !== profile.id) useBookingAttempt.getState().set(null);
     const draft = useBookingContactDraft.getState().draft;
     if (draft && draft.identityId !== profile.id) useBookingContactDraft.getState().clear();
-    const removedBusiness = Boolean(get().profile?.businesses.some(old => !profile.businesses.some(b => b.id === old.id && b.role === old.role)));
+    const removedBusiness = Boolean(get().profile?.businesses.some(old => !profile.businesses.some(b => b.id === old.id && workspaceKey(b) === workspaceKey(old))));
     if (changedIdentity || removedBusiness) { queryClient.clear(); useAgendaDraft.getState().clear(); useManualDraft.getState().clear(); }
     set({ token, profile, identityId: profile.id, bootstrapStatus: 'ready', ...(changedIdentity || removedBusiness ? { activeBusinessId: null, contextVersion: get().contextVersion + 1 } : {}) });
   },

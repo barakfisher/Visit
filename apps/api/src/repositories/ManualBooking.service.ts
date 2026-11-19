@@ -6,7 +6,7 @@ import { prisma } from '../db/client.js';
 import { signalAppointmentChanged } from '../infra/live-signals.js';
 import { AppError, conflict, forbidden, notFound } from '../http/errors.js';
 import { validateAuthenticatedSession, type AuthenticatedSession } from '../security/sessions.js';
-import { requireBusinessPermission } from '../security/tenant-context.js';
+import { countedMembershipWhere, requireBusinessPermission } from '../security/tenant-context.js';
 import { calendarMembershipWhere, requireCalendarScope, validateCalendarScope, type CalendarScope } from '../security/calendar-scope.js';
 import { publicBusinessWhere } from '../security/business-eligibility.js';
 import { withBookingTransaction } from '../scheduling/booking-transaction.js';
@@ -21,7 +21,7 @@ import { reviewedServiceSchema } from '../scheduling/booking-consent.utils.js';
 import { blocksCovering } from '../scheduling/time-blocks.js';
 import { customerCardExists, findCardByPhone } from './CustomerCards.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
-import { BusinessPermission, rolesWith } from '../security/business-permissions.js';
+import { BusinessPermission, permissionWhere } from '../security/business-permissions.js';
 
 export const manualBookingSchema = z.strictObject({
   finalConsent: z.literal(true), idempotencyKey: z.string().uuid(), serviceId: z.string().min(1).max(256), staffId: z.string().min(1).max(256),
@@ -64,7 +64,7 @@ export async function createManualBooking(session: AuthenticatedSession, busines
       await tx.$queryRaw`SELECT id FROM "Membership" WHERE "businessId" = ${businessId} AND "identityId" = ${session.identity.id} FOR SHARE`;
       if (!await tx.membership.findFirst({ where: calendarMembershipWhere(scope, 'act') })) throw notFound();
       // The card permission is rechecked under the same lock, so a member losing it mid-request cannot book on a card.
-      if ((input.customerCardId || input.saveCustomer) && !await tx.membership.findFirst({ where: { businessId, identityId: session.identity.id, status: 'ACTIVE', role: { in: rolesWith(BusinessPermission.SEARCH_CUSTOMERS) } } })) throw forbidden();
+      if ((input.customerCardId || input.saveCustomer) && !await tx.membership.findFirst({ where: { businessId, identityId: session.identity.id, status: 'ACTIVE', AND: [permissionWhere(BusinessPermission.SEARCH_CUSTOMERS), countedMembershipWhere] } })) throw forbidden();
       // Update the attempt row in the same commit as the booking. A waiting stale
       // worker must retry before it can interpret an availability error.
       await tx.$queryRaw`SELECT id FROM "ManualBookingAttempt" WHERE id = ${registered.id} FOR UPDATE`;

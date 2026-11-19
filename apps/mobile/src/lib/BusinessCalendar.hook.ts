@@ -8,7 +8,8 @@ import { useSessionStore } from '../state/session';
 import { useLiveAgenda } from './LiveSignals.hook';
 import { openAgendaContact, readProviderAgenda } from './ProviderAgenda.service';
 import { useBlockRemoval, useTimeBlockDialog } from './TimeBlocks.hook';
-import { workerCalendar } from './providerWorkspace';
+import { mayUse } from './providerWorkspace';
+import { blockableStaff, blockStart, pinnedCalendar } from './ActingScope';
 import { openManualBooking } from './ManualBookingEntry';
 import { useManualBooking } from './ManualBooking.hook';
 import { appointmentSpan, dateRange, fullDate } from './appointmentTime';
@@ -69,7 +70,9 @@ export function useBusinessCalendar(): BusinessCalendarView {
   // A slot names its own day; the footer's Add appointment starts today, as everywhere else. The sheet opens over this screen.
   const manual = useManualBooking(business, clock.date);
   const [opened, setOpened] = useState<{ kind: 'appointment' | 'block'; id: string } | null>(null);
-  const blockDialog = useTimeBlockDialog(business.id, business.timezone, undefined, workerCalendar(business)?.id);
+  // What this member may change, apart from what they see (decisions.md, "Switches").
+  const setup = mayUse(business, 'businessSetup'), act = agenda.data?.act ?? null, blockStaff = blockableStaff(act, agenda.data?.staff ?? []);
+  const blockDialog = useTimeBlockDialog(business.id, business.timezone, undefined, pinnedCalendar(act), blockStart(setup, blockStaff));
   // A tapped slot asks first: Add appointment or Block time. The next sheet opens once this one has left.
   const [slot, setSlot] = useState<{ date: string; localTime: string } | null>(null);
   const followUp = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -119,15 +122,15 @@ export function useBusinessCalendar(): BusinessCalendarView {
     openDay: day => { if (tapAllowed()) go({ date: day, mode: 'day' }); },
     status: agenda.isError ? 'error' : !data ? 'loading' : 'ready', retry: () => { if (focused) void agenda.refetch(); },
     columns, grid: drawnGrid, clock: { today: clock.date, minute: clock.minute },
-    chooseSlot: (day, localTime) => { if (tapAllowed()) setSlot({ date: day, localTime }); }, closeSlot: () => setSlot(null),
+    startable: act !== null, chooseSlot: (day, localTime) => { if (act && tapAllowed()) setSlot({ date: day, localTime }); }, closeSlot: () => setSlot(null),
     slot: slot ? { ...slot, title: t('calendar.slotTitle', { date: fullDate(slot.date, locale), time: isolateLtr(slot.localTime) }) } : null,
     // No staff from a slot: a staff member left over from a free-time card would narrow the times.
     addAtSlot: () => fromSlot(chosen => openManualBooking(business.id, { localDate: chosen.date, localTime: chosen.localTime, staffId: '' })),
     blockAtSlot: () => fromSlot(chosen => blockDialog.openDialog(chosen.date, chosen.localTime)),
-    blockDialog, staff: data?.staff ?? [],
+    blockDialog, staff: blockStaff, act, setup,
     openEntry: entry => { if (!tapAllowed()) return; blockRemoval.askRemove(null); setFeedback(''); setOpened(entry.kind === 'appointment' ? { kind: 'appointment', id: entry.booking.id } : { kind: 'block', id: entry.block.id }); },
     closeEntry: () => { blockRemoval.askRemove(null); setOpened(null); },
-    openAppointment, openBlock, businessId: business.id, timezone: business.timezone, worker: workerCalendar(business) !== null,
+    openAppointment, openBlock, businessId: business.id, timezone: business.timezone,
     contact: (phone, kind) => void contact(phone, kind),
     blockRemoval, feedback: removeFailure ? t(removeFailure) : feedback, manual,
     span: (startsAt, endsAt) => appointmentSpan(startsAt, endsAt, business.timezone, locale, true),

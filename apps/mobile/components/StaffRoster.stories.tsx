@@ -34,8 +34,10 @@ function RosterPreview({ locale, data = 'staff', conflicts, viewer = 'OWNER' }: 
     ] });
     // Noa works in the app, Dan has a pending link, Maya was never invited.
     const later = new Date(Date.now() + 86400000).toISOString();
-    client.setQueryData(['provider', 'preview', 'team'], { role: viewer, canLinkCalendars: viewer === 'OWNER',
-      members: [{ id: 'm-owner', identityId: 'owner', role: 'OWNER', label: 'o***@example.test', name: he ? 'דנה' : 'Dana', staff: null }, { id: 'm-noa', identityId: 'noa-account', role: 'STAFF', label: 'n***@example.test', name: he ? 'נועה כהן' : 'Noa Cohen', staff: { id: 'noa', displayName: he ? 'נועה' : 'Noa', membershipId: 'm-noa' } }],
+    // The team listing since slice 5: switches on each member, and this viewer's answers (decisions.md, "Switches").
+    const owner = viewer === 'OWNER', all = { seeAllCalendars: true, actOnAllCalendars: true, businessSetup: true, manageTeam: true }, none = { seeAllCalendars: false, actOnAllCalendars: false, businessSetup: false, manageTeam: false };
+    client.setQueryData(['provider', 'preview', 'team'], { role: owner ? 'OWNER' : 'MEMBER', switches: all, canLinkCalendars: owner, canChangeSwitches: owner, invitablePresets: owner ? ['STAFF', 'MANAGER'] : ['STAFF'],
+      members: [{ id: 'm-owner', identityId: 'owner', role: 'OWNER', switches: all, editable: false, removable: false, label: 'o***@example.test', name: he ? 'דנה' : 'Dana', staff: null }, { id: 'm-noa', identityId: 'noa-account', role: 'MEMBER', switches: { ...none, seeAllCalendars: true }, editable: owner, removable: true, label: 'n***@example.test', name: he ? 'נועה כהן' : 'Noa Cohen', staff: { id: 'noa', displayName: he ? 'נועה' : 'Noa', membershipId: 'm-noa' } }],
       invitations: [{ id: 'i-dan', role: 'STAFF', recipientHint: '***4567', createdAt: later, expiresAt: later, acceptedAt: null, revokedAt: null, staff: { id: 'dan', displayName: he ? 'דן' : 'Dan' } }] });
     return client;
   });
@@ -135,7 +137,7 @@ export const RemoveRefused: Story = { args: { locale: 'en', conflicts: { total, 
   await expect(within(canvas.getByTestId('staff-card-noa')).getByRole('button', { name: 'Confirm' })).toBeDisabled();
 } };
 export const AccessBadges: Story = { args: { locale: 'he' }, play: async ({ canvas }) => {
-  await expect(within(canvas.getByTestId('staff-card-noa')).getByTestId('staff-access-badge-noa')).toHaveTextContent('פעיל · נועה כהן · עובד');
+  await expect(within(canvas.getByTestId('staff-card-noa')).getByTestId('staff-access-badge-noa')).toHaveTextContent('פעיל · נועה כהן · עובד · צפייה ביומנים');
   await expect(within(canvas.getByTestId('staff-card-dan')).getByTestId('staff-access-badge-dan')).toHaveTextContent('הזמנה ממתינה · ***4567');
   await expect(within(canvas.getByTestId('staff-card-maya')).getByTestId('staff-access-badge-maya')).toHaveTextContent('לא הוזמן לאפליקציה');
   await expect(canvas.getByRole('button', { name: 'הסרת גישה לאפליקציה: נועה' })).toBeVisible();

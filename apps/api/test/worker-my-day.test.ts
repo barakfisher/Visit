@@ -7,6 +7,7 @@ import { redis } from '../src/infra/redis.js';
 import { tokenDigest } from '../src/security/sessions.js';
 import { calendarMembershipWhere, requireCalendarScope, validateCalendarScope } from '../src/security/calendar-scope.js';
 import { CUSTOMER_CARD_EXISTS } from '../src/repositories/CustomerCards.service.js';
+import { MEMBER_PRESETS, memberPreset } from '../src/security/business-permissions.js';
 
 after(async () => { redis.disconnect(); await prisma.$disconnect(); });
 
@@ -34,8 +35,8 @@ test('a linked worker works their own calendar only', async t => {
   await prisma.businessWeeklyAvailability.createMany({ data: Array.from({ length: 7 }, (_, weekday) => ({ businessId: business.id, weekday, startLocal: '00:00', endLocal: '23:59' })) });
   await prisma.membership.createMany({ data: [
     { businessId: business.id, identityId: people.owner.id, role: 'OWNER', status: 'ACTIVE' },
-    { businessId: business.id, identityId: people.worker.id, role: 'STAFF', status: 'ACTIVE', staffId: own.id },
-    { businessId: business.id, identityId: people.colleague.id, role: 'STAFF', status: 'ACTIVE', staffId: other.id },
+    { businessId: business.id, identityId: people.worker.id, ...memberPreset('STAFF'), status: 'ACTIVE', staffId: own.id },
+    { businessId: business.id, identityId: people.colleague.id, ...memberPreset('STAFF'), status: 'ACTIVE', staffId: other.id },
   ] });
   const date = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10), empty = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
   const appointment = (staffId: string, hour: number, day = date) => prisma.booking.create({ data: { businessId: business.id, customerId: people.customer.id, serviceId: cut.id, staffId, idempotencyKey: randomUUID(), startsAt: new Date(`${day}T${String(hour).padStart(2, '0')}:00:00Z`), endsAt: new Date(`${day}T${String(hour).padStart(2, '0')}:30:00Z`), occupiedFrom: new Date(`${day}T${String(hour).padStart(2, '0')}:00:00Z`), occupiedUntil: new Date(`${day}T${String(hour).padStart(2, '0')}:30:00Z`), status: 'CONFIRMED', serviceName: 'Cut', serviceDurationMinutes: 30, servicePriceMinor: 8000, serviceCurrency: 'ILS' } });
@@ -57,7 +58,7 @@ test('a linked worker works their own calendar only', async t => {
   try {
     await t.test('the profile opens provider mode on their own calendar', async () => {
       const profile = (await app.inject({ url: '/api/auth/me', headers: worker })).json<{ profile: { businesses: { id: string; role: string; calendar?: { id: string; displayName: string; active: boolean } }[] } }>().profile;
-      assert.deepEqual(profile.businesses, [{ id: business.id, name: business.name, timezone: business.timezone, role: 'STAFF', calendar: { id: own.id, displayName: 'Noa', active: true } }]);
+      assert.deepEqual(profile.businesses, [{ id: business.id, name: business.name, timezone: business.timezone, role: 'MEMBER', switches: MEMBER_PRESETS.STAFF, calendar: { id: own.id, displayName: 'Noa', active: true } }]);
       const me = (await app.inject({ url: '/v1/me', headers: worker })).json<{ memberships: { calendar: { id: string } | null }[] }>();
       assert.deepEqual(me.memberships.map(m => m.calendar?.id), [own.id]);
     });

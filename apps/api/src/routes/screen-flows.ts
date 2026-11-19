@@ -5,7 +5,7 @@ import { reviewedServiceSchema } from '../scheduling/booking-consent.utils.js';
 import { publicBusinessWhere } from '../security/business-eligibility.js';
 import { withBusinessConfiguration } from '../repositories/publication.js';
 import { countedMembershipWhere, requireOwnedReschedule, requireBusinessPermission } from '../security/tenant-context.js';
-import { requireCalendarScope } from '../security/calendar-scope.js';
+import { actingScope, requireCalendarScope } from '../security/calendar-scope.js';
 import { getBusinessAvailability, getBusinessBookingCalendar } from '../repositories/availability.js';
 import type { FastifyInstance, FastifyRequest, HTTPMethods } from 'fastify';
 import { z } from 'zod';
@@ -16,7 +16,7 @@ import { requirePublicBusiness } from '../security/tenant-context.js';
 import { AppError, conflict, notFound } from '../http/errors.js';
 import { requireHold, releaseHold } from '../scheduling/reservations.js';
 import { listActiveCustomerBookings } from '../repositories/bookings.js';
-import { BusinessPermission, rolesWith } from '../security/business-permissions.js';
+import { BusinessPermission, permissionWhere } from '../security/business-permissions.js';
 
 // Compatibility boundary: reuse the existing validated, tenant-scoped v1 handlers.
 // Error details are not forwarded: a v1 handler's details must not reach a route with other callers.
@@ -30,7 +30,7 @@ async function providerContext(request: FastifyRequest, supplied?: string) {
   const { identity } = await authenticate(request);
   let businessId = supplied;
   if (!businessId) {
-    const memberships = await prisma.membership.findMany({ where: { identityId: identity.id, status: 'ACTIVE', role: { in: rolesWith(BusinessPermission.WORKSPACE) }, business: { approvalStatus: 'APPROVED' }, ...countedMembershipWhere }, select: { businessId: true } });
+    const memberships = await prisma.membership.findMany({ where: { identityId: identity.id, status: 'ACTIVE', business: { approvalStatus: 'APPROVED' }, AND: [permissionWhere(BusinessPermission.WORKSPACE), countedMembershipWhere] }, select: { businessId: true } });
     if (memberships.length !== 1) throw new AppError(400, 'CHOOSE_BUSINESS', 'Choose the business you want to manage.');
     businessId = memberships[0]!.businessId;
   }
@@ -133,7 +133,8 @@ export async function registerScreenFlows(app: FastifyInstance) {
   app.get('/api/provider/agenda', async request => {
     const { businessId, date, days } = z.strictObject({ businessId: z.string().optional(), date: z.string().date(), days: z.enum(['1', '3', '7']).default('1') }).parse(request.query);
     const context = await providerContext(request, businessId);
-    return readProviderAgenda(await requireCalendarScope(context.identity.id, context.businessId, 'see'), date, Number(days) as 1 | 3 | 7);
+    const agenda = await readProviderAgenda(await requireCalendarScope(context.identity.id, context.businessId, 'see'), date, Number(days) as 1 | 3 | 7);
+    return { ...agenda, act: await actingScope(context.identity.id, context.businessId) };
   });
   app.get('/api/provider/block-time', async request => {
     const { businessId } = z.strictObject({ businessId: z.string().optional() }).parse(request.query);

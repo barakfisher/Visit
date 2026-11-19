@@ -14,6 +14,7 @@ import { registerScreenFlows } from '../src/routes/screen-flows.js';
 import { localDateTimeToInstant } from '../src/scheduling/local-time.js';
 import { CUSTOMER_CARD_EXISTS, CUSTOMER_CARD_SUGGESTIONS } from '../src/repositories/CustomerCards.service.js';
 import { CUSTOMER_SEARCH_MIN_DIGITS, CUSTOMER_SEARCH_MIN_LETTERS } from '@visit/contracts';
+import { memberPreset } from '../src/security/business-permissions.js';
 
 after(async () => { redis.disconnect(); await prisma.$disconnect(); });
 
@@ -25,7 +26,7 @@ test('customer cards: tenant-scoped search, save, pick, linked own bookings and 
   const foreign = await prisma.business.create({ data: { slug: `cards-foreign-${run}`, name: 'Other business', timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED', publishedAt: new Date() } });
   const person = (label: string, data = {}) => prisma.identity.create({ data: { email: `cards-${label}-${run}@example.test`, ...data } });
   const [owner, staffMember, customer, stranger, neverBooked] = await Promise.all([person('owner'), person('staff'), person('customer', { displayName: 'Dana Customer', emailVerifiedAt: new Date() }), person('stranger'), person('never', { displayName: 'Dana Neverbooked', emailVerifiedAt: new Date() })]);
-  await prisma.membership.createMany({ data: [{ businessId: business.id, identityId: owner.id, role: 'OWNER', status: 'ACTIVE' }, { businessId: business.id, identityId: staffMember.id, role: 'STAFF', status: 'ACTIVE' }, { businessId: foreign.id, identityId: owner.id, role: 'OWNER', status: 'ACTIVE' }] });
+  await prisma.membership.createMany({ data: [{ businessId: business.id, identityId: owner.id, role: 'OWNER', status: 'ACTIVE' }, { businessId: business.id, identityId: staffMember.id, ...memberPreset('STAFF'), status: 'ACTIVE' }, { businessId: foreign.id, identityId: owner.id, role: 'OWNER', status: 'ACTIVE' }] });
   const tokens = new Map<string, string>();
   for (const identity of [owner, staffMember, customer, stranger]) { const token = randomUUID(); tokens.set(identity.id, token); await prisma.session.create({ data: { identityId: identity.id, tokenHash: tokenDigest(token), expiresAt: new Date(Date.now() + 600000) } }); }
   const headers = (identity = owner) => ({ authorization: `Bearer ${tokens.get(identity.id)}`, 'x-visit-client': 'native' });
@@ -128,11 +129,11 @@ test('customer cards: tenant-scoped search, save, pick, linked own bookings and 
       assert.deepEqual((await cards('+97250123')).map(card => card.id), [danaCardId]);
       assert.deepEqual(await cards('%%'), []);
       assert.deepEqual(await cards('__'), []);
-      await prisma.membership.updateMany({ where: { businessId: business.id, identityId: staffMember.id }, data: { role: 'MANAGER' } });
+      await prisma.membership.updateMany({ where: { businessId: business.id, identityId: staffMember.id }, data: { ...memberPreset('MANAGER') } });
       assert.equal((await search('dana', staffMember)).statusCode, 200);
       await prisma.membership.updateMany({ where: { businessId: business.id, identityId: staffMember.id }, data: { status: 'REVOKED' } });
       assert.equal((await search('dana', staffMember)).statusCode, 403);
-      await prisma.membership.updateMany({ where: { businessId: business.id, identityId: staffMember.id }, data: { role: 'STAFF', status: 'ACTIVE' } });
+      await prisma.membership.updateMany({ where: { businessId: business.id, identityId: staffMember.id }, data: { ...memberPreset('STAFF'), status: 'ACTIVE' } });
       assert.equal((await search('dana', staffMember)).statusCode, 403);
       // An account that never booked here is not found by its phone either.
       const neverBookedPhone = `+97250${String(Math.floor(Math.random() * 1e7)).padStart(7, '0')}`;

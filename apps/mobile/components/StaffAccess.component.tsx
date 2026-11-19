@@ -8,6 +8,7 @@ import { AppText } from './AppText';
 import { Control } from './Control';
 import { outlineActionClass } from './AddButton';
 import { TextField } from './TextField';
+import { MemberSwitchesEditor, useMemberLabel } from './MemberSwitches.component';
 
 const badgeClass = 'self-start rounded-full px-3 py-1 text-sm font-semibold';
 
@@ -16,21 +17,24 @@ export function StaffAccessSection({ businessId, row, copy }: { businessId: stri
   const { t } = useAppLocale();
   const team = useTeam(businessId);
   const state = useStaffAccess(businessId, row.id, copy);
+  const memberName = useMemberLabel();
   // Without the team permission there is nothing to show or do here.
   if (team.isLoading) return null;
   // A 403 means this member has no team permission: nothing to show, not an error.
   if (team.isError && isApiCode(team.error, 'FORBIDDEN')) return null;
   if (team.isError || !team.data) return <AppText testID={`staff-access-failed-${row.id}`} className="text-sm text-muted">{t('roster.access.loadFailed')}</AppText>;
-  const roles = invitableRoles(team.data.role);
+  const roles = invitableRoles(team.data);
   if (!roles.length) return null;
   const access = staffAccess(team.data, row.id);
-  const roleName = (role: string) => t(role === 'MANAGER' ? 'roster.access.manager' : role === 'OWNER' ? 'roster.access.owner' : 'roster.access.worker');
-  const manageable = access.kind !== 'none' && (roles as string[]).includes(access.role);
+  // An invitation names a preset; an active member's label comes from their switches (decisions.md, "Switches").
+  const roleName = (role: string) => t(role === 'MANAGER' ? 'roster.access.manager' : 'roster.access.worker');
+  const manageable = access.kind === 'active' ? access.member.removable : access.kind === 'pending' && (roles as string[]).includes(access.role);
   return <View testID={`staff-access-${row.id}`} className="gap-3">
-    {access.kind === 'active' ? <AppText testID={`staff-access-badge-${row.id}`} className={`${badgeClass} bg-brand-soft text-brand`}>{t('roster.access.active', { account: access.account, role: roleName(access.role) })}</AppText>
+    {access.kind === 'active' ? <AppText testID={`staff-access-badge-${row.id}`} className={`${badgeClass} bg-brand-soft text-brand`}>{t('roster.access.active', { account: access.account, role: memberName(access.member.role, access.member.switches) })}</AppText>
       : access.kind === 'pending' ? <AppText testID={`staff-access-badge-${row.id}`} className={`${badgeClass} bg-canvas text-warning`}>{t('roster.access.pending', { recipient: access.recipientHint })}</AppText>
       : <AppText testID={`staff-access-badge-${row.id}`} className={`${badgeClass} bg-canvas text-muted`}>{t('roster.access.none')}</AppText>}
 
+    {access.kind === 'active' && !state.inviting && !state.confirmRemove ? <MemberSwitchesEditor businessId={businessId} member={access.member} name={row.displayName} testID={`staff-switches-${row.id}`} /> : null}
     {state.inviting ? <InviteForm name={row.displayName} roles={roles} roleName={roleName} state={state} />
       : access.kind === 'active' ? (manageable ? state.confirmRemove ? <View className="gap-3 rounded-control border border-line bg-canvas p-3">
         <AppText>{t('roster.access.removeHelp', { name: row.displayName })}</AppText>

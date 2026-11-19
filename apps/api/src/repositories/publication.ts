@@ -4,9 +4,9 @@ import { Temporal } from '@js-temporal/polyfill';
 import { prisma } from '../db/client.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { AppError, forbidden, notFound } from '../http/errors.js';
-import { type AuthorizedBusinessContext, validateBusinessPermission } from '../security/tenant-context.js';
+import { type AuthorizedBusinessContext, countedMembershipWhere, validateBusinessPermission } from '../security/tenant-context.js';
 import { workingWindows } from '../scheduling/availability.js';
-import { BusinessPermission, rolesWith } from '../security/business-permissions.js';
+import { BusinessPermission, permissionSql, permissionWhere } from '../security/business-permissions.js';
 export async function publicationReadiness(tx: Prisma.TransactionClient, businessId: string) {
   const business = await tx.business.findUnique({ where: { id: businessId }, include: { bookingPolicy: true, weeklyAvailability: true, services: { where: { active: true }, include: { staff: { where: { staff: { active: true } }, include: { staff: { include: { availability: true } } } } } } } });
   if (!business) throw notFound();
@@ -48,9 +48,9 @@ export async function publicationReadiness(tx: Prisma.TransactionClient, busines
 }
 export async function lockBusinessConfiguration(tx: Prisma.TransactionClient, context: AuthorizedBusinessContext, permission: BusinessPermission = BusinessPermission.BUSINESS_SETUP) {
   await tx.$queryRaw`SELECT id FROM "Business" WHERE id = ${context.businessId} FOR UPDATE`;
-  const membership = await tx.membership.findFirst({ where: { businessId: context.businessId, identityId: context.identityId, role: { in: rolesWith(permission) }, status: 'ACTIVE', business: { approvalStatus: 'APPROVED' } } });
+  const membership = await tx.membership.findFirst({ where: { businessId: context.businessId, identityId: context.identityId, AND: [permissionWhere(permission), countedMembershipWhere], status: 'ACTIVE', business: { approvalStatus: 'APPROVED' } } });
   if (!membership) throw forbidden();
-  const locked = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "Membership" WHERE "businessId" = ${context.businessId} AND "identityId" = ${context.identityId} AND status = 'ACTIVE' AND role = ANY(${rolesWith(permission)}::"MembershipRole"[]) FOR SHARE`;
+  const locked = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "Membership" WHERE "businessId" = ${context.businessId} AND "identityId" = ${context.identityId} AND status = 'ACTIVE' AND ${permissionSql(permission)} FOR SHARE`;
   if (!locked.length) throw forbidden();
 }
 async function expireBusinessHolds(tx: Prisma.TransactionClient, businessId: string) {

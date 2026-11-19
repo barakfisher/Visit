@@ -19,12 +19,13 @@ import { TimeBlockDialog } from './TimeBlockForm.component';
 import { ManualBookingDialog } from './ManualBooking.component';
 import { formatMoney } from '../src/types/flows';
 import type { AgendaAppointment, ProviderAgendaView } from '../src/types/ProviderAgenda.types';
+import { actsOn } from '../src/lib/ActingScope';
 /**
  * The business home: today only, appointments still to come first, and those that ended today folded under one row
  * (decisions.md, "The business home shows today" — 2026-11-10). `published` comes from publication readiness.
  */
 export function ProviderAgenda({ published, worker = false, ...view }: ProviderAgendaView & { published: boolean; worker?: boolean }) {
-  const { business, profile, t, day, agenda, busy, feedback, timeline, closed, ended } = view;
+  const { business, profile, t, day, agenda, busy, feedback, timeline, closed, ended, act, setup } = view;
   const { blockDialog, blockRemoval } = view, { removeFailure: _shownAsFeedback, ...removal } = blockRemoval;
   const [endedOpen, setEndedOpen] = useState(false);
   // The block whose details are open; it closes by itself once the block is released and leaves the day.
@@ -34,8 +35,9 @@ export function ProviderAgenda({ published, worker = false, ...view }: ProviderA
   // A worker's My day: their own calendar, which may be marked unavailable (worker-access.md, States to cover).
   const calendar = worker ? agenda.data?.calendar ?? null : null;
   const revenue = agenda.data ? Object.entries(agenda.data.summary.revenue).map(([currency, amount]) => formatMoney(amount, currency)).join(' · ') || '—' : '—';
+  // An appointment on a calendar this member only sees keeps its status and history, without its actions.
   const card = (booking: AgendaAppointment): ReactNode => <AgendaAppointmentCard key={booking.id} booking={booking} span={view.span(booking.startsAt, booking.endsAt)} t={t} contact={view.contact}
-    lifecycle={<AppointmentAudit key={`${business.id}:${booking.id}`} booking={booking} timezone={business.timezone} businessId={business.id} quiet />} />;
+    lifecycle={<AppointmentAudit key={`${business.id}:${booking.id}`} booking={booking} timezone={business.timezone} businessId={business.id} quiet readOnly={!actsOn(act, booking.staff.id)} />} />;
   return <ScrollView contentContainerClassName="mx-auto w-full max-w-3xl gap-4 px-5 py-5 pb-10" className="flex-1 bg-canvas">
     <Text accessibilityRole="header" className="text-3xl font-bold text-ink">{worker ? t('worker.myDay') : business.name}</Text>
     {worker ? <Text testID="worker-calendar" className="-mt-3 text-body">{calendar ? t('worker.calendarOf', { name: calendar.displayName, business: business.name }) : business.name}</Text> : null}
@@ -43,13 +45,13 @@ export function ProviderAgenda({ published, worker = false, ...view }: ProviderA
     {/* Share and Block time are one family: the same button, the same size, one row (decisions.md, "Block time simpler, sheets close with a swipe down" — 2026-11-11). */}
     <View className="flex-row gap-2">
       {/* Publishing lives in business settings; the agenda only points there (decisions.md, 2026-11-02). */}
-      {published && !worker ? <View className="flex-1"><ActionButton secondary testID="dashboard-share" label={t('dashboard.share')} icon={color => <ShareIcon color={color} />} onPress={() => router.push({ pathname: '/provider/[businessId]/share', params: { businessId: business.id } })} /></View> : null}
+      {published && setup ? <View className="flex-1"><ActionButton secondary testID="dashboard-share" label={t('dashboard.share')} icon={color => <ShareIcon color={color} />} onPress={() => router.push({ pathname: '/provider/[businessId]/share', params: { businessId: business.id } })} /></View> : null}
       {/* The same dialog as the hours screen, starting today (decisions.md, "Time blocks with a reason"). */}
-      <View className="flex-1"><ActionButton secondary testID="agenda-block" label={t('dashboard.block')} icon={color => <PlusIcon color={color} />} disabled={busy || !agenda.data || calendar?.active === false} onPress={() => blockDialog.openDialog(day)} /></View>
+      {act ? <View className="flex-1"><ActionButton secondary testID="agenda-block" label={t('dashboard.block')} icon={color => <PlusIcon color={color} />} disabled={busy || !agenda.data || calendar?.active === false} onPress={() => blockDialog.openDialog(day)} /></View> : null}
     </View>
     {calendar && !calendar.active ? <Text testID="worker-bookings-off" accessibilityRole="alert" className="rounded-control border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-warning">{t('worker.bookingsOff')}</Text> : null}
     {published ? null : <View testID="dashboard-unpublished" className="flex-row flex-wrap items-center gap-x-3 gap-y-1 rounded-control border border-amber-300 bg-amber-50 px-4 py-3"><Text className="flex-1 text-sm text-warning">{t('dashboard.unpublished')}</Text><Link href={{ pathname: '/provider/[businessId]/[section]', params: { businessId: business.id, section: 'publish' } }} className="min-h-touch py-2 font-semibold text-warning underline">{t('dashboard.publishLink')}</Link></View>}
-    <TimeBlockDialog staff={agenda.data?.staff ?? []} {...blockDialog} />
+    <TimeBlockDialog staff={view.blockStaff} wholeBusiness={setup} {...blockDialog} />
     <ManualBookingDialog {...view.manual} />
     {/* The whole day's totals, including appointments that already ended. */}
     <View testID="agenda-summary" className="flex-row items-center rounded-card bg-brand px-4 py-3">
@@ -62,9 +64,10 @@ export function ProviderAgenda({ published, worker = false, ...view }: ProviderA
     {agenda.isError ? <View className="gap-2"><Text accessibilityRole="alert">{t('agendaEdit.loadFailure')}</Text><ActionButton secondary label={t('common.retry')} onPress={view.retry} /></View>
       : agenda.isLoading || !agenda.data ? <Text role="status" className="text-body">{t('dashboard.loading')}</Text> : <>
         {/* Free time, blocks and appointments in one list (decisions.md, "The business day as cards" — 2026-11-11). */}
-        {closed ? <ClosedDayCard t={t} onHours={worker ? undefined : view.openHours} /> : null}
+        {closed ? <ClosedDayCard t={t} onHours={setup ? view.openHours : undefined} /> : null}
         {timeline.length ? <View testID="agenda-today" className="gap-2">{timeline.map(entry => entry.kind === 'appointment' ? card(entry.item)
-          : entry.kind === 'free' ? <FreeTimeCard key={`free-${entry.item.staffId}-${entry.item.startsAt}`} gap={entry.item} t={t} staffName={severalStaff} onPress={() => view.addAt(entry.item)} />
+          // Free time is a place to add an appointment, so it shows only where this member may add one.
+          : entry.kind === 'free' ? !actsOn(act, entry.item.staffId) ? null : <FreeTimeCard key={`free-${entry.item.staffId}-${entry.item.startsAt}`} gap={entry.item} t={t} staffName={severalStaff} onPress={() => view.addAt(entry.item)} />
           : <BlockCard key={`block-${entry.item.id}`} block={entry.item} t={t} onPress={() => { removal.askRemove(null); setBlockId(entry.item.id); }} />)}</View>
           : closed ? null : <Text className="text-body">{t(ended.length ? 'dashboard.noneLeft' : 'dashboard.empty')}</Text>}
         {/* Ended appointments stay reachable, since "Mark no-show" exists only once an appointment is over (decisions.md, 2026-11-10). */}
@@ -78,7 +81,7 @@ export function ProviderAgenda({ published, worker = false, ...view }: ProviderA
         </View> : null}
         {/* A block's details and its release, with the same confirmation as the hours screen. */}
         <FormDialog testID="agenda-block-details" title={t('dashboard.blockTitle')} open={openBlock !== null} onClose={() => { removal.askRemove(null); setBlockId(null); }}>
-          {openBlock ? <TimeBlockRow block={openBlock} t={t} locale={blockDialog.locale} releasable={!worker || openBlock.staff !== null} {...removal} /> : null}
+          {openBlock ? <TimeBlockRow block={openBlock} t={t} locale={blockDialog.locale} releasable={openBlock.staff ? actsOn(act, openBlock.staff.id) : setup} {...removal} /> : null}
         </FormDialog>
       </>}
   </ScrollView>;

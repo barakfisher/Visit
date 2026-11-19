@@ -16,6 +16,7 @@ import { requireBusinessMembership, requirePublicBusiness, type AuthorizedBusine
 import { createBusinessService, deleteBusinessService, getBusinessService, listBusinessServices, listPublicServices, updateBusinessService } from '../src/repositories/services.js';
 import { listCustomerBookings } from '../src/repositories/bookings.js';
 import { saveBusinessPolicy, getBusinessAvailability } from '../src/repositories/provider-settings.js';
+import { memberPreset } from '../src/security/business-permissions.js';
 
 const denied = (status: number) => (error: unknown) => error instanceof AppError && error.statusCode === status;
 const foreignKey = (error: unknown) => typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2003';
@@ -40,8 +41,8 @@ test('tenant repositories and both HTTP surfaces enforce scope, ownership and cu
     await prisma.membership.createMany({ data: [
       { identityId: ownerA!.id, businessId: a!.id, role: 'OWNER', status: 'ACTIVE' },
       { identityId: ownerB!.id, businessId: b!.id, role: 'OWNER', status: 'ACTIVE' },
-      ...[a!, b!].map(business => ({ identityId: dual!.id, businessId: business.id, role: 'MANAGER' as const, status: 'ACTIVE' as const })),
-      { identityId: staffMember!.id, businessId: a!.id, role: 'STAFF', status: 'ACTIVE' },
+      ...[a!, b!].map(business => ({ identityId: dual!.id, businessId: business.id, ...memberPreset('MANAGER'), status: 'ACTIVE' as const })),
+      { identityId: staffMember!.id, businessId: a!.id, ...memberPreset('STAFF'), status: 'ACTIVE' },
       { identityId: pending!.id, businessId: a!.id, role: 'OWNER', status: 'PENDING' },
     ] });
     const services = await Promise.all(businesses.map(business => prisma.service.create({ data: { businessId: business.id, name: 'Private service', durationMinutes: 30 } })));
@@ -203,12 +204,12 @@ test('tenant repositories and both HTTP surfaces enforce scope, ownership and cu
     await t.test('revoked membership, withdrawn approval and revoked sessions invalidate issued contexts', async () => {
       const context = await requireBusinessMembership(ownerA!.id, a!.id);
       const publicContext = await requirePublicBusiness(a!.id);
-      const membershipKey = { identityId: ownerA!.id, businessId: a!.id, role: 'OWNER' as const };
-      await prisma.membership.update({ where: { identityId_businessId_role: membershipKey }, data: { status: 'REVOKED' } });
+      const membershipKey = { identityId: ownerA!.id, businessId: a!.id };
+      await prisma.membership.update({ where: { identityId_businessId: membershipKey }, data: { status: 'REVOKED' } });
       await assert.rejects(listBusinessServices(context), denied(403));
       assert.equal((await app.inject({ url: `${base(a!.id)}/services`, headers: headers(0) })).statusCode, 403);
       assert.equal((await app.inject({ url: `/api/provider/agenda?businessId=${a!.id}&date=${date}`, headers: headers(0) })).statusCode, 403);
-      await prisma.membership.update({ where: { identityId_businessId_role: membershipKey }, data: { status: 'ACTIVE' } });
+      await prisma.membership.update({ where: { identityId_businessId: membershipKey }, data: { status: 'ACTIVE' } });
       await prisma.business.update({ where: { id: a!.id }, data: { approvalStatus: 'REJECTED' } });
       await assert.rejects(listBusinessServices(context), denied(403));
       await assert.rejects(listPublicServices(publicContext), denied(404));

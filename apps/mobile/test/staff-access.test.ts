@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { MIN_RECIPIENT, invitableRoles, staffAccess, validRecipient, type Team, type TeamInvitation } from '../src/lib/StaffAccess';
+import { MIN_RECIPIENT, invitableRoles, staffAccess, validRecipient, type Team, type TeamInvitation, type TeamMember } from '../src/lib/StaffAccess';
+import { NO_SWITCHES } from '../src/lib/MemberSwitches';
 
 const now = new Date('2026-11-18T10:00:00Z'), later = '2026-11-19T10:00:00.000Z', earlier = '2026-11-17T10:00:00.000Z';
 const invitation = (patch: Partial<TeamInvitation>): TeamInvitation => ({ id: 'i', role: 'STAFF', recipientHint: '***4567', createdAt: earlier, expiresAt: later, acceptedAt: null, revokedAt: null, staff: { id: 'noa', displayName: 'Noa' }, ...patch });
-const team = (patch: Partial<Team>): Team => ({ role: 'OWNER', members: [], invitations: [], ...patch });
+const team = (patch: Partial<Team>): Team => ({ role: 'OWNER', switches: NO_SWITCHES, invitablePresets: ['STAFF', 'MANAGER'], members: [], invitations: [], ...patch });
 
 test('a calendar linked to an active member is Active, under their name or masked contact', () => {
-  const linked = team({ members: [{ id: 'm', identityId: 'p', role: 'STAFF', label: 'n***@x.test', name: null, staff: { id: 'noa', displayName: 'Noa', membershipId: 'm' } }] });
-  assert.deepEqual(staffAccess(linked, 'noa', now), { kind: 'active', membershipId: 'm', account: 'n***@x.test', role: 'STAFF' });
+  const member: TeamMember = { id: 'm', identityId: 'p', role: 'MEMBER', switches: NO_SWITCHES, editable: true, removable: true, label: 'n***@x.test', name: null, staff: { id: 'noa', displayName: 'Noa', membershipId: 'm' } };
+  const linked = team({ members: [member] });
+  assert.deepEqual(staffAccess(linked, 'noa', now), { kind: 'active', membershipId: 'm', account: 'n***@x.test', member });
   assert.deepEqual(staffAccess(linked, 'dan', now), { kind: 'none' });
 });
 
@@ -19,10 +21,10 @@ test('only a live invitation for this calendar is Pending; expired, revoked, acc
   }
 });
 
-test('owners invite workers and managers, managers workers only, staff nobody', () => {
-  assert.deepEqual(invitableRoles('OWNER'), ['STAFF', 'MANAGER']);
-  assert.deepEqual(invitableRoles('MANAGER'), ['STAFF']);
-  assert.deepEqual(invitableRoles('STAFF'), []);
+test('the presets offered are the ones the server says this viewer may invite with', () => {
+  assert.deepEqual(invitableRoles(team({})), ['STAFF', 'MANAGER']);
+  assert.deepEqual(invitableRoles(team({ invitablePresets: ['STAFF'] })), ['STAFF']);
+  assert.deepEqual(invitableRoles(team({ invitablePresets: [] })), []);
 });
 
 test('recipients match what the server accepts', () => {

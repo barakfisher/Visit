@@ -13,6 +13,7 @@ import { useAppLocale } from '@/src/i18n/LocaleContext';
 import { accessEn, accessHe } from '@/src/i18n/accessMessages';
 import type { Team } from '@/src/lib/StaffAccess';
 import { teamQueryKey } from '@/src/lib/StaffAccess.hook';
+import { MemberSwitchesEditor, useMemberLabel } from '@/components/MemberSwitches.component';
 export default function TeamScreen() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const identity = useSessionStore(s => s.identityId), version = useSessionStore(s => s.contextVersion);
@@ -25,7 +26,8 @@ function TeamContent({ businessId }: { businessId: string }) {
   const query = useQuery({ queryKey: teamQueryKey(businessId), queryFn: () => apiRequest<Team>(`${base}/team`), enabled: !!identity, retry: false });
   const [recipient, setRecipient] = useState(''), [channel, setChannel] = useState<'email' | 'phone'>('email'), [role, setRole] = useState<'MANAGER' | 'STAFF'>('STAFF'), [busy, setBusy] = useState(false), [feedback, setFeedback] = useState(''), [link, setLink] = useState(''), [confirm, setConfirm] = useState('');
   const running = useRef(false);
-  const roleLabel = (value: string) => value === 'OWNER' ? m.owner : value === 'MANAGER' ? m.manager : m.staff;
+  // An invitation names a preset; a member's label comes from their switches (decisions.md, "Switches").
+  const roleLabel = (value: string) => value === 'MANAGER' ? m.manager : m.staff, memberName = useMemberLabel();
   async function act(path: string, body?: object) {
     if (running.current) return;
     running.current = true; setBusy(true); setFeedback(''); setLink('');
@@ -42,16 +44,17 @@ function TeamContent({ businessId }: { businessId: string }) {
       <View className="gap-4 rounded-card border border-line bg-surface p-card">
         <View className="flex-row gap-3"><ActionButton secondary label={m.email} disabled={busy || channel === 'email'} onPress={() => { setChannel('email'); setRecipient(''); }} /><ActionButton secondary label={m.phone} disabled={busy || channel === 'phone'} onPress={() => { setChannel('phone'); setRecipient(''); }} /></View>
         <TextField identifier label={m.recipient} value={recipient} onChangeText={setRecipient} autoCapitalize="none" keyboardType={channel === 'email' ? 'email-address' : 'phone-pad'} editable={!busy} maxLength={254} />
-        <View className="flex-row gap-3">{(query.data.role === 'OWNER' ? ['STAFF', 'MANAGER'] : ['STAFF']).map(value => <ActionButton key={value} secondary label={`${role === value ? '✓ ' : ''}${roleLabel(value)}`} disabled={busy} onPress={() => setRole(value as 'STAFF' | 'MANAGER')} />)}</View>
+        <View className="flex-row gap-3">{query.data.invitablePresets.map(value => <ActionButton key={value} secondary label={`${role === value ? '✓ ' : ''}${roleLabel(value)}`} disabled={busy} onPress={() => setRole(value as 'STAFF' | 'MANAGER')} />)}</View>
         <ActionButton label={m.create} disabled={busy || (channel === 'phone' ? !/^\+[1-9]\d{7,14}$/.test(recipient) : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient))} onPress={() => void act('invitations', { role, channel, recipient })} />
         {link ? <><AppText>{m.once}</AppText><AppText testID="private-invitation-link" selectable style={{ writingDirection: 'ltr' }}>{link}</AppText><ActionButton secondary label={m.copy} onPress={() => void Clipboard.setStringAsync(link).then(ok => setFeedback(ok ? m.copied : m.failure)).catch(() => setFeedback(m.failure))} /></> : null}
       </View>
       <AppText accessibilityRole="header" className="text-xl font-semibold">{m.members}</AppText>
-      {query.data.members.map(member => <View key={member.id} testID={`team-member-${member.identityId}`} className="gap-3 rounded-card border border-line bg-surface p-card"><AppText>{roleLabel(member.role)} · {member.name ?? member.label}</AppText><AppText testID={`team-member-calendar-${member.identityId}`} className="text-body">{member.staff ? m.calendarLine.replace('{name}', member.staff.displayName) : m.noCalendar}</AppText>
-        {member.role !== 'OWNER' && (query.data?.role === 'OWNER' || member.role === 'STAFF') && !query.data?.members.some(other => other.identityId === member.identityId && other.role === 'OWNER') ? confirm === member.id ? <><AppText>{m.removeHint}</AppText><ActionButton label={m.confirmRemove} disabled={busy} onPress={() => void act(`members/${member.id}`)} /><ActionButton secondary label={m.cancel} onPress={() => setConfirm('')} /></> : <ActionButton secondary label={m.remove} disabled={busy} onPress={() => setConfirm(member.id)} /> : null}
+      {query.data.members.map(member => <View key={member.id} testID={`team-member-${member.identityId}`} className="gap-3 rounded-card border border-line bg-surface p-card"><AppText testID={`team-member-label-${member.identityId}`}>{memberName(member.role, member.switches)} · {member.name ?? member.label}</AppText><AppText testID={`team-member-calendar-${member.identityId}`} className="text-body">{member.staff ? m.calendarLine.replace('{name}', member.staff.displayName) : m.noCalendar}</AppText>
+        <MemberSwitchesEditor businessId={businessId} member={member} name={member.name ?? member.label} testID={`team-switches-${member.identityId}`} />
+        {member.removable ? confirm === member.id ? <><AppText>{m.removeHint}</AppText><ActionButton label={m.confirmRemove} disabled={busy} onPress={() => void act(`members/${member.id}`)} /><ActionButton secondary label={m.cancel} onPress={() => setConfirm('')} /></> : <ActionButton secondary label={m.remove} disabled={busy} onPress={() => setConfirm(member.id)} /> : null}
       </View>)}
       <AppText accessibilityRole="header" className="text-xl font-semibold">{m.invitations}</AppText>
-      {query.data.invitations.map(item => <View key={item.id} className="gap-3 rounded-card border border-line bg-surface p-card"><AppText>{item.recipientHint} · {roleLabel(item.role)}{item.staff ? ` · ${m.calendarLine.replace('{name}', item.staff.displayName)}` : ''}</AppText><AppText>{item.acceptedAt ? m.accepted : item.revokedAt ? m.revoked : new Date(item.expiresAt) <= new Date() ? m.expired : m.pending} · {new Date(item.expiresAt).toLocaleString(locale === 'he' ? 'he-IL' : 'en-GB', { timeZone: 'Asia/Jerusalem' })}</AppText>{!item.acceptedAt && !item.revokedAt && (query.data?.role === 'OWNER' || item.role === 'STAFF') ? <ActionButton secondary label={m.revoke} disabled={busy} onPress={() => void act(`invitations/${item.id}`)} /> : null}</View>)}
+      {query.data.invitations.map(item => <View key={item.id} className="gap-3 rounded-card border border-line bg-surface p-card"><AppText>{item.recipientHint} · {roleLabel(item.role)}{item.staff ? ` · ${m.calendarLine.replace('{name}', item.staff.displayName)}` : ''}</AppText><AppText>{item.acceptedAt ? m.accepted : item.revokedAt ? m.revoked : new Date(item.expiresAt) <= new Date() ? m.expired : m.pending} · {new Date(item.expiresAt).toLocaleString(locale === 'he' ? 'he-IL' : 'en-GB', { timeZone: 'Asia/Jerusalem' })}</AppText>{!item.acceptedAt && !item.revokedAt && query.data?.invitablePresets.includes(item.role) ? <ActionButton secondary label={m.revoke} disabled={busy} onPress={() => void act(`invitations/${item.id}`)} /> : null}</View>)}
     </>}
     {feedback ? <AppText accessibilityRole="alert">{feedback}</AppText> : null}<ActionButton secondary label={m.retry} disabled={busy} onPress={() => void query.refetch()} /><Link href={{ pathname: '/provider/dashboard', params: { businessId } }}>{t('setup.backAgenda')}</Link>
   </ScrollView>;

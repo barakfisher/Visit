@@ -8,7 +8,8 @@ import { useSessionStore } from '../state/session';
 import { agendaDraftScope, emptyAgendaDraft, useAgendaDraft } from '../state/ProviderAgenda.store';
 import { readProviderAgenda, openAgendaContact } from './ProviderAgenda.service';
 import { useBlockRemoval, useTimeBlockDialog } from './TimeBlocks.hook';
-import { workerCalendar } from './providerWorkspace';
+import { mayUse } from './providerWorkspace';
+import { blockableStaff, blockStart, pinnedCalendar } from './ActingScope';
 import { canContinueAppointmentAction } from './AppointmentLifecycle.utils';
 import { todayInTimezone } from './calendar';
 import { agendaTimeline, nextAgendaRecheck, splitAgendaToday, type FreeGap } from './AgendaToday.utils';
@@ -29,11 +30,13 @@ export function useProviderAgenda(): ProviderAgendaView {
   // The clock moves an appointment to the ended row when it ends, and today to the next day after midnight.
   const [now, setNow] = useState(() => Date.now());
   const day = todayInTimezone(business.timezone, new Date(now));
-  const blockDialog = useTimeBlockDialog(business.id, business.timezone, undefined, workerCalendar(business)?.id), blockRemoval = useBlockRemoval(business.id);
+  const agenda = useQuery({ queryKey: ['provider', business.id, 'agenda', identity, version, day], queryFn: ({ signal }) => readProviderAgenda(business.id, day, signal), enabled: focused, staleTime: 0 });
+  // What this member may change, apart from what they see (decisions.md, "Switches").
+  const setup = mayUse(business, 'businessSetup'), act = agenda.data?.act ?? null, blockStaff = blockableStaff(act, agenda.data?.staff ?? []);
+  const blockDialog = useTimeBlockDialog(business.id, business.timezone, undefined, pinnedCalendar(act), blockStart(setup, blockStaff)), blockRemoval = useBlockRemoval(business.id);
   const manual = useManualBooking(business, day);
   // A pending block save or removal holds the business, so its result lands where it was made.
   const busy = blockDialog.busy || Boolean(blockRemoval.pending);
-  const agenda = useQuery({ queryKey: ['provider', business.id, 'agenda', identity, version, day], queryFn: ({ signal }) => readProviderAgenda(business.id, day, signal), enabled: focused, staleTime: 0 });
   useLiveAgenda(business.id, focused);
   const bookings = agenda.data?.bookings, refetch = agenda.refetch;
   useEffect(() => {
@@ -61,7 +64,7 @@ export function useProviderAgenda(): ProviderAgendaView {
     try { if (isCurrent()) await openAgendaContact(phone, mode); } catch { if (isCurrent()) setFeedback(t(mode === 'call' ? 'dashboard.callFailure' : 'dashboard.whatsappFailure')); }
   }
   const saved = stored.savedDate;
-  return { business, profile, t, day, upcoming, ended, timeline, closed: agenda.data?.day?.closed ?? false, addAt,
+  return { business, profile, t, day, upcoming, ended, timeline, closed: agenda.data?.day?.closed ?? false, addAt, act, setup, blockStaff,
     openHours: () => router.push({ pathname: '/provider/[businessId]/[section]', params: { businessId: business.id, section: 'hours' } }), retry: () => { if (focused) void agenda.refetch(); }, agenda: { data: agenda.data, isError: agenda.isError, isLoading: agenda.isLoading }, busy,
     feedback: blockRemoval.removeFailure ? t(blockRemoval.removeFailure) : feedback,
     notice: !saved ? '' : saved === day ? t('dashboard.savedToday') : t('dashboard.savedFor', { date: dateRange(saved, saved, locale) }),
