@@ -9,6 +9,7 @@ The user's global working agreement governs. A parent session asked for slice 1 
 - **Resend:** works by pending id.
 - **"Already have an account" email:** no link.
 - **Email language:** the owner's stored language, else the app's.
+- **Bug 2:** fix it in this PR too (after the security review showed bug 1's fix did not reach the MVP accounts).
 
 ## Where things stand
 
@@ -18,16 +19,13 @@ The user's global working agreement governs. A parent session asked for slice 1 
   - A registered address gets the same answer and a "you already have an account" email.
   - `EMAIL_TAKEN` is gone from the API and the app.
 - **Code screen:** shows the address on its own line, "Send again" with a 30-second countdown, "Change email address" (the form keeps its fields) and, in development builds, a button that loads the local code. Reloading the page in the browser returns to the form; the pending id lives only in memory.
-- **Account code:** proving the account's email with the six-digit account code clears `unprovenEmail` (bug 1 of the plan).
+- **Account code:** proving the account's email with the six-digit account code clears `unprovenEmail` (bug 1 of the plan), and an MVP account can now prove its own trusted address with it (bug 2).
 - **`requireVerifiedEmail`:** the policy save refuses it while email delivery is unavailable. `/api/auth/capabilities` reports `email` from the account delivery; it used to always say `true`.
 - **Next:** slice 2 (password reset with a code). Slice 2 should add a "forgot your password?" line to the "already have an account" email (`sign-up-delivery.ts`, `signUpEmail`).
 
 ## Lessons
 
-- **The bug 1 fix does not reach the 14 MVP accounts on their own address.** Bug 2 still applies to them: `alreadyVerified` in `account-methods.ts` refuses the code for an address already marked verified, so they can never prove it.
-  - **So "the real owner wins" still applies to them.** Their own email-link sign-in still deletes their password.
-  - **Where the fix does run:** an account that proves a new address, or one whose `emailVerifiedAt` is empty.
-  - **Status:** the user had called bug 2 moot; `bf-security-reviewer` raised this as an open question. Fixing bug 2 would make the fix reachable for them.
+- **Bugs 1 and 2 had to be fixed together.** Fixing bug 1 alone (clearing `unprovenEmail` on code proof) never reached the 14 MVP accounts' own address: bug 2 (`alreadyVerified`) refused the code for an address already marked verified. `bf-security-reviewer` caught it; the user chose to fix bug 2 in this PR. An MVP owner can now enter their own address under Account → sign-in methods, prove it with the code, and keep their password through a later email link. A proven address is still refused (`METHOD_UNAVAILABLE`), and the security event is `LINKED`, not `REPLACED`. There is no one-tap "verify this email" button; the owner types the address. Because whoever reads the code may not hold the account, this case sends its own warning email (`purpose: 'confirm-own'` in `account-delivery.ts`); a second security pass asked for it.
 - **A registered address must get a pending row too**, or resend, attempt counts and expiry would behave differently and reveal it. Its row holds no password and no code, and a database `CHECK` enforces that.
 - **Test runs share the development database's `_prisma_migrations`.** The migration was renamed to `20261120130000_pending_sign_up` so it sorts after PR #77's. The local `visit` and `visit_test` databases had it under the old name and were updated by hand (`UPDATE _prisma_migrations SET migration_name = ...`). A database that ran this branch before the rename needs the same update.
 - **The browser suite reads sign-up codes from an injected local inbox** (`web-smoke.mts` passes `signUpInbox` to `password-sign-in-smoke.ts`). Repeating a sign-up for one address within 30 seconds needs the cooldown key cleared; the smoke does that.
@@ -37,7 +35,7 @@ The user's global working agreement governs. A parent session asked for slice 1 
 ## Not verified
 
 - **Checked:**
-  - API suite: 502/502 after merging `main` (`password-sign-up.test.ts` 11 tests; the bug 1 test in `account-methods.test.ts` failed before the fix).
+  - API suite: 504/504 on the final branch (after merging `main` and fixing bug 2) (`password-sign-up.test.ts` 11 tests; the bug 1 test in `account-methods.test.ts` failed before the fix).
   - Browser suite (`npm run test:web`, including the updated `password-sign-in-smoke.ts`): passed (exit 0) when run alone. One earlier run failed in `manual-booking-smoke.ts:76` (an alert counted on the Add appointment form) while the API suite ran at the same time; that code is untouched here and PR #77's CI passed it, so it is treated as load flakiness, not fixed.
   - Mobile foundation tests: 241/241.
   - Typecheck: clean. The API test typecheck has only the known `booking-operations.test.ts:141`.

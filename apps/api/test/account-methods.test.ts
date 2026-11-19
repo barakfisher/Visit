@@ -8,7 +8,7 @@ import { redis, ensureRedisReady } from '../src/infra/redis.js';
 import { env } from '../src/env.js';
 import { AppError } from '../src/http/errors.js';
 import { createAccountMethodsService } from '../src/security/account-methods.js';
-import { createLocalAccountDelivery, createAccountDelivery } from '../src/security/account-delivery.js';
+import { accountVerificationEmail, createLocalAccountDelivery, createAccountDelivery } from '../src/security/account-delivery.js';
 import { hashPassword } from '../src/security/password-login.js';
 import { createEmailLoginService, createLocalEmailDelivery } from '../src/security/email-login.js';
 import { createOtpService } from '../src/security/phone-otp.js';
@@ -228,6 +228,30 @@ test('account methods bind ownership, recent authentication, proof, contact name
       assert.equal(await prisma.passwordCredential.count({ where: { identityId: a.identity.id } }), 1);
       assert.ok(await nextContext(verified.sessionToken!));
     });
+    await t.test('an MVP account whose trusted address was never proven can prove it with the code; a proven address still cannot be re-linked', async () => {
+      const a = await actor({ email: true, google: true }), address = a.identity.email!;
+      await prisma.passwordCredential.create({ data: { identityId: a.identity.id, hash: await hashPassword('owner password value'), unprovenEmail: address } });
+      const otherDevice = await prisma.session.create({ data: { identityId: a.identity.id, tokenHash: tokenDigest(newOpaqueToken()), expiresAt: new Date(Date.now() + 3600000) } });
+      // Whoever reads this code may not hold the account, so the email warns them not to share it.
+      const purposes: (string | undefined)[] = [];
+      const spied = createAccountMethodsService({ delivery: { ...delivery, emailVerification: async input => { purposes.push(input.purpose); return delivery.emailVerification(input); } }, otp, loginOtp, namespace, secret: 'test-only-email-secret' });
+      const start = await spied.start({ channel: 'email', destination: address }, a.context, randomUUID());
+      assert.deepEqual(purposes, ['confirm-own']);
+      const verified = await spied.verify({ challenge: start.challenge, code: (await spied.localCode(start.challenge, a.context)).code }, a.context, randomUUID());
+      assert.equal((await prisma.passwordCredential.findUniqueOrThrow({ where: { identityId: a.identity.id } })).unprovenEmail, null);
+      const event = await prisma.identitySecurityEvent.findFirstOrThrow({ where: { identityId: a.identity.id }, orderBy: { createdAt: 'desc' } });
+      assert.equal(event.action, 'LINKED');
+      assert.ok(await prisma.securityNotification.findFirst({ where: { eventId: event.id, channel: 'email' } }));
+      assert.ok((await prisma.session.findUniqueOrThrow({ where: { id: otherDevice.id } })).revokedAt);
+      const emailService = createEmailLoginService({ delivery: createLocalEmailDelivery(), namespace: `${namespace}:mvp-owner-link` });
+      await emailService.send(address, randomUUID());
+      await emailService.verify((await emailService.localMessage(address)).token, randomUUID());
+      assert.equal(await prisma.passwordCredential.count({ where: { identityId: a.identity.id } }), 1);
+      // Now proven, the same address is refused as before.
+      await redis.del(`${namespace}:destination:${tokenDigest(`email:${address}`)}:cooldown`);
+      const again = await emailProof({ ...a, context: await nextContext(verified.sessionToken!) }, address);
+      await assert.rejects(account.verify({ challenge: again.start.challenge, code: again.code }, await nextContext(verified.sessionToken!), randomUUID()), denied(409, 'METHOD_UNAVAILABLE'));
+    });
     await t.test('removed email is released only for a newly proven identity, stale links cannot recover the original account and last-method recovery has no bypass', async () => {
       const a = await actor({ email: true, google: true });
       const emailDelivery = createLocalEmailDelivery();
@@ -294,3 +318,12 @@ test('account email and alert providers pin endpoints, bound calls and never dis
 });
 
 test.after(async () => { redis.disconnect(); await prisma.$disconnect(); });
+
+test('the confirm-own email warns a reader who never created an account not to share the code, in Hebrew and English', () => {
+  for (const locale of ['he', 'en']) {
+    const own = accountVerificationEmail(locale, '482913', 'confirm-own'), change = accountVerificationEmail(locale, '482913', 'change');
+    assert.match(own.text, /482913/); assert.notEqual(own.subject, change.subject); assert.doesNotMatch(own.text, /https?:/);
+  }
+  assert.match(accountVerificationEmail('en', '000000', 'confirm-own').text, /do not share this code/);
+  assert.match(accountVerificationEmail('he', '000000', 'confirm-own').text, /אל תמסרו את הקוד/);
+});

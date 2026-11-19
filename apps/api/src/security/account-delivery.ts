@@ -1,12 +1,24 @@
 import { env } from '../env.js';
 import { AppError } from '../http/errors.js';
 export type AccountChannel = 'email' | 'phone';
+// 'confirm-own': an MVP account proving the address it was trusted with. Whoever reads the code may not be the
+// account holder, so that email warns them not to share it (decisions.md, "Verified password sign-up", bug 2).
+export type AccountEmailPurpose = 'change' | 'confirm-own';
 export type AccountDelivery = {
-  emailVerification: (input: { destination: string; code: string; id: string; locale: string | null }) => Promise<void>;
+  emailVerification: (input: { destination: string; code: string; id: string; locale: string | null; purpose?: AccountEmailPurpose }) => Promise<void>;
   alert: (input: { channel: AccountChannel; destination: string; id: string; locale: string | null }) => Promise<string>;
   available: (channel: AccountChannel) => boolean;
   localCode?: (id: string) => string | undefined;
 };
+export function accountVerificationEmail(locale: string | null, code: string, purpose: AccountEmailPurpose) {
+  const he = locale !== 'en';
+  if (purpose === 'confirm-own') return he
+    ? { subject: 'מישהו מבקש לאשר שהכתובת הזו שלו ב־Visit', text: `מישהו שנכנס לחשבון Visit שמשתמש בכתובת הזו מבקש לאשר שהיא שלו. הקוד: ${code}\nאם לא אתם יצרתם חשבון Visit, אל תמסרו את הקוד לאף אחד. היכנסו ל־Visit עם קישור במייל לכתובת הזו, והחשבון יעבור אליכם.\nהקוד תקף ל־10 דקות.` }
+    : { subject: 'Someone wants to confirm this address on Visit', text: `Someone signed in to a Visit account that uses this address wants to confirm it is theirs. The code: ${code}\nIf you did not create a Visit account, do not share this code with anyone. Sign in to Visit with an email link to this address and the account becomes yours.\nThe code expires in 10 minutes.` };
+  return he
+    ? { subject: 'אימות כתובת הדואר בחשבון Visit', text: `קוד האימות לשינוי כתובת הדואר בחשבון Visit: ${code}\nהקוד תקף ל־10 דקות. אם לא ביקשתם שינוי, התעלמו מהודעה זו.` }
+    : { subject: 'Verify your Visit email address', text: `Your code to change your Visit email address: ${code}\nThis code expires in 10 minutes. If you did not request a change, ignore this message.` };
+}
 const unavailable = () => new AppError(503, 'ACCOUNT_DELIVERY_UNAVAILABLE', 'Verification delivery is unavailable. Try again shortly.');
 export function createLocalAccountDelivery(): AccountDelivery {
   const codes = new Map<string, { code: string; expiresAt: number }>();
@@ -26,8 +38,8 @@ export function createAccountDelivery({ emailMode = env.EMAIL_DELIVERY_MODE, api
     async emailVerification(input) {
       if (emailMode === 'local-inbox') return local.emailVerification(input);
       if (!apiKey) throw unavailable();
-      const he = input.locale !== 'en';
-      await email(input.destination, he ? 'אימות כתובת הדואר בחשבון Visit' : 'Verify your Visit email address', he ? `קוד האימות לשינוי כתובת הדואר בחשבון Visit: ${input.code}\nהקוד תקף ל־10 דקות. אם לא ביקשתם שינוי, התעלמו מהודעה זו.` : `Your code to change your Visit email address: ${input.code}\nThis code expires in 10 minutes. If you did not request a change, ignore this message.`, input.id);
+      const { subject, text } = accountVerificationEmail(input.locale, input.code, input.purpose ?? 'change');
+      await email(input.destination, subject, text, input.id);
     },
     async alert(input) {
       const localMode = input.channel === 'email' ? emailMode === 'local-inbox' : smsMode === 'local-inbox';
