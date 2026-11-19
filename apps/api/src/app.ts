@@ -18,7 +18,7 @@ import { env } from "./env.js";
 import { safeRequestLog, safeErrorLog } from "./security/logging.js";
 import { registerRequestSecurity } from "./security/request-security.js";
 
-export async function createApp({ google, account, providerReviewScope = 'live' }: { google?: NonNullable<Parameters<typeof registerFlowAuth>[1]>['google']; account?: NonNullable<Parameters<typeof registerAccountMethods>[1]>['account']; providerReviewScope?: string } = {}) {
+export async function createApp({ google, account, passwordSignUp, providerReviewScope = 'live' }: { google?: NonNullable<Parameters<typeof registerFlowAuth>[1]>['google']; account?: NonNullable<Parameters<typeof registerAccountMethods>[1]>['account']; passwordSignUp?: NonNullable<Parameters<typeof registerAuthRoutes>[1]>['passwordSignUp']; providerReviewScope?: string } = {}) {
   const trustedProxies = env.TRUSTED_PROXY_CIDRS.split(",").map(value => value.trim()).filter(Boolean);
   const app = Fastify({ trustProxy: trustedProxies.length ? trustedProxies : false, logger: { serializers: { req: safeRequestLog }, redact: ["req.headers.authorization", "req.headers.cookie"] } });
   const pool = new Pool({ connectionString: env.DATABASE_URL, max: 5, connectionTimeoutMillis: 3000, query_timeout: 3000 });
@@ -38,7 +38,7 @@ export async function createApp({ google, account, providerReviewScope = 'live' 
 
   await registerLiveStreaming(app);
   registerRequestSecurity(app, env.WEB_APP_URL);
-  await registerAuthRoutes(app);
+  await registerAuthRoutes(app, passwordSignUp ? { passwordSignUp } : {});
   await registerProviderRoutes(app, { reviewScope: providerReviewScope });
   await registerBookingRoutes(app);
   await registerAccountMethods(app, account ? { account } : {});

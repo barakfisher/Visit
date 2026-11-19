@@ -215,6 +215,19 @@ test('account methods bind ownership, recent authentication, proof, contact name
       assert.ok((await account.remove({ method: 'email' }, a.context)).sessionToken);
       assert.equal(await prisma.passwordCredential.count({ where: { identityId: a.identity.id } }), 0);
     });
+    await t.test('proving the account address with the code clears unprovenEmail, so the owner\'s later email link keeps the password', async () => {
+      const a = await actor({ email: true, google: true }), address = a.identity.email!;
+      await prisma.identity.update({ where: { id: a.identity.id }, data: { emailVerifiedAt: null } });
+      await prisma.passwordCredential.create({ data: { identityId: a.identity.id, hash: await hashPassword('owner password value'), unprovenEmail: address } });
+      const proof = await emailProof(a, address);
+      const verified = await account.verify({ challenge: proof.start.challenge, code: proof.code }, a.context, randomUUID());
+      assert.equal((await prisma.passwordCredential.findUniqueOrThrow({ where: { identityId: a.identity.id } })).unprovenEmail, null);
+      const emailService = createEmailLoginService({ delivery: createLocalEmailDelivery(), namespace: `${namespace}:owner-link` });
+      await emailService.send(address, randomUUID());
+      await emailService.verify((await emailService.localMessage(address)).token, randomUUID());
+      assert.equal(await prisma.passwordCredential.count({ where: { identityId: a.identity.id } }), 1);
+      assert.ok(await nextContext(verified.sessionToken!));
+    });
     await t.test('removed email is released only for a newly proven identity, stale links cannot recover the original account and last-method recovery has no bypass', async () => {
       const a = await actor({ email: true, google: true });
       const emailDelivery = createLocalEmailDelivery();

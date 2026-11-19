@@ -44,17 +44,24 @@ export const advanceHint = (text: string) => countHint(text, { one: 'setup.advan
 
 /** The server's refusal to save the verified-phone requirement while SMS delivery is off. */
 export const VERIFIED_PHONE_UNAVAILABLE = 'VERIFIED_PHONE_UNAVAILABLE';
+export const VERIFIED_EMAIL_UNAVAILABLE = 'VERIFIED_EMAIL_UNAVAILABLE';
 /**
  * Whether the owner may change "require verified phone", and what to tell them.
  * `sms` is `/api/auth/capabilities`: undefined while loading, false when off or unreadable.
  * A requirement that is already on stays switchable so the owner can always turn it off (decisions.md, 2026-11-03 verified phone).
  */
-export function verifiedPhoneSwitch(sms: boolean | undefined, on: boolean): { disabled: boolean; hint: MessageKey | null } {
-  if (sms) return { disabled: false, hint: null };
-  if (sms === undefined) return { disabled: !on, hint: null };
-  return on ? { disabled: false, hint: 'setup.verifiedPhoneOn' } : { disabled: true, hint: 'setup.verifiedPhoneUnavailable' };
+// A verified-contact requirement no customer can meet makes the business unbookable, so the switch opens only
+// while that channel can deliver a code; one already on stays usable so it can be turned off (decisions.md, 2026-11-03).
+function verifiedContactSwitch(available: boolean | undefined, on: boolean, hints: { on: MessageKey; unavailable: MessageKey }): { disabled: boolean; hint: MessageKey | null } {
+  if (available) return { disabled: false, hint: null };
+  if (available === undefined) return { disabled: !on, hint: null };
+  return on ? { disabled: false, hint: hints.on } : { disabled: true, hint: hints.unavailable };
 }
-/** The message for a failed policy save: the verified-phone refusal gets its own, anything else the generic one. */
+export const verifiedPhoneSwitch = (sms: boolean | undefined, on: boolean) => verifiedContactSwitch(sms, on, { on: 'setup.verifiedPhoneOn', unavailable: 'setup.verifiedPhoneUnavailable' });
+export const verifiedEmailSwitch = (email: boolean | undefined, on: boolean) => verifiedContactSwitch(email, on, { on: 'setup.verifiedEmailOn', unavailable: 'setup.verifiedEmailUnavailable' });
+/** The message for a failed policy save: each verified-contact refusal gets its own, anything else the generic one. */
 export function policySaveFailure(error: unknown): MessageKey {
-  return error instanceof ApiError && error.code === VERIFIED_PHONE_UNAVAILABLE ? 'setup.verifiedPhoneRefused' : 'setup.saveFailure';
+  if (error instanceof ApiError && error.code === VERIFIED_PHONE_UNAVAILABLE) return 'setup.verifiedPhoneRefused';
+  if (error instanceof ApiError && error.code === VERIFIED_EMAIL_UNAVAILABLE) return 'setup.verifiedEmailRefused';
+  return 'setup.saveFailure';
 }

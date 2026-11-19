@@ -22,7 +22,7 @@ export default function LoginScreen() {
   const { t } = useAppLocale();
   const params = useLocalSearchParams<{ returnTo?: string }>();
   const returnTo = safeAuthReturnTo(params.returnTo);
-  const password = usePasswordSignIn('sign-in', returnTo), phone = usePhoneSignIn(returnTo);
+  const password = usePasswordSignIn(returnTo), phone = usePhoneSignIn(returnTo);
   const [googleBusy, setGoogleBusy] = useState(false), [googleError, setGoogleError] = useState('');
   const capabilities = useQuery({ queryKey: ['auth', 'capabilities'], queryFn: () => apiRequest<AuthCapabilities>('/api/auth/capabilities') });
   const sms = capabilities.data?.sms ?? false, blocked = password.busy || phone.busy || phone.issued || googleBusy;

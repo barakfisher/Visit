@@ -404,12 +404,34 @@ model AccountContactChallenge {
   @@index([expiresAt])
 }
 
+// A password sign-up waiting for its six-digit code (login-plan-stage-2.md, slice 1). No Identity exists until
+// the code is right. A row for an address that already has an account holds no password and no code: that
+// address received "you already have an account" instead, and verification of the row always fails.
+model PendingSignUp {
+  id              String    @id @default(cuid())
+  handleHash      String    @unique
+  email           String
+  displayName     String
+  passwordHash    String?
+  locale          String
+  existingAccount Boolean   @default(false)
+  codeHash        String?
+  attempts        Int       @default(0)
+  expiresAt       DateTime  @db.Timestamptz
+  deliveredAt     DateTime? @db.Timestamptz
+  consumedAt      DateTime? @db.Timestamptz
+  createdAt       DateTime  @default(now()) @db.Timestamptz
+  @@index([email, consumedAt])
+  @@index([expiresAt])
+}
+
 // MVP email+password sign-in (decisions.md, 2026-11-01). Kept apart from Identity so ordinary
 // identity reads never carry the password hash.
 model PasswordCredential {
   identityId String   @id
   hash       String
-  // The address accepted at sign-up without proof of ownership; re-verify while it equals Identity.email.
+  // The address accepted at MVP sign-up without proof of ownership. Null once the account proves its email
+  // (verified sign-up, the account code or the email link), so "the real owner wins" no longer applies.
   unprovenEmail String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

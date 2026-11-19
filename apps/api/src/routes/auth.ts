@@ -8,19 +8,43 @@ import { authenticate, clearSessionCookie, issueSessionToken, readSessionToken, 
 
 import { emailSchema, emailLoginService, type createEmailLoginService } from '../security/email-login.js';
 import { passwordLoginService, type createPasswordLoginService } from '../security/password-login.js';
+import { PENDING_SIGN_UP_HANDLE, passwordSignUpService, type createPasswordSignUpService } from '../security/password-sign-up.js';
 
-export async function registerAuthRoutes(app: FastifyInstance, { emailLogin = emailLoginService, passwordLogin = passwordLoginService }: { emailLogin?: ReturnType<typeof createEmailLoginService>; passwordLogin?: ReturnType<typeof createPasswordLoginService> } = {}) {
+export async function registerAuthRoutes(app: FastifyInstance, { emailLogin = emailLoginService, passwordLogin = passwordLoginService, passwordSignUp = passwordSignUpService }: { emailLogin?: ReturnType<typeof createEmailLoginService>; passwordLogin?: ReturnType<typeof createPasswordLoginService>; passwordSignUp?: ReturnType<typeof createPasswordSignUpService> } = {}) {
   // Field rules are enforced by the service; the route only bounds the shape before hashing.
   const passwordFields = { email: z.string().max(320), password: z.string().max(1024) };
+  // Sign-up answers 202 with a pending id whether or not the address is registered; the account exists only
+  // after /verify with the emailed code (login-plan-stage-2.md, slice 1).
   app.post('/v1/auth/password/sign-up', async (request, reply) => {
-    const parsed = z.strictObject({ ...passwordFields, displayName: z.string().max(512) }).safeParse(request.body);
+    const parsed = z.strictObject({ ...passwordFields, displayName: z.string().max(512), locale: z.enum(['he', 'en']).optional() }).safeParse(request.body);
     if (!parsed.success) throw new AppError(400, 'VALIDATION_ERROR', 'Enter your name, email and password.');
-    const result = await passwordLogin.signUp(parsed.data, request.ip).catch((error: unknown) => {
+    const result = await passwordSignUp.signUp(parsed.data, request.ip).catch((error: unknown) => {
       if (error instanceof z.ZodError) throw new AppError(400, 'VALIDATION_ERROR', 'Enter your name, a valid email and a password of at least 8 characters.');
       throw error;
     });
+    reply.code(202);
+    return result;
+  });
+  const pendingId = z.string().regex(PENDING_SIGN_UP_HANDLE);
+  app.post('/v1/auth/password/sign-up/resend', async (request, reply) => {
+    const parsed = z.strictObject({ pendingId }).safeParse(request.body);
+    if (!parsed.success) throw new AppError(400, 'SIGN_UP_EXPIRED', 'This sign-up has expired. Start again.');
+    const result = await passwordSignUp.resend(parsed.data.pendingId, request.ip);
+    reply.code(202);
+    return result;
+  });
+  app.post('/v1/auth/password/sign-up/verify', async (request, reply) => {
+    const parsed = z.strictObject({ pendingId: z.string().max(128), code: z.string().max(16) }).safeParse(request.body);
+    if (!parsed.success) throw new AppError(400, 'SIGN_UP_CODE_INVALID', 'Enter the six-digit code from the email.');
+    const result = await passwordSignUp.verify(parsed.data, request.ip);
     reply.code(201);
     return { ...issueSessionToken(reply, request, result.token), identity: result.identity };
+  });
+  app.post('/__dev/auth/sign-up-code', async request => {
+    if (env.NODE_ENV !== 'development' || !passwordSignUp.delivery.local || !['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(request.ip)) throw new AppError(404, 'NOT_FOUND', 'The requested resource was not found.');
+    const parsed = z.strictObject({ pendingId }).safeParse(request.body);
+    if (!parsed.success) throw new AppError(404, 'NOT_FOUND', 'The requested resource was not found.');
+    return passwordSignUp.localMessage(parsed.data.pendingId);
   });
   app.post('/v1/auth/password/sign-in', async (request, reply) => {
     const parsed = z.strictObject(passwordFields).safeParse(request.body);

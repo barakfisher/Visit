@@ -7,8 +7,8 @@ import { AppError } from '../http/errors.js';
 import { emailSchema } from './email-login.js';
 import { newOpaqueToken, sessionExpiry, tokenDigest } from './sessions.js';
 
-// MVP email+password sign-in (decisions.md, 2026-11-01). The address is trusted without proof and
-// marked verified at sign-up; the credential keeps that address so these accounts can be re-verified.
+// Email+password sign-in (decisions.md, 2026-11-01). Sign-up proves the email first and lives in
+// password-sign-up.ts; accounts from the MVP keep `unprovenEmail` (login-plan-stage-2.md).
 export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 128;
 export const passwordSchema = z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH);
@@ -24,7 +24,6 @@ const derive = (password: string, salt: Buffer, options: ScryptOptions, keyLengt
   scryptCallback(password.normalize('NFKC'), salt, keyLength, { ...options, maxmem: 128 * options.N! * options.r! * 2 }, (error, key) => error ? reject(error) : resolve(key));
 });
 const invalidCredentials = () => new AppError(401, 'INVALID_CREDENTIALS', 'The email or password is incorrect.');
-export const emailTaken = () => new AppError(409, 'EMAIL_TAKEN', 'An account with this email already exists. Sign in instead.');
 
 export async function hashPassword(password: string) {
   const salt = randomBytes(SCRYPT.saltLength), key = await derive(password, salt, SCRYPT, SCRYPT.keyLength);
@@ -55,25 +54,6 @@ export function createPasswordLoginService({ namespace = 'visit:password', now =
   });
   const recordFailure = (email: string, ip: string) => guarded(async () => { for (const item of failureKeys(email, ip)) await count(item.key, item.seconds); });
   return {
-    async signUp(input: { email: string; password: string; displayName: string }, ip: string) {
-      const email = emailSchema.parse(input.email), password = passwordSchema.parse(input.password), displayName = displayNameSchema.parse(input.displayName);
-      await limit(`sign-up:ip:${hash(ip)}`, SIGN_UP_LIMIT.maximum, SIGN_UP_LIMIT.seconds);
-      const passwordHash = await hashPassword(password), rawSessionToken = newOpaqueToken(), current = new Date(now());
-      const identity = await prisma.$transaction(async tx => {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`email:${email}`}, 0))::text`;
-        // An existing account is never modified or entered from sign-up, whichever method created it.
-        if (await tx.identity.findUnique({ where: { email }, select: { id: true } })) throw emailTaken();
-        const person = await tx.identity.create({ data: { email, emailVerifiedAt: current, displayName } });
-        await lockIdentitySecurity(tx, person.id);
-        await tx.passwordCredential.create({ data: { identityId: person.id, hash: passwordHash, unprovenEmail: email } });
-        await tx.session.create({ data: { identityId: person.id, tokenHash: tokenDigest(rawSessionToken), expiresAt: sessionExpiry(current) } });
-        return { id: person.id, email: person.email, platformRole: person.platformRole };
-      }).catch((error: unknown) => {
-        if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') throw emailTaken();
-        throw error;
-      });
-      return { token: rawSessionToken, identity };
-    },
     async signIn(input: { email: string; password: string }, ip: string) {
       const parsedEmail = emailSchema.safeParse(input.email), parsedPassword = passwordSchema.safeParse(input.password);
       await limit(`sign-in:ip:${hash(ip)}`, SIGN_IN_LIMITS.ip.maximum, SIGN_IN_LIMITS.ip.seconds);

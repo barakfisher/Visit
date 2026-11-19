@@ -5,7 +5,7 @@ import test, { after } from 'node:test';
 import { prisma } from '../src/db/client.js';
 import { redis } from '../src/infra/redis.js';
 import { AppError } from '../src/http/errors.js';
-import { saveBusinessPolicy, VERIFIED_PHONE_UNAVAILABLE } from '../src/repositories/provider-settings.js';
+import { saveBusinessPolicy, VERIFIED_EMAIL_UNAVAILABLE, VERIFIED_PHONE_UNAVAILABLE } from '../src/repositories/provider-settings.js';
 import { requireBusinessMembership } from '../src/security/tenant-context.js';
 import { DEFAULT_BOOKING_POLICY } from '../src/scheduling/rules.js';
 after(async () => { redis.disconnect(); await prisma.$disconnect(); });
@@ -57,5 +57,22 @@ test('the verified-phone requirement is refused while SMS is off and allowed onc
   } finally {
     await prisma.business.deleteMany({ where: { id: business.id } });
     await prisma.identity.deleteMany({ where: { id: { in: [owner.id, staffMember.id] } } });
+  }
+});
+
+test('the verified-email requirement is refused while email delivery is unavailable, like the phone', async () => {
+  const owner = await prisma.identity.create({ data: { displayName: 'Email policy owner' } });
+  const business = await prisma.business.create({ data: { name: 'Email policy fixture', slug: `email-policy-${randomUUID()}`, timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED' } });
+  await prisma.membership.create({ data: { businessId: business.id, identityId: owner.id, role: 'OWNER', status: 'ACTIVE' } });
+  const emailUnavailable = (error: unknown) => error instanceof AppError && error.statusCode === 409 && error.code === VERIFIED_EMAIL_UNAVAILABLE;
+  try {
+    const context = await requireBusinessMembership(owner.id, business.id, ['OWNER']);
+    await assert.rejects(saveBusinessPolicy(context, { ...DEFAULT_BOOKING_POLICY, requireVerifiedEmail: true }, { emailVerification: false }), emailUnavailable);
+    assert.equal(await prisma.bookingPolicy.findUnique({ where: { businessId: business.id } }), null);
+    assert.equal((await saveBusinessPolicy(context, { ...DEFAULT_BOOKING_POLICY, requireVerifiedEmail: false }, { emailVerification: false })).requireVerifiedEmail, false);
+    assert.equal((await saveBusinessPolicy(context, { ...DEFAULT_BOOKING_POLICY, requireVerifiedEmail: true }, { emailVerification: true })).requireVerifiedEmail, true);
+  } finally {
+    await prisma.business.deleteMany({ where: { id: business.id } });
+    await prisma.identity.deleteMany({ where: { id: owner.id } });
   }
 });

@@ -1,6 +1,6 @@
 # Login plan stage 2: verified sign-up, password reset and change
 
-Agreed with the user 2026-11-19. Plan only; nothing here is built yet. Part of
+Agreed with the user 2026-11-19. **Slice 1 is built** (decisions.md, "Verified password sign-up"); slices 2 and 3 are not. Part of
 [login-plan.md](login-plan.md) stage 2; decisions in `decisions.md`, "Login plan stage 2 scope" (PR #78).
 
 ## Problem
@@ -49,7 +49,10 @@ Local data: 14 password accounts, all with `unprovenEmail = email`.
 - Email one-time code sign-in (stage 3), account merging, password strength beyond length, and
   making tests hermetic.
 
-## Slice 1: sign-up proves the email first
+## Slice 1: sign-up proves the email first (built)
+
+Agreed while building: resend works by pending id on the same row (`POST .../sign-up/resend`), the 30-second wait only disables the button (nothing is sent automatically), the "already have an account" email has no link and says to sign in as usual, and each email goes in the account owner's language if stored, else the app's.
+
 
 - `POST /v1/auth/password/sign-up` validates name, email and password, then stores a pending
   sign-up (name, email, scrypt hash, HMAC of a six-digit code, 10-minute expiry, 5 attempts,

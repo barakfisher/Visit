@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { advanceHint, HOUR_FIELDS, hoursText, MINUTES_PER_HOUR, noticeHint, policyFormValues, policyNumbers, policySaveFailure, VERIFIED_PHONE_UNAVAILABLE, verifiedPhoneSwitch, type PolicyNumbers } from '../src/lib/BookingPolicyForm';
+import { advanceHint, HOUR_FIELDS, hoursText, MINUTES_PER_HOUR, noticeHint, policyFormValues, policyNumbers, policySaveFailure, VERIFIED_EMAIL_UNAVAILABLE, VERIFIED_PHONE_UNAVAILABLE, verifiedEmailSwitch, verifiedPhoneSwitch, type PolicyNumbers } from '../src/lib/BookingPolicyForm';
 import { ApiError } from '../src/lib/apiClient';
 import { translate } from '../src/i18n/messages';
 
@@ -66,4 +66,14 @@ test('the server refusing the verified phone requirement gets its own localized 
   assert.equal(translate('en', 'setup.verifiedPhoneRefused'), 'Phone verification isn’t available yet. Turn off the verified phone requirement and save again.');
   assert.equal(translate('he', 'setup.verifiedPhoneUnavailable'), 'אימות טלפון עדיין לא זמין, ולכן לקוחות לא יוכלו לעמוד בדרישה הזו.');
   assert.equal(translate('en', 'setup.verifiedPhoneOn'), 'Phone verification isn’t available yet, so no customer can book while this is on. Turn it off and save.');
+});
+
+test('the verified email switch follows email delivery the same way, with its own messages', () => {
+  assert.deepEqual(verifiedEmailSwitch(true, false), { disabled: false, hint: null });
+  assert.deepEqual(verifiedEmailSwitch(false, false), { disabled: true, hint: 'setup.verifiedEmailUnavailable' });
+  assert.deepEqual(verifiedEmailSwitch(false, true), { disabled: false, hint: 'setup.verifiedEmailOn' });
+  assert.deepEqual(verifiedEmailSwitch(undefined, false), { disabled: true, hint: null });
+  assert.deepEqual(verifiedEmailSwitch(undefined, true), { disabled: false, hint: null });
+  assert.equal(policySaveFailure(new ApiError('Email verification is not available yet.', VERIFIED_EMAIL_UNAVAILABLE, 409)), 'setup.verifiedEmailRefused');
+  for (const key of ['setup.verifiedEmailUnavailable', 'setup.verifiedEmailOn', 'setup.verifiedEmailRefused'] as const) assert.notEqual(translate('he', key), translate('en', key));
 });

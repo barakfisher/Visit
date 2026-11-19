@@ -6,6 +6,8 @@ export function createSecurityNotificationWorker(delivery: AccountDelivery = acc
   let active: Promise<void> | undefined, stopped = false;
   async function drain() {
     await prisma.accountContactChallenge.deleteMany({ where: { expiresAt: { lt: new Date(Date.now() - 86400000) } } });
+    // Pending password sign-ups, kept a day past expiry like contact challenges (login-plan-stage-2.md).
+    await prisma.pendingSignUp.deleteMany({ where: { expiresAt: { lt: new Date(Date.now() - 86400000) } } });
     // Bound private recipient retention, including permanently unconfigured channels.
     await prisma.securityNotification.updateMany({ where: { scope, destination: { not: null }, createdAt: { lt: new Date(Date.now() - 7 * 86400000) } }, data: { status: 'FAILED', destination: null, leaseUntil: null } });
     for (let iteration = 0; iteration < 10 && !stopped; iteration++) {

@@ -12,6 +12,7 @@ import { authenticate, newOpaqueToken, issueSessionToken, sessionExpiry, tokenDi
 import { phoneSchema as phone, otpService, type createOtpService } from '../security/phone-otp.js';
 import { BusinessPermission, ROLE_PRIORITY, rolesWith } from '../security/business-permissions.js';
 import { countedMembershipWhere } from '../security/tenant-context.js';
+import { accountDelivery } from '../security/account-delivery.js';
 const phoneKey = (value: string) => createHash('sha256').update(value).digest('hex');
 /**
  * The person and the businesses they open provider mode for. One entry per business, under their strongest role
@@ -31,7 +32,7 @@ export async function registerFlowAuth(app: FastifyInstance, { otp = otpService,
     await prisma.identity.update({ where: { id: identity.id }, data: { preferredLocale: locale } });
     return { locale };
   });
-  app.get('/api/auth/capabilities', async () => ({ sms: otp.mode !== 'disabled', google: google.enabled, googleNative: google.nativeEnabled, email: true }));
+  app.get('/api/auth/capabilities', async () => ({ sms: otp.mode !== 'disabled', google: google.enabled, googleNative: google.nativeEnabled, email: accountDelivery.available('email') }));
   app.get('/api/auth/me', async (request) => { const { identity } = await authenticate(request); return { profile: await authProfile(identity.id) }; });
   app.post('/api/auth/otp/send', async (request, reply) => {
     const parsed = z.object({ phone }).safeParse(request.body);

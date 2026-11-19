@@ -36,7 +36,7 @@ const date = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
 let apiServer: Awaited<ReturnType<typeof import('../../api/src/app.js').createApp>> | undefined, webProcess: ChildProcess | undefined;
 const googleClaims = new Map<string, Record<string, unknown>>();
 const googleNamespace = `test:google-web:${run}`;
-const accountNamespace = `test:account-web:${run}`;
+const accountNamespace = `test:account-web:${run}`, signUpNamespace = `test:password-web:${run}`;
 const businessIds: string[] = [], identityIds: string[] = [];
 const contexts: BrowserContext[] = [];
 let capture: Page | undefined;
@@ -91,7 +91,12 @@ try {
   const { createLocalAccountDelivery } = await import('../../api/src/security/account-delivery.js');
   const { createOtpService } = await import('../../api/src/security/phone-otp.js');
   const account = createAccountMethodsService({ namespace: accountNamespace, delivery: createLocalAccountDelivery(), otp: createOtpService({ mode: 'local-inbox', namespace: `${accountNamespace}:otp`, secret: 'web-test-only-account-otp-secret' }) });
-  apiServer = await createApp({ google, account, providerReviewScope: `test:review-web:${run}` });
+  // Sign-up mail goes to a local inbox the password smoke reads; nothing is sent.
+  const { createPasswordSignUpService } = await import('../../api/src/security/password-sign-up.js');
+  const { createLocalSignUpDelivery } = await import('../../api/src/security/sign-up-delivery.js');
+  const signUpInbox = createLocalSignUpDelivery();
+  const passwordSignUp = createPasswordSignUpService({ delivery: signUpInbox, namespace: signUpNamespace });
+  apiServer = await createApp({ google, account, passwordSignUp, providerReviewScope: `test:review-web:${run}` });
   await apiServer.listen({ host: '127.0.0.1', port: 3001 });
   assert.equal((await fetch(`${apiUrl}/health/ready`)).status, 200);
   for (const name of ['North', 'South']) {
@@ -137,7 +142,7 @@ try {
     const { googleSmoke } = await import('./google-smoke.js');
     await googleSmoke({ browser, webUrl, apiUrl, claims: googleClaims, run, prisma, identityIds, sharedBusinessId: businessIds[0]! });
     const { passwordSignInSmoke } = await import('./password-sign-in-smoke.js');
-    await passwordSignInSmoke({ browser, webUrl, prisma, run, identityIds });
+    await passwordSignInSmoke({ browser, webUrl, prisma, redis, run, identityIds, signUpInbox, signUpNamespace });
     const { homeNavigationSmoke } = await import('./home-navigation-smoke.js');
     await homeNavigationSmoke({ browser, webUrl, apiUrl, prisma, run, identityIds, businessIds });
     const { pilotLifecycleSmoke } = await import('./pilot-lifecycle-smoke.js');
@@ -588,6 +593,7 @@ try {
 } finally {
   webProcess?.kill('SIGTERM'); await apiServer?.close();
   const accountKeys: string[] = []; for await (const batch of redis.scanStream({ match: `${accountNamespace}:*` })) accountKeys.push(...batch); if (accountKeys.length) await redis.del(...accountKeys);
+  const signUpKeys: string[] = []; for await (const batch of redis.scanStream({ match: `${signUpNamespace}:*` })) signUpKeys.push(...batch); if (signUpKeys.length) await redis.del(...signUpKeys);
   const googleKeys: string[] = []; for await (const batch of redis.scanStream({ match: `${googleNamespace}:*` })) googleKeys.push(...batch); if (googleKeys.length) await redis.del(...googleKeys);
   const holds = await prisma.booking.findMany({ where: { businessId: { in: businessIds } }, select: { id: true } });
   if (holds.length) await redis.del(...holds.map((hold) => `visit:hold:${hold.id}`));

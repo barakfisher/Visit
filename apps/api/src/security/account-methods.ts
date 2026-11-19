@@ -125,6 +125,9 @@ export function createAccountMethodsService({ delivery = accountDelivery, otp = 
           if (initial.channel === 'phone') for (const phone of [...new Set([initial.destination, ...(identity.phone ? [identity.phone] : [])])]) { await otp.invalidate(phone); await loginOtp.invalidate(phone); }
           await tx.accountContactChallenge.update({ where: { id: initial.id }, data: { consumedAt: new Date(now()) } });
           await tx.identity.update({ where: { id: identity.id }, data: initial.channel === 'email' ? { email: initial.destination, emailVerifiedAt: new Date(now()) } : { phone: initial.destination, phoneVerifiedAt: new Date(now()) } });
+          // The account now proves the address its password signs in with, so "the real owner wins" in
+          // email-login.ts must not treat that password as an unproven claim on it any more.
+          if (initial.channel === 'email') await tx.passwordCredential.updateMany({ where: { identityId: identity.id }, data: { unprovenEmail: null } });
           if (initial.channel === 'email') await tx.emailChallenge.updateMany({ where: { email: initial.destination, consumedAt: null }, data: { consumedAt: new Date(now()) } });
           return finishAccountSecurityChange(tx, { identity, session, channels, notificationScope: namespace === 'visit:account' ? 'live' : namespace, action: old ? 'REPLACED' : 'LINKED', method: initial.channel as AccountChannel, rotate: true, proofHash }, new Date(now()));
         }, { maxWait: 5000, timeout: 5000 });
