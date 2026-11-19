@@ -5,7 +5,7 @@ import { needsSetupGuide } from './BusinessReadiness';
 import { useBusinessReadiness } from './BusinessReadiness.hook';
 import { openManualBooking } from './ManualBookingEntry';
 import { accountBusiness, footerHidden, isProviderPath } from './navigation';
-import { workerCalendar } from './providerWorkspace';
+import { mayAddAppointment, mayUse } from './providerWorkspace';
 import type { FooterTab } from '../types/FooterNavigation.types';
 
 export function useAppFooter(): FooterTab[] | null {
@@ -13,9 +13,10 @@ export function useAppFooter(): FooterTab[] | null {
   const params = useGlobalSearchParams<{ businessId?: string }>(), onAccount = accountBusiness(pathname, params.businessId, useSessionStore(state => state.profile?.businesses));
   const identity = useSessionStore(state => state.identityId), active = useSessionStore(state => state.activeBusinessId);
   const business = onAccount ?? active, providerMode = !!onAccount || isProviderPath(pathname);
-  // A worker has no setup to finish and may not read it: asking would be refused and close provider mode.
-  const calendar = useSessionStore(state => { const entry = state.profile?.businesses.find(item => item.id === business); return entry ? workerCalendar(entry) : null; });
-  const readiness = useBusinessReadiness(business ?? '', !!identity && providerMode && !!business && !calendar);
+  // Without "business setup" there is no setup to finish and it may not be read: asking would be refused and close provider mode.
+  const entry = useSessionStore(state => state.profile?.businesses.find(item => item.id === business));
+  const setup = mayUse(entry, 'businessSetup');
+  const readiness = useBusinessReadiness(business ?? '', !!identity && providerMode && !!business && setup);
   if (!identity || footerHidden(pathname)) return null;
   if (!providerMode) return [
     { key: 'home', label: t('nav.home'), active: pathname === '/', onPress: () => router.dismissTo('/') },
@@ -35,8 +36,8 @@ export function useAppFooter(): FooterTab[] | null {
     // The calendar opens on this week; from another week, the tab brings it back (decisions.md, "The calendar screen" — 2026-11-11).
     { key: 'calendar', label: t('nav.calendar'), active: pathname === '/provider/calendar', onPress: () => router.navigate({ pathname: '/provider/calendar', params: { businessId: business } }) },
     // Until setup is done the agenda redirects to settings, so there is nowhere to add an appointment.
-    ...((calendar ? calendar.active : readiness.data && !needsSetupGuide(readiness.data)) ? [{ key: 'add' as const, label: t('manual.open'), active: false, onPress: () => openAdd(business) }] : []),
-    // Team access is the owner's and managers'; a worker's footer is their day, their calendar and Add appointment.
-    ...(calendar ? [] : [{ key: 'team' as const, label: t('nav.teamAccess'), active: pathname === `/provider/team/${business}`, onPress: () => router.navigate({ pathname: '/provider/team/[businessId]', params: { businessId: business } }) }]),
+    ...(mayAddAppointment(entry, !!readiness.data && !needsSetupGuide(readiness.data)) ? [{ key: 'add' as const, label: t('manual.open'), active: false, onPress: () => openAdd(business) }] : []),
+    // Team access opens with "manage team"; a worker's footer is their day, their calendar and Add appointment.
+    ...(!mayUse(entry, 'manageTeam') ? [] : [{ key: 'team' as const, label: t('nav.teamAccess'), active: pathname === `/provider/team/${business}`, onPress: () => router.navigate({ pathname: '/provider/team/[businessId]', params: { businessId: business } }) }]),
   ];
 }

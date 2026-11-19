@@ -6,10 +6,12 @@ import { ZodError } from 'zod';
 import { prisma } from '../src/db/client.js';
 import { redis } from '../src/infra/redis.js';
 import { registerBusinessAccess } from '../src/routes/business-access.js';
+import { INVITATION_ALREADY_MEMBER } from '../src/repositories/business-access.js';
 import { AppError } from '../src/http/errors.js';
 import { newOpaqueToken, tokenDigest, sessionExpiry } from '../src/security/sessions.js';
 import { authProfile } from '../src/routes/flow-auth.js';
 import { requireBusinessMembership } from '../src/security/tenant-context.js';
+import { MEMBER_PRESETS, memberPreset, switchesOf } from '../src/security/business-permissions.js';
 after(async () => { redis.disconnect(); await prisma.$disconnect(); });
 test('existing-business access requires scoped, verified, single-use consent and leaves publication intact', async t => {
   const ids: string[] = [], businesses: string[] = [];
@@ -25,8 +27,8 @@ test('existing-business access requires scoped, verified, single-use consent and
   for (let n = 0; n < 2; n++) { const b = await prisma.business.create({ data: { name: 'Invitation fixture', slug: `inv-${randomUUID()}`, approvalStatus: 'APPROVED', publishedAt: new Date(), timezone: 'Asia/Jerusalem' } }); businesses.push(b.id); }
   const b = businesses[0]!, other = businesses[1]!;
   const ownerMember = await prisma.membership.create({ data: { businessId: b, identityId: owner.id, role: 'OWNER', status: 'ACTIVE' } });
-  const managerMember = await prisma.membership.create({ data: { businessId: b, identityId: manager.id, role: 'MANAGER', status: 'ACTIVE' } });
-  const staffMember = await prisma.membership.create({ data: { businessId: b, identityId: staff.id, role: 'STAFF', status: 'ACTIVE' } });
+  const managerMember = await prisma.membership.create({ data: { businessId: b, identityId: manager.id, ...memberPreset('MANAGER'), status: 'ACTIVE' } });
+  const staffMember = await prisma.membership.create({ data: { businessId: b, identityId: staff.id, ...memberPreset('STAFF'), status: 'ACTIVE' } });
   const original = await prisma.business.findUniqueOrThrow({ where: { id: b } });
   const req = (method: 'GET' | 'POST' | 'DELETE', url: string, who = owner, payload?: object) => app.inject({ method, url, headers: { cookie: who.cookie }, ...(payload ? { payload } : {}) });
   const invite = async (who = owner, role = 'STAFF', recipient = receiver.email!) => { const r = await req('POST', `/v1/provider/businesses/${b}/invitations`, who, { role, channel: 'email', recipient }); assert.equal(r.statusCode, 200, r.body); const v = r.json(); return { ...v, token: new URL(v.url).hash.slice('#invite='.length) }; };
@@ -57,19 +59,24 @@ test('existing-business access requires scoped, verified, single-use consent and
       const revoked = await invite(); assert.equal((await req('DELETE', `/v1/provider/businesses/${b}/invitations/${revoked.id}`)).statusCode, 200); assert.equal((await accept(revoked.token)).statusCode, 409);
       const byManager = await invite(manager); await prisma.membership.update({ where: { id: managerMember.id }, data: { status: 'REVOKED' } }); assert.equal((await accept(byManager.token)).statusCode, 409); await prisma.membership.update({ where: { id: managerMember.id }, data: { status: 'ACTIVE' } });
     });
-    await t.test('phone recipient binding and strongest-role context survive multiple memberships', async () => {
+    await t.test('phone recipient binding, and a second invitation never changes an active member\'s switches', async () => {
       await prisma.identity.update({ where: { id: receiver.id }, data: { phone: `+9725${String(Date.now()).slice(-8)}`, phoneVerifiedAt: new Date() } });
       const person = await prisma.identity.findUniqueOrThrow({ where: { id: receiver.id } });
       const r = await req('POST', `/v1/provider/businesses/${b}/invitations`, manager, { role: 'STAFF', channel: 'phone', recipient: person.phone }); assert.equal(r.statusCode, 200, r.body);
-      const token = new URL(r.json().url).hash.slice(8); assert.equal((await accept(token)).statusCode, 200);
-      assert.equal((await requireBusinessMembership(receiver.id, b)).role, 'MANAGER');
-      const profile = await authProfile(receiver.id); assert.equal(profile.businesses.length, 1); assert.equal(profile.businesses[0]?.role, 'MANAGER');
+      // The phone matched (a wrong recipient is 403 before this), and one membership per person: a Worker invitation
+      // without a calendar would only lower a manager's switches, which only the owner changes (decisions.md, "Switches").
+      const token = new URL(r.json().url).hash.slice(8); const second = await accept(token);
+      assert.equal(second.statusCode, 409); assert.equal(second.json().code, INVITATION_ALREADY_MEMBER);
+      assert.equal(await prisma.membership.count({ where: { identityId: receiver.id, businessId: b } }), 1);
+      assert.deepEqual(switchesOf(await prisma.membership.findFirstOrThrow({ where: { identityId: receiver.id, businessId: b } })), MEMBER_PRESETS.MANAGER);
+      assert.equal((await requireBusinessMembership(receiver.id, b)).role, 'MEMBER');
+      const profile = await authProfile(receiver.id); assert.equal(profile.businesses.length, 1); assert.deepEqual(profile.businesses[0]?.switches, MEMBER_PRESETS.MANAGER);
       assert.equal((await req('DELETE', `/v1/provider/businesses/${b}/members/${staffMember.id}`, receiver)).statusCode, 200);
       assert.equal((await req('DELETE', `/v1/provider/businesses/${b}/members/${ownerMember.id}`, manager)).statusCode, 403);
     });
     await t.test('member revocation invalidates issued invitations and all subordinate roles without owner lockout', async () => {
       const v = await invite(receiver, 'STAFF', outsider.email!);
-      const member = await prisma.membership.findFirstOrThrow({ where: { identityId: receiver.id, businessId: b, role: 'MANAGER' } });
+      const member = await prisma.membership.findFirstOrThrow({ where: { identityId: receiver.id, businessId: b } });
       assert.equal((await req('DELETE', `/v1/provider/businesses/${b}/members/${member.id}`)).statusCode, 200);
       assert.equal((await accept(v.token, outsider)).statusCode, 409);
       assert.equal(await prisma.membership.count({ where: { businessId: b, identityId: receiver.id, status: 'ACTIVE' } }), 0);
@@ -91,7 +98,8 @@ test('existing-business access requires scoped, verified, single-use consent and
       const row = await prisma.businessOwnershipReview.findUniqueOrThrow({ where: { id: fresh.json().id } });
       assert.equal(row.reviewedByIdentityId, admin.id);
       assert.equal(await prisma.membership.count({ where: { businessId: b, identityId: outsider.id, role: 'OWNER', status: 'ACTIVE' } }), row.status === 'APPROVED' ? 1 : 0);
-      await prisma.membership.create({ data: { businessId: b, identityId: owner.id, role: 'MANAGER', status: 'ACTIVE' } });
+      // One membership per person per business: the owner cannot also hold a member row.
+      await assert.rejects(prisma.membership.create({ data: { businessId: b, identityId: owner.id, ...memberPreset('MANAGER'), status: 'ACTIVE' } }));
       const profile = await authProfile(owner.id); assert.equal(profile.businesses.length, 1); assert.equal(profile.businesses[0]?.role, 'OWNER');
       const event = await prisma.businessAccessEvent.findFirstOrThrow({ where: { businessId: b } }); await assert.rejects(prisma.businessAccessEvent.update({ where: { id: event.id }, data: { action: 'REVOKED' } }));
     });

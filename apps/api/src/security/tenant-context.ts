@@ -4,16 +4,17 @@ import { validateAuthenticatedSession, type AuthenticatedSession } from './sessi
 import { MembershipRole, MembershipStatus, type Prisma } from '../generated/prisma/client.js';
 import { prisma } from '../db/client.js';
 import { conflict, forbidden, notFound, rescheduleCutoff } from '../http/errors.js';
-import { BusinessPermission, ROLE_PRIORITY, rolesWith } from './business-permissions.js';
+import { BusinessPermission, permissionWhere } from './business-permissions.js';
 
 /** Who sees the whole business: they see its agenda and are told about all of its bookings. */
-export const MANAGING_ROLES: readonly MembershipRole[] = Object.freeze(rolesWith(BusinessPermission.SEE_ALL_CALENDARS));
+export const seesWholeBusinessWhere = Object.freeze(permissionWhere(BusinessPermission.SEE_ALL_CALENDARS));
 
 /**
- * A Staff membership counts only while it is linked to a staff row that has not been removed: an unlinked worker
- * (an invitation from before calendars, or a link that was revoked) has no workspace (worker-access.md, slice 3).
+ * A membership counts when it is the owner's, sees every calendar, or is linked to a staff row that has not been
+ * removed. A member with neither a calendar nor "see other calendars" has no workspace, whatever else is on
+ * (the user's call, decisions.md "Switches"), so a removed worker is back in customer mode on the next read.
  */
-export const countedMembershipWhere = Object.freeze({ OR: [{ role: { not: MembershipRole.STAFF } }, { staffId: { not: null }, staff: { is: { archivedAt: null } } }] }) satisfies Prisma.MembershipWhereInput;
+export const countedMembershipWhere = Object.freeze({ OR: [{ role: MembershipRole.OWNER }, { seeAllCalendars: true }, { staffId: { not: null }, staff: { is: { archivedAt: null } } }] }) satisfies Prisma.MembershipWhereInput;
 
 const contextBrand: unique symbol = Symbol('AuthorizedBusinessContext');
 const publicContextBrand: unique symbol = Symbol('PublicBusinessContext');
@@ -29,23 +30,22 @@ export type AuthorizedBusinessContext = Readonly<{
 
 export type PublicBusinessContext = Readonly<{ businessId: string; timezone: string; ownedBookingId?: string; customerId?: string; [publicContextBrand]: true }>;
 
+/** The member's context for a business, if their one membership there counts and holds the permission. */
 export async function requireBusinessMembership(
   identityId: string,
   businessId: string,
-  allowedRoles?: readonly MembershipRole[],
+  permission: BusinessPermission = BusinessPermission.WORKSPACE,
 ): Promise<AuthorizedBusinessContext> {
-  const memberships = await prisma.membership.findMany({
+  const membership = await prisma.membership.findFirst({
     where: {
       identityId,
       businessId,
       status: MembershipStatus.ACTIVE,
-      ...(allowedRoles ? { role: { in: [...allowedRoles] } } : {}),
       business: { approvalStatus: 'APPROVED' },
-      ...countedMembershipWhere,
+      AND: [countedMembershipWhere, permissionWhere(permission)],
     },
     select: { role: true },
   });
-  const membership = ROLE_PRIORITY.map(role => memberships.find(m => m.role === role)).find(Boolean);
   if (!membership) throw forbidden();
   const context = Object.freeze({ identityId, businessId, role: membership.role, [contextBrand]: true as const });
   issuedMembershipContexts.add(context);
@@ -54,7 +54,7 @@ export async function requireBusinessMembership(
 
 /** The member's context for a business, if they hold the permission there. */
 export function requireBusinessPermission(identityId: string, businessId: string, permission: BusinessPermission) {
-  return requireBusinessMembership(identityId, businessId, rolesWith(permission));
+  return requireBusinessMembership(identityId, businessId, permission);
 }
 
 export async function requirePublicBusiness(businessId: string): Promise<PublicBusinessContext> {
@@ -68,20 +68,16 @@ export async function requirePublicBusiness(businessId: string): Promise<PublicB
   return context;
 }
 
-export function assertMembershipRole(context: AuthorizedBusinessContext, roles: readonly MembershipRole[]) {
-  if (!context || !issuedMembershipContexts.has(context) || !roles.includes(context.role)) throw forbidden();
-}
-
-export async function validateBusinessContext(context: AuthorizedBusinessContext, roles?: readonly MembershipRole[]) {
+export async function validateBusinessContext(context: AuthorizedBusinessContext, permission?: BusinessPermission) {
   if (!context || !issuedMembershipContexts.has(context)) throw forbidden();
-  if (roles) assertMembershipRole(context, roles);
-  // Contexts are in-process capabilities, not permanent membership grants.
-  await requireBusinessMembership(context.identityId, context.businessId, [context.role]);
+  // Contexts are in-process capabilities, not permanent membership grants: the switches are read again.
+  const current = await requireBusinessMembership(context.identityId, context.businessId, permission);
+  if (current.role !== context.role) throw forbidden();
 }
 
 /** Rechecks an issued context against the member's current permission. */
 export function validateBusinessPermission(context: AuthorizedBusinessContext, permission: BusinessPermission) {
-  return validateBusinessContext(context, rolesWith(permission));
+  return validateBusinessContext(context, permission);
 }
 
 export async function validatePublicBusinessContext(context: PublicBusinessContext) {

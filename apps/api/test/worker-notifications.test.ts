@@ -9,6 +9,7 @@ import { setBookingAudit } from '../src/repositories/BookingLifecycle.service.js
 import { WORKER_NOTIFICATION_KINDS } from '../src/repositories/Notifications.service.js';
 import { tokenDigest } from '../src/security/sessions.js';
 import { expectCustomerSignal } from './support/live-signal.js';
+import { memberPreset } from '../src/security/business-permissions.js';
 
 after(async () => { closeLiveSignals(); redis.disconnect(); await prisma.$disconnect(); });
 
@@ -35,17 +36,17 @@ test('a worker is notified of their own calendar only', async t => {
   await prisma.businessWeeklyAvailability.createMany({ data: Array.from({ length: 7 }, (_, weekday) => ({ businessId: business.id, weekday, startLocal: '00:00', endLocal: '23:59' })) });
   await prisma.membership.createMany({ data: [
     { businessId: business.id, identityId: people.owner.id, role: 'OWNER', status: 'ACTIVE' },
-    { businessId: business.id, identityId: people.manager.id, role: 'MANAGER', status: 'ACTIVE' },
-    { businessId: business.id, identityId: people.worker.id, role: 'STAFF', status: 'ACTIVE', staffId: rows.own.id },
-    { businessId: business.id, identityId: people.colleague.id, role: 'STAFF', status: 'ACTIVE', staffId: rows.other.id },
-    // One person holding the owner role and, in another membership, the link to a row: one notification, never two.
-    { businessId: business.id, identityId: people.dual.id, role: 'OWNER', status: 'ACTIVE' },
-    { businessId: business.id, identityId: people.dual.id, role: 'STAFF', status: 'ACTIVE', staffId: rows.dualRow.id },
-    { businessId: business.id, identityId: people.removed.id, role: 'STAFF', status: 'REVOKED', staffId: rows.removedRow.id },
-    { businessId: business.id, identityId: people.unlinked.id, role: 'STAFF', status: 'ACTIVE' },
-    { businessId: business.id, identityId: people.archived.id, role: 'STAFF', status: 'ACTIVE', staffId: rows.archivedRow.id },
+    { businessId: business.id, identityId: people.manager.id, ...memberPreset('MANAGER'), status: 'ACTIVE' },
+    { businessId: business.id, identityId: people.worker.id, ...memberPreset('STAFF'), status: 'ACTIVE', staffId: rows.own.id },
+    { businessId: business.id, identityId: people.colleague.id, ...memberPreset('STAFF'), status: 'ACTIVE', staffId: rows.other.id },
+    // One membership per person since slice 5: a member who sees every calendar (one switch) and is linked to a row
+    // is told as a manager and as that row's worker by the trigger's two inserts: one notification, never two.
+    { businessId: business.id, identityId: people.dual.id, ...memberPreset('STAFF'), seeAllCalendars: true, status: 'ACTIVE', staffId: rows.dualRow.id },
+    { businessId: business.id, identityId: people.removed.id, ...memberPreset('STAFF'), status: 'REVOKED', staffId: rows.removedRow.id },
+    { businessId: business.id, identityId: people.unlinked.id, ...memberPreset('STAFF'), status: 'ACTIVE' },
+    { businessId: business.id, identityId: people.archived.id, ...memberPreset('STAFF'), status: 'ACTIVE', staffId: rows.archivedRow.id },
     // A manager linked to a calendar: told once, as a manager.
-    { businessId: business.id, identityId: people.linkedManager.id, role: 'MANAGER', status: 'ACTIVE', staffId: rows.managerRow.id },
+    { businessId: business.id, identityId: people.linkedManager.id, ...memberPreset('MANAGER'), status: 'ACTIVE', staffId: rows.managerRow.id },
   ] });
   await prisma.staff.update({ where: { id: rows.archivedRow.id }, data: { archivedAt: new Date() } });
 
@@ -107,7 +108,7 @@ test('a worker is notified of their own calendar only', async t => {
       assert.ok((await recipients(absent.id, 'BOOKING_NO_SHOW')).includes(as(people.manager)), 'managers keep every kind');
     });
 
-    await t.test('one row per person: an owner linked to a row, a linked manager, and a worker who is the customer', async () => {
+    await t.test('one row per person: a linked member who sees every calendar, a linked manager, and a worker who is the customer', async () => {
       for (const row of [rows.dualRow, rows.managerRow]) {
         const booking = await book(row.id);
         assert.deepEqual(await recipients(booking.id, 'BOOKING_CONFIRMED'), expected());
@@ -236,7 +237,7 @@ test('a worker is notified of their own calendar only', async t => {
         const row = await prisma.staff.create({ data: { businessId: second.id, displayName: 'Elsewhere' } });
         const service = await prisma.service.create({ data: { businessId: second.id, name: 'Cut', durationMinutes: 30 } });
         await prisma.bookingPolicy.create({ data: { businessId: second.id, minimumNoticeMinutes: 0, maximumAdvanceDays: 30, cancellationCutoffMinutes: 0, rescheduleCutoffMinutes: 0, requireCustomerName: false, requireVerifiedPhone: false, requireVerifiedEmail: false } });
-        await prisma.membership.create({ data: { businessId: second.id, identityId: people.worker.id, role: 'STAFF', status: 'ACTIVE' } });
+        await prisma.membership.create({ data: { businessId: second.id, identityId: people.worker.id, ...memberPreset('STAFF'), status: 'ACTIVE' } });
         const { startsAt, endsAt } = slot();
         const booking = await prisma.$transaction(async tx => {
           await setBookingAudit(tx, people.customer.id, 'CUSTOMER', 'FINAL_CONSENT');

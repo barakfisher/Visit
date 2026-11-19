@@ -10,5 +10,5 @@ export type AppointmentActionScope = { identityId: string | null; contextVersion
 
 // `quiet` opens the change history from a text link instead of a button; `hideStatus` leaves out a status every card in the list shares.
 // `open` hands the history's opening to the caller, which then shows no toggle of its own.
-export type AppointmentAuditProps = { booking: LifecycleAppointment; timezone: string; businessId?: string; quiet?: boolean; hideStatus?: boolean; open?: boolean };
+export type AppointmentAuditProps = { booking: LifecycleAppointment; timezone: string; businessId?: string; quiet?: boolean; hideStatus?: boolean; open?: boolean; readOnly?: boolean };
 export type ActiveAppointment = HistoricalAppointment & { actions: { canCancel: boolean; canReschedule: boolean } };

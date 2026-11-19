@@ -1,11 +1,14 @@
 import { ApiError } from './apiClient';
+import type { MemberSwitches, MembershipRole } from './MemberSwitches';
 
 /** The API's team listing (`apps/api/src/repositories/business-access.ts`, `team`). */
 export type TeamStaffLink = { id: string; displayName: string; membershipId: string };
-export type TeamMember = { id: string; identityId: string; role: 'OWNER' | 'MANAGER' | 'STAFF'; label: string; name: string | null; staff: TeamStaffLink | null };
-export type TeamInvitation = { id: string; role: 'MANAGER' | 'STAFF'; recipientHint: string; createdAt: string; expiresAt: string; acceptedAt: string | null; revokedAt: string | null; staff: { id: string; displayName: string } | null };
-/** `canLinkCalendars`: only the owner ties an invitation to a calendar (decisions.md, "My day for a worker"). */
-export type Team = { role: 'OWNER' | 'MANAGER' | 'STAFF'; canLinkCalendars?: boolean; members: TeamMember[]; invitations: TeamInvitation[] };
+/** `editable` and `removable` are the server's answers for this viewer (decisions.md, "Switches"). */
+export type TeamMember = { id: string; identityId: string; role: MembershipRole; switches: MemberSwitches; editable: boolean; removable: boolean; label: string; name: string | null; staff: TeamStaffLink | null };
+/** An invitation's role is only the preset it starts with. */
+export type TeamInvitation = { id: string; role: InviteRole; recipientHint: string; createdAt: string; expiresAt: string; acceptedAt: string | null; revokedAt: string | null; staff: { id: string; displayName: string } | null };
+/** `canLinkCalendars`: only the owner ties an invitation to a calendar (decisions.md, "My day for a worker"); `canChangeSwitches`: only the owner edits permissions. */
+export type Team = { role: MembershipRole; switches: MemberSwitches; canLinkCalendars?: boolean; canChangeSwitches?: boolean; invitablePresets: InviteRole[]; members: TeamMember[]; invitations: TeamInvitation[] };
 
 export type InviteRole = 'STAFF' | 'MANAGER';
 export type InviteChannel = 'email' | 'phone';
@@ -14,7 +17,7 @@ export type InviteChannel = 'email' | 'phone';
 export type StaffAccess =
   | { kind: 'none' }
   | { kind: 'pending'; invitationId: string; recipientHint: string; role: InviteRole }
-  | { kind: 'active'; membershipId: string; account: string; role: TeamMember['role'] };
+  | { kind: 'active'; membershipId: string; account: string; member: TeamMember };
 
 /** The server codes this screen answers (`business-access.ts`, `provider-settings.ts`). */
 export const STAFF_ALREADY_LINKED = 'STAFF_ALREADY_LINKED';
@@ -26,14 +29,14 @@ export const MIN_RECIPIENT = 8, MAX_RECIPIENT = 254;
 
 export function staffAccess(team: Team, staffId: string, now = new Date()): StaffAccess {
   const member = team.members.find(item => item.staff?.id === staffId);
-  if (member) return { kind: 'active', membershipId: member.staff!.membershipId, account: member.name ?? member.label, role: member.role };
+  if (member) return { kind: 'active', membershipId: member.staff!.membershipId, account: member.name ?? member.label, member };
   // The server keeps at most one live invitation per calendar; the newest is the one that counts.
   const invitation = team.invitations.find(item => item.staff?.id === staffId && !item.acceptedAt && !item.revokedAt && new Date(item.expiresAt) > now);
   return invitation ? { kind: 'pending', invitationId: invitation.id, recipientHint: invitation.recipientHint, role: invitation.role } : { kind: 'none' };
 }
 
-/** Owners invite workers and managers; a manager invites workers only (`permittedInvite`). */
-export function invitableRoles(role: Team['role']): InviteRole[] { return role === 'OWNER' ? ['STAFF', 'MANAGER'] : role === 'MANAGER' ? ['STAFF'] : []; }
+/** The presets this viewer may invite with, and so revoke: the owner both, a manager workers only (server `permittedInvite`). */
+export const invitableRoles = (team: Pick<Team, 'invitablePresets'>): InviteRole[] => team.invitablePresets ?? [];
 
 /** The same shapes the server accepts: E.164 phone, or a plain email address. */
 export function validRecipient(channel: InviteChannel, value: string) {

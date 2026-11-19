@@ -12,10 +12,13 @@ enum PlatformRole {
   ADMIN
 }
 
+/// A membership is OWNER or MEMBER (one per person per business). MANAGER and STAFF remain only as the preset an
+/// invitation names and in the access audit's history (decisions.md, "Switches").
 enum MembershipRole {
   OWNER
   MANAGER
   STAFF
+  MEMBER
 }
 
 enum MembershipStatus {
@@ -134,12 +137,18 @@ model Membership {
   status     MembershipStatus @default(PENDING)
   /// The calendar (staff row) this account works on. At most one active account per row, and one linked row per account per business (partial unique indexes in the migration).
   staffId    String?
+  /// The four switches (worker-access.md, Privileges). Always all on for an owner (trigger and check in the migration);
+  /// acting on other calendars requires seeing them (check).
+  seeAllCalendars   Boolean @default(false)
+  actOnAllCalendars Boolean @default(false)
+  businessSetup     Boolean @default(false)
+  manageTeam        Boolean @default(false)
   createdAt  DateTime         @default(now())
   identity   Identity         @relation(fields: [identityId], references: [id], onDelete: Cascade)
   business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
   staff      Staff?           @relation(fields: [businessId, staffId], references: [businessId, id], onDelete: NoAction, onUpdate: NoAction)
 
-  @@unique([identityId, businessId, role])
+  @@unique([identityId, businessId])
   @@unique([businessId, id, identityId])
   @@index([businessId, status, role])
 }
@@ -568,6 +577,8 @@ model BusinessAccessEvent {
   role MembershipRole
   action String
   referenceId String?
+  /// The switches set, for SWITCHES_CHANGED.
+  switches Json?
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
   membership Membership @relation(fields: [businessId, membershipId, subjectIdentityId], references: [businessId, id, identityId], onDelete: Restrict, onUpdate: Restrict)

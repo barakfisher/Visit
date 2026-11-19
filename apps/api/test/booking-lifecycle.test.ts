@@ -6,6 +6,7 @@ import { prisma } from '../src/db/client.js';
 import { redis } from '../src/infra/redis.js';
 import { MembershipRole } from '../src/generated/prisma/client.js';
 import { tokenDigest } from '../src/security/sessions.js';
+import { memberPreset } from '../src/security/business-permissions.js';
 after(async () => { redis.disconnect(); await prisma.$disconnect(); });
 test('appointment lifecycle is authorized, append-only, idempotent and capacity preserving', async t => {
   const run = randomUUID();
@@ -16,7 +17,7 @@ test('appointment lifecycle is authorized, append-only, idempotent and capacity 
   assert.ok(customer && owner && manager && staffIdentity && foreign);
   const sessions = new Map<string, string>();
   for (const person of people) { const token = randomUUID(); sessions.set(person.id, token); await prisma.session.create({ data: { identityId: person.id, tokenHash: tokenDigest(token), expiresAt: new Date(Date.now() + 600000) } }); }
-  await prisma.membership.createMany({ data: [{ identityId: owner.id, role: MembershipRole.OWNER }, { identityId: manager.id, role: MembershipRole.MANAGER }, { identityId: staffIdentity.id, role: MembershipRole.STAFF }].map(item => ({ ...item, businessId: business.id, status: 'ACTIVE' as const })) });
+  await prisma.membership.createMany({ data: [{ identityId: owner.id, role: MembershipRole.OWNER }, { identityId: manager.id, ...memberPreset('MANAGER') }, { identityId: staffIdentity.id, ...memberPreset('STAFF') }].map(item => ({ ...item, businessId: business.id, status: 'ACTIVE' as const })) });
   const service = await prisma.service.create({ data: { businessId: business.id, name: 'Historical consultation', durationMinutes: 30, priceMinor: 12500, currency: 'ILS' } });
   const staff = await prisma.staff.create({ data: { businessId: business.id, displayName: 'Historical specialist' } });
   await prisma.staffService.create({ data: { businessId: business.id, staffId: staff.id, serviceId: service.id } });

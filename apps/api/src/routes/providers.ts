@@ -104,7 +104,7 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
 
         const created = await tx.providerApplication.create({ data: { kind: 'NEW_BUSINESS', identityId: identity.id, businessId: business.id, message: input.message ?? null } });
         await tx.membership.upsert({
-          where: { identityId_businessId_role: { identityId: identity.id, businessId: business.id, role: MembershipRole.OWNER } },
+          where: { identityId_businessId: { identityId: identity.id, businessId: business.id } },
           create: { identityId: identity.id, businessId: business.id, role: MembershipRole.OWNER, status: MembershipStatus.PENDING },
           update: { status: MembershipStatus.PENDING },
         });

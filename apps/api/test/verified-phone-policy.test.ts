@@ -8,6 +8,7 @@ import { AppError } from '../src/http/errors.js';
 import { saveBusinessPolicy, VERIFIED_EMAIL_UNAVAILABLE, VERIFIED_PHONE_UNAVAILABLE } from '../src/repositories/provider-settings.js';
 import { requireBusinessMembership } from '../src/security/tenant-context.js';
 import { DEFAULT_BOOKING_POLICY } from '../src/scheduling/rules.js';
+import { memberPreset, BusinessPermission } from '../src/security/business-permissions.js';
 after(async () => { redis.disconnect(); await prisma.$disconnect(); });
 
 const MIGRATION = new URL('../prisma/migrations/20261103150000_verified_phone_unavailable/migration.sql', import.meta.url);
@@ -17,10 +18,10 @@ test('the verified-phone requirement is refused while SMS is off and allowed onc
   const owner = await prisma.identity.create({ data: { displayName: 'Policy owner' } });
   const staffMember = await prisma.identity.create({ data: { displayName: 'Policy staff' } });
   const business = await prisma.business.create({ data: { name: 'Phone policy fixture', slug: `phone-policy-${randomUUID()}`, timezone: 'Asia/Jerusalem', approvalStatus: 'APPROVED' } });
-  await prisma.membership.createMany({ data: [{ businessId: business.id, identityId: owner.id, role: 'OWNER', status: 'ACTIVE' }, { businessId: business.id, identityId: staffMember.id, role: 'STAFF', status: 'ACTIVE' }] });
+  await prisma.membership.createMany({ data: [{ businessId: business.id, identityId: owner.id, role: 'OWNER', status: 'ACTIVE' }, { businessId: business.id, identityId: staffMember.id, ...memberPreset('STAFF'), status: 'ACTIVE' }] });
   const stored = async () => prisma.bookingPolicy.findUnique({ where: { businessId: business.id } });
   try {
-    const context = await requireBusinessMembership(owner.id, business.id, ['OWNER']);
+    const context = await requireBusinessMembership(owner.id, business.id, BusinessPermission.CHANGE_SWITCHES);
     await t.test('SMS off: turning it on is refused and nothing is written', async () => {
       await assert.rejects(saveBusinessPolicy(context, { ...DEFAULT_BOOKING_POLICY, requireVerifiedPhone: true }, { phoneVerification: false }), unavailable);
       assert.equal(await stored(), null);
@@ -39,7 +40,7 @@ test('the verified-phone requirement is refused while SMS is off and allowed onc
       assert.equal((await saveBusinessPolicy(context, { ...DEFAULT_BOOKING_POLICY, requireVerifiedPhone: false }, { phoneVerification: false })).requireVerifiedPhone, false);
     });
     await t.test('staff cannot reach the policy before the SMS check', async () => {
-      await assert.rejects(requireBusinessMembership(staffMember.id, business.id, ['OWNER', 'MANAGER']));
+      await assert.rejects(requireBusinessMembership(staffMember.id, business.id, BusinessPermission.BUSINESS_SETUP));
     });
     await t.test('the migration turns the requirement off and leaves the other requirements', async () => {
       const sql = await readFile(MIGRATION, 'utf8');

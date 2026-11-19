@@ -11,6 +11,7 @@ import { authProfile } from '../src/routes/flow-auth.js';
 // Postgres errors Prisma surfaces for a unique index and a foreign key.
 const UNIQUE_VIOLATION = { code: 'P2002' }, FOREIGN_KEY_VIOLATION = { code: 'P2003' };
 import { STAFF_HAS_APP_ACCESS } from '../src/repositories/provider-settings.js';
+import { MEMBER_PRESETS, memberPreset, switchesOf } from '../src/security/business-permissions.js';
 
 after(async () => { redis.disconnect(); await prisma.$disconnect(); });
 
@@ -30,7 +31,7 @@ test('an invitation tied to a staff row links the account to that calendar and f
   }
   await prisma.membership.createMany({ data: [
     { businessId: business.id, identityId: people.owner.id, role: 'OWNER', status: 'ACTIVE' },
-    { businessId: business.id, identityId: people.manager.id, role: 'MANAGER', status: 'ACTIVE' },
+    { businessId: business.id, identityId: people.manager.id, ...memberPreset('MANAGER'), status: 'ACTIVE' },
     { businessId: other.id, identityId: people.otherOwner.id, role: 'OWNER', status: 'ACTIVE' },
   ] });
   const service = await prisma.service.create({ data: { businessId: business.id, name: 'Cut', durationMinutes: 30 } });
@@ -69,11 +70,11 @@ test('an invitation tied to a staff row links the account to that calendar and f
       const accepted = await invitation('accept', token, people.worker.id);
       assert.equal(accepted.statusCode, 200, accepted.body);
       const membership = await prisma.membership.findFirstOrThrow({ where: { businessId: business.id, identityId: people.worker.id, status: 'ACTIVE' } });
-      assert.equal(membership.staffId, noa.id); assert.equal(membership.role, 'STAFF');
+      assert.equal(membership.staffId, noa.id); assert.equal(membership.role, 'MEMBER'); assert.deepEqual(switchesOf(membership), MEMBER_PRESETS.STAFF);
       assert.equal((await team()).members.find(member => member.identityId === people.worker.id)?.staff?.id, noa.id);
       // Since slice 3 the link opens the worker's own calendar in provider mode.
       const entry = (await authProfile(people.worker.id)).businesses.find(item => item.id === business.id);
-      assert.equal(entry?.role, 'STAFF'); assert.equal(entry && 'calendar' in entry ? entry.calendar.id : null, noa.id);
+      assert.equal(entry?.role, 'MEMBER'); assert.deepEqual(entry?.switches, MEMBER_PRESETS.STAFF); assert.equal(entry && 'calendar' in entry ? entry.calendar.id : null, noa.id);
     });
 
     await t.test('a row that already has an account cannot be invited, and a link taken after the invite fails closed', async () => {
@@ -90,12 +91,12 @@ test('an invitation tied to a staff row links the account to that calendar and f
       const forSecond = await invite(dan.id, people.second.email!);
       // One live link per calendar: the newer invitation replaced the worker's.
       assert.ok((await prisma.businessInvitation.findUniqueOrThrow({ where: { id: second.json<{ id: string }>().id } })).revokedAt);
-      await prisma.membership.create({ data: { businessId: business.id, identityId: people.customer.id, role: 'STAFF', status: 'ACTIVE', staffId: dan.id } });
+      await prisma.membership.create({ data: { businessId: business.id, identityId: people.customer.id, ...memberPreset('STAFF'), status: 'ACTIVE', staffId: dan.id } });
       const taken = await invitation('accept', tokenOf(forSecond), people.second.id);
       assert.equal(taken.statusCode, 409); assert.equal(taken.json<{ error: { code: string } }>().error.code, INVITATION_STAFF_LINKED);
       assert.equal(await prisma.membership.count({ where: { businessId: business.id, identityId: people.second.id } }), 0);
       // The database refuses a second active account on one row even if the code were bypassed.
-      await assert.rejects(prisma.membership.create({ data: { businessId: business.id, identityId: people.second.id, role: 'STAFF', status: 'ACTIVE', staffId: dan.id } }), UNIQUE_VIOLATION);
+      await assert.rejects(prisma.membership.create({ data: { businessId: business.id, identityId: people.second.id, ...memberPreset('STAFF'), status: 'ACTIVE', staffId: dan.id } }), UNIQUE_VIOLATION);
     });
 
     await t.test('a removed row fails closed: removal revokes the link, and an archived row is refused at accept', async () => {
@@ -125,7 +126,7 @@ test('an invitation tied to a staff row links the account to that calendar and f
       assert.equal(response.statusCode, 404);
       assert.equal(await prisma.businessInvitation.count({ where: { staffId: foreign.id } }), 0);
       // The composite key refuses a cross-business link at the database too.
-      await assert.rejects(prisma.membership.create({ data: { businessId: business.id, identityId: people.second.id, role: 'STAFF', status: 'ACTIVE', staffId: foreign.id } }), FOREIGN_KEY_VIOLATION);
+      await assert.rejects(prisma.membership.create({ data: { businessId: business.id, identityId: people.second.id, ...memberPreset('STAFF'), status: 'ACTIVE', staffId: foreign.id } }), FOREIGN_KEY_VIOLATION);
       // The other business's owner cannot link this business's row through their own business.
       const noa = await prisma.staff.findFirstOrThrow({ where: { businessId: business.id, displayName: 'Noa' } });
       assert.equal((await invite(noa.id, people.second.email!, people.otherOwner.id, 'STAFF', other.id)).statusCode, 404);
@@ -159,7 +160,7 @@ test('an invitation tied to a staff row links the account to that calendar and f
       // A Manager invitation that names a calendar links the manager to it.
       assert.equal((await invitation('accept', tokenOf(ownerInvite), people.second.id)).statusCode, 200);
       const linked = await prisma.membership.findFirstOrThrow({ where: { businessId: business.id, identityId: people.second.id, status: 'ACTIVE' } });
-      assert.equal(linked.role, 'MANAGER'); assert.equal(linked.staffId, lea.id);
+      assert.equal(linked.role, 'MEMBER'); assert.deepEqual(switchesOf(linked), MEMBER_PRESETS.MANAGER); assert.equal(linked.staffId, lea.id);
       await prisma.membership.update({ where: { id: linked.id }, data: { status: 'REVOKED' } });
     });
 
@@ -180,7 +181,7 @@ test('an invitation tied to a staff row links the account to that calendar and f
       const tal = await row('Tal');
       const moved = await invite(tal.id, people.second.email!, people.owner.id, 'MANAGER');
       assert.equal((await invitation('accept', tokenOf(moved), people.second.id)).statusCode, 200);
-      const membership = await prisma.membership.findFirstOrThrow({ where: { businessId: business.id, identityId: people.second.id, role: 'MANAGER' } });
+      const membership = await prisma.membership.findFirstOrThrow({ where: { businessId: business.id, identityId: people.second.id } });
       assert.equal(membership.status, 'ACTIVE'); assert.equal(membership.staffId, tal.id); assert.notEqual(membership.staffId, lea.id);
       await prisma.membership.update({ where: { id: membership.id }, data: { status: 'REVOKED' } });
     });
@@ -214,7 +215,7 @@ test('an invitation tied to a staff row links the account to that calendar and f
     await t.test('reactivating a revoked membership with an invitation for no calendar does not revive the old link', async () => {
       const response = await invite(undefined, people.worker.email!);
       assert.equal((await invitation('accept', tokenOf(response), people.worker.id)).statusCode, 200);
-      const membership = await prisma.membership.findFirstOrThrow({ where: { businessId: business.id, identityId: people.worker.id, role: 'STAFF' } });
+      const membership = await prisma.membership.findFirstOrThrow({ where: { businessId: business.id, identityId: people.worker.id } });
       assert.equal(membership.status, 'ACTIVE'); assert.equal(membership.staffId, null);
     });
   } finally {

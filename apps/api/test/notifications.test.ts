@@ -14,6 +14,7 @@ import { registerNotifications } from '../src/routes/notifications.js';
 import { registerProviderRoutes } from '../src/routes/providers.js';
 import { newOpaqueToken, sessionExpiry, tokenDigest } from '../src/security/sessions.js';
 import { expectCustomerSignal } from './support/live-signal.js';
+import { memberPreset } from '../src/security/business-permissions.js';
 
 after(async () => { closeLiveSignals(); redis.disconnect(); await prisma.$disconnect(); });
 
@@ -35,9 +36,9 @@ async function scene() {
   const [owner, manager, staff, revoked, customer, outsider] = await Promise.all(['owner', 'manager', 'staff', 'revoked', 'customer', 'outsider'].map(person)) as [Awaited<ReturnType<typeof person>>, Awaited<ReturnType<typeof person>>, Awaited<ReturnType<typeof person>>, Awaited<ReturnType<typeof person>>, Awaited<ReturnType<typeof person>>, Awaited<ReturnType<typeof person>>];
   await prisma.membership.createMany({ data: [
     { identityId: owner.id, businessId: business.id, role: 'OWNER', status: 'ACTIVE' },
-    { identityId: manager.id, businessId: business.id, role: 'MANAGER', status: 'ACTIVE' },
-    { identityId: staff.id, businessId: business.id, role: 'STAFF', status: 'ACTIVE' },
-    { identityId: revoked.id, businessId: business.id, role: 'MANAGER', status: 'REVOKED' },
+    { identityId: manager.id, businessId: business.id, ...memberPreset('MANAGER'), status: 'ACTIVE' },
+    { identityId: staff.id, businessId: business.id, ...memberPreset('STAFF'), status: 'ACTIVE' },
+    { identityId: revoked.id, businessId: business.id, ...memberPreset('MANAGER'), status: 'REVOKED' },
   ] });
   const book = async (actorId: string | null, { status = 'CONFIRMED', customerId = customer.id as string | null, startsIn = 72 * HOUR_MS }: { status?: BookingStatus; customerId?: string | null; startsIn?: number } = {}) => {
     const startsAt = new Date(Date.now() + startsIn), endsAt = new Date(+startsAt + HOUR_MS / 2);
@@ -177,7 +178,7 @@ test('the inbox API', async t => {
     const before = await unread(s.owner); assert.ok(before > 0);
     await prisma.membership.updateMany({ where: { identityId: s.owner.id, businessId: s.business.id }, data: { status: 'REVOKED' } });
     assert.deepEqual(await list(s.owner), []); assert.equal(await unread(s.owner), 0);
-    await prisma.membership.updateMany({ where: { identityId: s.owner.id, businessId: s.business.id }, data: { status: 'ACTIVE', role: 'STAFF' } });
+    await prisma.membership.updateMany({ where: { identityId: s.owner.id, businessId: s.business.id }, data: { status: 'ACTIVE', ...memberPreset('STAFF') } });
     assert.deepEqual(await list(s.owner), [], 'a staff role is not a managing role');
     await prisma.membership.updateMany({ where: { identityId: s.owner.id, businessId: s.business.id }, data: { role: 'OWNER' } });
     assert.equal(await unread(s.owner), before);

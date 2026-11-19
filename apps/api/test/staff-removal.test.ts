@@ -7,6 +7,7 @@ import { redis } from '../src/infra/redis.js';
 import { tokenDigest } from '../src/security/sessions.js';
 import { STAFF_HAS_APPOINTMENTS } from '../src/repositories/provider-settings.js';
 import { MAX_REPORTED_CONFLICTS } from '../src/repositories/TimeBlocks.service.js';
+import { memberPreset } from '../src/security/business-permissions.js';
 
 after(async () => { redis.disconnect(); await prisma.$disconnect(); });
 
@@ -27,8 +28,8 @@ test('removing staff deletes, archives or refuses depending on their bookings', 
   }
   await prisma.membership.createMany({ data: [
     { businessId: business.id, identityId: owner.id, role: 'OWNER', status: 'ACTIVE' },
-    { businessId: business.id, identityId: manager.id, role: 'MANAGER', status: 'ACTIVE' },
-    { businessId: business.id, identityId: staffMember.id, role: 'STAFF', status: 'ACTIVE' },
+    { businessId: business.id, identityId: manager.id, ...memberPreset('MANAGER'), status: 'ACTIVE' },
+    { businessId: business.id, identityId: staffMember.id, ...memberPreset('STAFF'), status: 'ACTIVE' },
   ] });
   const service = await prisma.service.create({ data: { businessId: business.id, name: 'Cut', durationMinutes: 30 } });
   // The booking trigger refuses contact-less bookings under the default policy.

@@ -61,7 +61,7 @@ test('providers receive no tenant access until approval; approved members remain
       method: 'POST', url: `/v1/admin/provider-applications/${submitted.json().id}/decision`, headers: { cookie: adminCookie }, payload: { decision: 'APPROVED', reason: 'Verified new business application.' },
     });
     assert.equal(decision.statusCode, 200, decision.body);
-    const membership = await prisma.membership.findUniqueOrThrow({ where: { identityId_businessId_role: { identityId: user.id, businessId, role: MembershipRole.OWNER } } });
+    const membership = await prisma.membership.findUniqueOrThrow({ where: { identityId_businessId: { identityId: user.id, businessId } } });
     assert.equal(membership.status, MembershipStatus.ACTIVE);
 
     const created = await app.inject({

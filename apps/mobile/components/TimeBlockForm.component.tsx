@@ -27,7 +27,8 @@ function ReasonChoice({ label, selected, disabled, onPress, testID }: { label: s
 }
 
 /** Who, what and when to block, with optional reasons. Saving here is the only save. */
-export function TimeBlockForm({ staff, ...state }: TimeBlockDialogState & { staff: readonly { id: string; displayName: string }[] }) {
+/** `wholeBusiness` false (no business setup) leaves out "the whole business": a block then names a row. */
+export function TimeBlockForm({ staff, wholeBusiness = true, ...state }: TimeBlockDialogState & { staff: readonly { id: string; displayName: string }[]; wholeBusiness?: boolean }) {
   const { t, form, errors, conflicts, failure, busy, update, save, close, when, today } = state;
   const errorFor = (key: keyof typeof errors) => errors[key] ? t(errorMessages[errors[key]!], { max: MAX_BLOCK_DAYS }) : undefined;
   const kinds: BlockKind[] = ['hours', 'days'];
@@ -36,7 +37,7 @@ export function TimeBlockForm({ staff, ...state }: TimeBlockDialogState & { staf
     {staff.length > 1 ? <View className="gap-2" accessibilityRole="radiogroup" accessibilityLabel={t('blocks.who')}>
       <AppText className="font-medium text-ink">{t('blocks.who')}</AppText>
       <View className="flex-row flex-wrap gap-2">
-        <Choice testID="block-who-business" label={t('blocks.wholeBusiness')} selected={!form.staffId} disabled={busy} onPress={() => update({ staffId: '' })} />
+        {wholeBusiness ? <Choice testID="block-who-business" label={t('blocks.wholeBusiness')} selected={!form.staffId} disabled={busy} onPress={() => update({ staffId: '' })} /> : null}
         {staff.map(row => <Choice key={row.id} testID={`block-who-${row.id}`} label={row.displayName} selected={form.staffId === row.id} disabled={busy} onPress={() => update({ staffId: row.id })} />)}
       </View>
     </View> : null}
@@ -78,6 +79,6 @@ export function TimeBlockForm({ staff, ...state }: TimeBlockDialogState & { staf
   </View>;
 }
 
-export function TimeBlockDialog({ staff, ...state }: TimeBlockDialogState & { staff: readonly { id: string; displayName: string }[] }) {
-  return <FormDialog title={state.t('blocks.dialogTitle')} open={state.open} onClose={state.close} testID="block-dialog"><TimeBlockForm staff={staff} {...state} /></FormDialog>;
+export function TimeBlockDialog({ staff, wholeBusiness = true, ...state }: TimeBlockDialogState & { staff: readonly { id: string; displayName: string }[]; wholeBusiness?: boolean }) {
+  return <FormDialog title={state.t('blocks.dialogTitle')} open={state.open} onClose={state.close} testID="block-dialog"><TimeBlockForm staff={staff} wholeBusiness={wholeBusiness} {...state} /></FormDialog>;
 }

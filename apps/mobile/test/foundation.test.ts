@@ -136,7 +136,7 @@ test('server role downgrade invalidates private state while retaining customer i
   useSessionStore.getState().setAuth(null, profile); useSessionStore.getState().selectBusiness(business.id);
   const version = useSessionStore.getState().contextVersion;
   queryClient.setQueryData(['provider', business.id, 'team'], { role: 'OWNER' });
-  useSessionStore.getState().setAuth(null, { ...profile, businesses: [{ ...business, role: 'MANAGER' }] });
+  useSessionStore.getState().setAuth(null, { ...profile, businesses: [{ ...business, role: 'MEMBER', switches: { seeAllCalendars: true, actOnAllCalendars: true, businessSetup: true, manageTeam: true } }] });
   assert.equal(useSessionStore.getState().contextVersion, version + 1); assert.equal(useSessionStore.getState().activeBusinessId, null); assert.equal(queryClient.getQueryData(['provider', business.id, 'team']), undefined); assert.equal(useSessionStore.getState().identityId, profile.id);
   useSessionStore.getState().clear();
 });

@@ -13,6 +13,7 @@ import { customerContactReadiness } from '../src/security/customer-contact.utils
 import { withBookingTransaction } from '../src/scheduling/booking-transaction.js';
 import { saveBusinessPolicy } from '../src/repositories/provider-settings.js';
 import { requireBusinessMembership } from '../src/security/tenant-context.js';
+import { BusinessPermission } from '../src/security/business-permissions.js';
 import { DEFAULT_BOOKING_POLICY } from '../src/scheduling/rules.js';
 after(async () => { redis.disconnect(); await prisma.$disconnect(); });
 
@@ -97,7 +98,7 @@ test('tenant contact policy guards HTTP holds, direct confirmations, snapshots a
     await t.test('policy tightening expires holds and old-client omissions preserve stricter rules', async () => {
       const f = await fixture({});
       await prisma.membership.create({ data: { businessId: f.b.id, identityId: person.id, role: 'OWNER', status: 'ACTIVE' } });
-      const context = await requireBusinessMembership(person.id, f.b.id, ['OWNER']);
+      const context = await requireBusinessMembership(person.id, f.b.id, BusinessPermission.CHANGE_SWITCHES);
       const held = await prisma.booking.create({ data: { ...f.input(), status: 'HELD', holdExpiresAt: new Date(Date.now() + 60000) } });
       // SMS on: with it off the requirement is refused (verified-phone-policy.test.ts).
       await saveBusinessPolicy(context, { ...DEFAULT_BOOKING_POLICY, requireVerifiedPhone: true }, { phoneVerification: true });

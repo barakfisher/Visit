@@ -1,3 +1,4 @@
+import type { ActingScope } from '../lib/ActingScope';
 import type { Locale } from '../i18n/messages';
 import type { CalendarMode, DayHours, Placed } from '../lib/CalendarGrid';
 import type { BlockRemovalState, TimeBlockDialogState } from '../lib/TimeBlocks.hook';
@@ -30,6 +31,8 @@ export type BusinessCalendarView = {
   /** Today and the minute of day in the business's zone: the "now" line, and slots before it cannot start an appointment. */
   clock: { today: string; minute: number };
   /** A tapped slot asks what to start there; `slot` is the one asked about, or null when no choice is open. */
+  /** Whether a slot can start anything: false for a member who acts on no calendar (decisions.md, "Switches"). */
+  startable: boolean;
   chooseSlot: (date: string, localTime: string) => void; closeSlot: () => void;
   slot: { date: string; localTime: string; title: string } | null;
   /** From the slot's choice: Add appointment, or Block time, at that date and time. */
@@ -41,8 +44,8 @@ export type BusinessCalendarView = {
   openEntry: (entry: CalendarEntry) => void; closeEntry: () => void;
   openAppointment: AgendaAppointment | null; openBlock: TimeBlock | null;
   businessId: string; timezone: string;
-  /** A worker's calendar: their own row only, and business-wide blocks are not theirs to release. */
-  worker: boolean;
+  /** Where this member may act and whether they do business setup; business-wide blocks are setup. */
+  act: ActingScope; setup: boolean;
   contact: ProviderAgendaView['contact'];
   blockRemoval: Omit<BlockRemovalState, 'removeFailure'>; feedback: string;
   manual: ManualBookingView;
