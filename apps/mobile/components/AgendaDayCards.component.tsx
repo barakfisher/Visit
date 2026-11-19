@@ -44,13 +44,18 @@ export function BlockCard({ block, t, onPress }: { block: TimeBlock; t: Translat
   </Control>;
 }
 
-/** A day with no weekly hours. Releasing a block cannot open it, so the card points to the hours instead. */
-export function ClosedDayCard({ t, onHours }: { t: Translate; onHours: () => void }) {
+/**
+ * A day with no weekly hours. Releasing a block cannot open it, so the card points to the hours instead; without
+ * `onHours` (a worker, who does not set hours) it only says the day is closed.
+ */
+export function ClosedDayCard({ t, onHours }: { t: Translate; onHours?: (() => void) | undefined }) {
   return <View testID="agenda-closed" className="gap-2 rounded-card border border-line bg-slate-200 px-4 py-3">
     <Text className="font-semibold text-ink">{t('dashboard.closed')}</Text>
-    <Text className="text-sm text-body">{t('dashboard.closedHelp')}</Text>
-    <Control accessibilityRole="link" onPress={onHours} className="flex-row items-center gap-1 self-start">
-      <Text className="font-semibold text-ink underline">{t('dashboard.closedHours')}</Text>
-    </Control>
+    {onHours ? <>
+      <Text className="text-sm text-body">{t('dashboard.closedHelp')}</Text>
+      <Control accessibilityRole="link" onPress={onHours} className="flex-row items-center gap-1 self-start">
+        <Text className="font-semibold text-ink underline">{t('dashboard.closedHours')}</Text>
+      </Control>
+    </> : <Text className="text-sm text-body">{t('worker.closedHelp')}</Text>}
   </View>;
 }

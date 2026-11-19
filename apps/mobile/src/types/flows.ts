@@ -1,4 +1,8 @@
-export type AuthProfile = { id: string; email: string | null; phone: string | null; preferredLocale?: 'he' | 'en' | null; is_provider: boolean; businesses: { id: string; name: string; timezone: string; role?: 'OWNER' | 'MANAGER' }[] };
+export type AuthProfile = { id: string; email: string | null; phone: string | null; preferredLocale?: 'he' | 'en' | null; is_provider: boolean; businesses: ProviderBusiness[] };
+/** The calendar (staff row) a worker is linked to; `active` false means it takes no new bookings (worker-access.md). */
+export type WorkerCalendar = { id: string; displayName: string; active: boolean };
+/** A business the person opens provider mode for. A worker's entry carries their calendar, and provider mode is then their own My day. */
+export type ProviderBusiness = { id: string; name: string; timezone: string; role?: 'OWNER' | 'MANAGER' | 'STAFF'; calendar?: WorkerCalendar };
 export type Service = { id: string; name: string; description: string | null; durationMinutes: number; priceMinor: number | null; currency: string | null };
 export type Provider = { id: string; name: string; timezone: string; location: string | null; category: string | null; rating: number | null };
 /** The API also returns the owner's public contact details; each may be missing. */

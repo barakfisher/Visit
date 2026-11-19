@@ -4,9 +4,10 @@ import { z } from 'zod';
 import type { Booking } from '../generated/prisma/client.js';
 import { prisma } from '../db/client.js';
 import { signalAppointmentChanged } from '../infra/live-signals.js';
-import { AppError, conflict, notFound } from '../http/errors.js';
+import { AppError, conflict, forbidden, notFound } from '../http/errors.js';
 import { validateAuthenticatedSession, type AuthenticatedSession } from '../security/sessions.js';
 import { requireBusinessPermission } from '../security/tenant-context.js';
+import { calendarMembershipWhere, requireCalendarScope, validateCalendarScope, type CalendarScope } from '../security/calendar-scope.js';
 import { publicBusinessWhere } from '../security/business-eligibility.js';
 import { withBookingTransaction } from '../scheduling/booking-transaction.js';
 import { acquireIntervalLocks } from '../scheduling/redis-slot-lock.js';
@@ -34,7 +35,12 @@ type ManualInput = z.infer<typeof manualBookingSchema>;
 function result(booking: Booking) { return { customerCard: booking.customerCardId ? { id: booking.customerCardId } : null, id: booking.id, status: booking.status, startsAt: booking.startsAt, endsAt: booking.endsAt, revision: booking.revision, source: 'MANUAL', contactVerification: 'UNVERIFIED', notification: 'NOT_SENT' }; }
 export async function createManualBooking(session: AuthenticatedSession, businessId: string, input: ManualInput) {
   await validateAuthenticatedSession(session);
-  await requireBusinessPermission(session.identity.id, businessId, BusinessPermission.ACT_ON_ALL_CALENDARS);
+  // A worker books on their own row only; another row reads as not found, like a row that does not exist.
+  const scope = await requireCalendarScope(session.identity.id, businessId, 'act');
+  if (scope.staffId && input.staffId !== scope.staffId) throw notFound();
+  // Picking a card or offering the existing one by phone reads customer cards, so it needs the search permission too
+  // (decisions.md, "My day for a worker"). Everyone who books holds it today.
+  if (input.customerCardId || input.saveCustomer) await requireBusinessPermission(session.identity.id, businessId, BusinessPermission.SEARCH_CUSTOMERS);
   const fingerprint = createHash('sha256').update(JSON.stringify(input)).digest('hex');
   // A private actor-owned namespace prevents collisions with consumer booking attempts.
   const key = `manual:${session.identity.id}:${input.idempotencyKey}`;
@@ -56,7 +62,9 @@ export async function createManualBooking(session: AuthenticatedSession, busines
       await fenceScheduleSession(tx, session);
       await tx.$queryRaw`SELECT id FROM "Business" WHERE id = ${businessId} FOR SHARE`;
       await tx.$queryRaw`SELECT id FROM "Membership" WHERE "businessId" = ${businessId} AND "identityId" = ${session.identity.id} FOR SHARE`;
-      if (!await tx.membership.findFirst({ where: { businessId, identityId: session.identity.id, status: 'ACTIVE', role: { in: rolesWith(BusinessPermission.ACT_ON_ALL_CALENDARS) }, business: { approvalStatus: 'APPROVED', deletedAt: null } } })) throw notFound();
+      if (!await tx.membership.findFirst({ where: calendarMembershipWhere(scope, 'act') })) throw notFound();
+      // The card permission is rechecked under the same lock, so a member losing it mid-request cannot book on a card.
+      if ((input.customerCardId || input.saveCustomer) && !await tx.membership.findFirst({ where: { businessId, identityId: session.identity.id, status: 'ACTIVE', role: { in: rolesWith(BusinessPermission.SEARCH_CUSTOMERS) } } })) throw forbidden();
       // Update the attempt row in the same commit as the booking. A waiting stale
       // worker must retry before it can interpret an availability error.
       await tx.$queryRaw`SELECT id FROM "ManualBookingAttempt" WHERE id = ${registered.id} FOR UPDATE`;
@@ -117,7 +125,7 @@ export async function createManualBooking(session: AuthenticatedSession, busines
       }).catch(() => { throw new AppError(503, 'MANUAL_ATTEMPT_PENDING', 'Retry this same appointment to recover its result.'); });
       if (committed) {
         await validateAuthenticatedSession(session);
-        await requireBusinessPermission(session.identity.id, businessId, BusinessPermission.ACT_ON_ALL_CALENDARS);
+        await validateCalendarScope(scope, 'act');
         signalAppointmentChanged({ businessId, customerId: null });
         return recover(committed);
       }
@@ -126,11 +134,17 @@ export async function createManualBooking(session: AuthenticatedSession, busines
   } finally { await releaseHold(reservationId, session.identity.id).catch(() => {}); if (slotLock) await slotLock.release(); }
 }
 
+/**
+ * What the add-appointment sheet offers. A worker sees only the active services their own row gives, with the name,
+ * duration and customer price the final review confirms, and only their own row; nothing else of the catalogue
+ * (decisions.md, "My day for a worker"). A row marked unavailable offers nothing.
+ */
 export async function readManualBookingOptions(session: AuthenticatedSession, businessId: string) {
   await validateAuthenticatedSession(session);
-  await requireBusinessPermission(session.identity.id, businessId, BusinessPermission.ACT_ON_ALL_CALENDARS);
+  const scope: CalendarScope = await requireCalendarScope(session.identity.id, businessId, 'act');
+  const staffWhere = { active: true, ...(scope.staffId ? { id: scope.staffId } : {}) };
   return prisma.$transaction(async tx => {
-    const business = await tx.business.findFirst({ where: { id: businessId, approvalStatus: 'APPROVED', deletedAt: null }, select: { timezone: true, publishedAt: true, bookingPolicy: { select: { id: true } }, services: { where: { active: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }], select: { id: true, name: true, durationMinutes: true, priceMinor: true, currency: true, staff: { where: { staff: { active: true } }, select: { staff: { select: { id: true, displayName: true, parallelCapacity: true } } } } } } } });
+    const business = await tx.business.findFirst({ where: { id: businessId, approvalStatus: 'APPROVED', deletedAt: null }, select: { timezone: true, publishedAt: true, bookingPolicy: { select: { id: true } }, services: { where: { active: true, ...(scope.staffId ? { staff: { some: { staff: staffWhere } } } : {}) }, orderBy: [{ name: 'asc' }, { id: 'asc' }], select: { id: true, name: true, durationMinutes: true, priceMinor: true, currency: true, staff: { where: { staff: staffWhere }, select: { staff: { select: { id: true, displayName: true, parallelCapacity: true } } } } } } } });
     if (!business) throw notFound();
     return { timezone: business.timezone, bookable: Boolean(business.publishedAt && business.bookingPolicy), services: business.services.map(service => ({ ...service, staff: service.staff.map(link => link.staff) })) };
   }, { isolationLevel: 'RepeatableRead' });

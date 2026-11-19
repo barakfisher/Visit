@@ -15,11 +15,14 @@ import { apiRequest } from '@/src/lib/api';
 import { useSessionStore } from '@/src/state/session';
 import { SessionLoading } from '@/components/SessionLoading';
 import { accountBusiness, menuCapabilities } from '@/src/lib/navigation';
+import { workerCalendar } from '@/src/lib/providerWorkspace';
 
 
 export default function AccountScreen() {
   const { t, direction } = useAppLocale();
   const business = accountBusiness('/account', useLocalSearchParams<{ businessId?: string }>().businessId, useSessionStore(state => state.profile?.businesses));
+  // A worker has no business settings to open (worker-access.md, Worker flow).
+  const settingsOpen = useSessionStore(state => { const entry = state.profile?.businesses.find(item => item.id === business); return !!entry && !workerCalendar(entry); });
   const identityId = useSessionStore((state) => state.identityId);
   const bootstrap = useSessionStore(state => state.bootstrapStatus);
   const account = useQuery({ queryKey: ['me', identityId], queryFn: () => apiRequest<{ identity: { platformRole: string; contactPhone: string | null }; memberships: { role: string; status: string; business: { id: string; name: string; approvalStatus: string } }[]; providerApplications: { id: string; status: string; business: { name: string } }[] }>('/v1/me'), enabled: Boolean(identityId) });
@@ -37,7 +40,7 @@ export default function AccountScreen() {
   return <ScrollView testID="account-screen" className="flex-1 bg-canvas" contentContainerClassName="mx-auto w-full max-w-2xl gap-4 px-5 pb-8 pt-3 md:px-8">
     <LanguageSettings />
     {/* The settings left the footer for this entry, so it shows only when Account was opened from a business. */}
-    {business ? <ActionButton secondary label={t('nav.businessSettings')} onPress={() => router.push({ pathname: '/provider/[businessId]', params: { businessId: business } })} /> : null}
+    {business && settingsOpen ? <ActionButton secondary label={t('nav.businessSettings')} onPress={() => router.push({ pathname: '/provider/[businessId]', params: { businessId: business } })} /> : null}
     {identityId && account.data ? <ContactPhone saved={account.data.identity.contactPhone} /> : null}
     {identityId ? <AccountMethods onBusyChange={setMethodsBusy} /> : null}
     {!identityId ? <View className="gap-3 rounded-card border border-line bg-surface p-card"><Text className="font-semibold text-ink">{t('account.title')}</Text><Text className="leading-6 text-body">{t('account.guestHelp')}</Text><Link href="/auth/login" className="self-start rounded-control bg-brand px-5 py-4 font-semibold text-white">{t('common.signIn')}</Link></View> : account.isLoading ? <View className="flex-row items-center gap-2"><ActivityIndicator color="#0f766e"/><Text className="text-body">{t('account.loading')}</Text></View> : account.isError ? <View className="gap-3 rounded-card border border-line bg-surface p-card"><Text accessibilityRole="alert" className="text-warning">{t('account.failure')}</Text><Pressable onPress={() => void account.refetch()} className="self-start rounded-control border border-line px-4 py-3"><Text className="font-semibold text-brand">{t('common.retry')}</Text></Pressable></View> : <>

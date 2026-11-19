@@ -2,7 +2,7 @@ import { withBusinessConfiguration } from './publication.js';
 import { validateService, type ServiceInput } from '@visit/contracts';
 import { prisma } from '../db/client.js';
 import type { AuthorizedBusinessContext, PublicBusinessContext } from '../security/tenant-context.js';
-import { validateBusinessContext, validatePublicBusinessContext, validateBusinessPermission } from '../security/tenant-context.js';
+import { validatePublicBusinessContext, validateBusinessPermission } from '../security/tenant-context.js';
 import { AppError, notFound } from '../http/errors.js';
 import { BusinessPermission } from '../security/business-permissions.js';
 
@@ -22,7 +22,7 @@ export async function listPublicServices(context: PublicBusinessContext) {
 }
 
 export async function listBusinessServices(context: AuthorizedBusinessContext) {
-  await validateBusinessContext(context);
+  await validateBusinessPermission(context, BusinessPermission.BUSINESS_SETUP);
   return prisma.service.findMany({
     where: { businessId: context.businessId },
     orderBy: { name: 'asc' },
@@ -30,7 +30,7 @@ export async function listBusinessServices(context: AuthorizedBusinessContext) {
 }
 
 export async function getBusinessService(context: AuthorizedBusinessContext, serviceId: string) {
-  await validateBusinessContext(context);
+  await validateBusinessPermission(context, BusinessPermission.BUSINESS_SETUP);
   const service = await prisma.service.findFirst({ where: { id: serviceId, businessId: context.businessId } });
   if (!service) throw notFound();
   return service;

@@ -83,7 +83,7 @@ test('repeatable isolated fixtures cover both directions of foundation HTTP tena
       }
       assert.equal((await app.inject({ url: '/api/provider/services', headers: f.headers('dual') })).statusCode, 400, 'ambiguous context requires explicit workspace');
       const business = f.businesses[0]!;
-      for (const actor of ['pending', 'outsider', 'staff'] as const) assert.equal((await app.inject({ method: 'POST', url: `/v1/provider/businesses/${business.id}/services`, headers: f.headers(actor), payload: { name: 'Unauthorized mutation', durationMinutes: 30 } })).statusCode, 403);
+      for (const actor of ['pending', 'outsider', 'staff', 'worker'] as const) assert.equal((await app.inject({ method: 'POST', url: `/v1/provider/businesses/${business.id}/services`, headers: f.headers(actor), payload: { name: 'Unauthorized mutation', durationMinutes: 30 } })).statusCode, 403);
       for (const url of [`/v1/provider/businesses/${business.id}/services`, `/api/provider/agenda?businessId=${business.id}&date=${f.date}`, '/api/consumer/bookings/active']) assert.equal((await app.inject({ url })).statusCode, 401);
       const response = await app.inject({ url: `/v1/me?identityId=${f.people[1]!.id}`, headers: { ...f.headers('north'), 'x-business-id': f.businesses[1]!.id } });
       assert.equal(response.json().identity.id, f.people[0]!.id);

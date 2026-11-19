@@ -8,6 +8,7 @@ import { useSessionStore } from '../state/session';
 import { useLiveAgenda } from './LiveSignals.hook';
 import { openAgendaContact, readProviderAgenda } from './ProviderAgenda.service';
 import { useBlockRemoval, useTimeBlockDialog } from './TimeBlocks.hook';
+import { workerCalendar } from './providerWorkspace';
 import { openManualBooking } from './ManualBookingEntry';
 import { useManualBooking } from './ManualBooking.hook';
 import { appointmentSpan, dateRange, fullDate } from './appointmentTime';
@@ -68,7 +69,7 @@ export function useBusinessCalendar(): BusinessCalendarView {
   // A slot names its own day; the footer's Add appointment starts today, as everywhere else. The sheet opens over this screen.
   const manual = useManualBooking(business, clock.date);
   const [opened, setOpened] = useState<{ kind: 'appointment' | 'block'; id: string } | null>(null);
-  const blockDialog = useTimeBlockDialog(business.id, business.timezone);
+  const blockDialog = useTimeBlockDialog(business.id, business.timezone, undefined, workerCalendar(business)?.id);
   // A tapped slot asks first: Add appointment or Block time. The next sheet opens once this one has left.
   const [slot, setSlot] = useState<{ date: string; localTime: string } | null>(null);
   const followUp = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -126,7 +127,7 @@ export function useBusinessCalendar(): BusinessCalendarView {
     blockDialog, staff: data?.staff ?? [],
     openEntry: entry => { if (!tapAllowed()) return; blockRemoval.askRemove(null); setFeedback(''); setOpened(entry.kind === 'appointment' ? { kind: 'appointment', id: entry.booking.id } : { kind: 'block', id: entry.block.id }); },
     closeEntry: () => { blockRemoval.askRemove(null); setOpened(null); },
-    openAppointment, openBlock, businessId: business.id, timezone: business.timezone,
+    openAppointment, openBlock, businessId: business.id, timezone: business.timezone, worker: workerCalendar(business) !== null,
     contact: (phone, kind) => void contact(phone, kind),
     blockRemoval, feedback: removeFailure ? t(removeFailure) : feedback, manual,
     span: (startsAt, endsAt) => appointmentSpan(startsAt, endsAt, business.timezone, locale, true),

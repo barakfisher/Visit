@@ -34,8 +34,9 @@ function saveFailure(error: unknown): MessageKey {
 /**
  * The "Block time" dialog, shared by the hours screen and the agenda. A refused block lists what it
  * would have covered and keeps the form, so the owner can change it or go and move those appointments.
+ * `calendarId` pins every block to a worker's own calendar.
  */
-export function useTimeBlockDialog(businessId: string, timezone: string | undefined, onSaved?: () => void) {
+export function useTimeBlockDialog(businessId: string, timezone: string | undefined, onSaved?: () => void, calendarId?: string) {
   const { t, locale, direction } = useAppLocale(), client = useQueryClient(), scope = useCurrentScope(businessId);
   const operation = useRef(false);
   const [open, setOpen] = useState(false);
@@ -61,7 +62,8 @@ export function useTimeBlockDialog(businessId: string, timezone: string | undefi
     operation.current = true; setBusy(true);
     const isCurrent = scope.capture();
     try {
-      await createTimeBlock(blockInput(form, businessId, reason => t(`blocks.reason.${reason}`)));
+      // A worker blocks their own calendar only; a block without a row would close the whole business, which is setup.
+      await createTimeBlock(blockInput(calendarId ? { ...form, staffId: calendarId } : form, businessId, reason => t(`blocks.reason.${reason}`)));
       if (!isCurrent()) return;
       // A block changes slots, the agenda and the blocked-time list.
       await Promise.allSettled([client.invalidateQueries({ predicate: query => isBookingQuery(query.queryKey) })]);

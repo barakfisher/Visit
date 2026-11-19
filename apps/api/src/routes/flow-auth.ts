@@ -10,11 +10,19 @@ import { redis, ensureRedisReady } from '../infra/redis.js';
 import { authenticate, newOpaqueToken, issueSessionToken, sessionExpiry, tokenDigest } from '../security/sessions.js';
 
 import { phoneSchema as phone, otpService, type createOtpService } from '../security/phone-otp.js';
-import { BusinessPermission, rolesWith } from '../security/business-permissions.js';
+import { BusinessPermission, ROLE_PRIORITY, rolesWith } from '../security/business-permissions.js';
+import { countedMembershipWhere } from '../security/tenant-context.js';
 const phoneKey = (value: string) => createHash('sha256').update(value).digest('hex');
+/**
+ * The person and the businesses they open provider mode for. One entry per business, under their strongest role
+ * (ROLE_PRIORITY). A worker's entry names the calendar they work on: provider mode then opens their own My day.
+ */
 export async function authProfile(identityId: string) {
-  const identity = await prisma.identity.findUniqueOrThrow({ where: { id: identityId }, select: { id: true, email: true, phone: true, preferredLocale: true, memberships: { where: { status: 'ACTIVE', role: { in: rolesWith(BusinessPermission.WORKSPACE) }, business: { approvalStatus: 'APPROVED' } }, select: { role: true, business: { select: { id: true, name: true, timezone: true } } } } } });
-  return { id: identity.id, email: identity.email, phone: identity.phone, preferredLocale: identity.preferredLocale, is_provider: identity.memberships.length > 0, businesses: [...new Map([...identity.memberships.filter(m => m.role === 'MANAGER'), ...identity.memberships.filter(m => m.role === 'OWNER')].map(m => [m.business.id, { ...m.business, role: m.role }])).values()] };
+  const identity = await prisma.identity.findUniqueOrThrow({ where: { id: identityId }, select: { id: true, email: true, phone: true, preferredLocale: true, memberships: { where: { status: 'ACTIVE', role: { in: rolesWith(BusinessPermission.WORKSPACE) }, business: { approvalStatus: 'APPROVED' }, ...countedMembershipWhere }, select: { role: true, staff: { select: { id: true, displayName: true, active: true } }, business: { select: { id: true, name: true, timezone: true } } } } } });
+  const strongest = new Map<string, typeof identity.memberships[number]>();
+  for (const role of ROLE_PRIORITY) for (const membership of identity.memberships) if (membership.role === role && !strongest.has(membership.business.id)) strongest.set(membership.business.id, membership);
+  const businesses = [...strongest.values()].map(m => ({ ...m.business, role: m.role, ...(m.role === 'STAFF' && m.staff ? { calendar: m.staff } : {}) }));
+  return { id: identity.id, email: identity.email, phone: identity.phone, preferredLocale: identity.preferredLocale, is_provider: businesses.length > 0, businesses };
 }
 export async function registerFlowAuth(app: FastifyInstance, { otp = otpService, google = googleAuthService }: { otp?: ReturnType<typeof createOtpService>; google?: typeof googleAuthService } = {}) {
   app.put('/api/account/preferences', async (request) => {

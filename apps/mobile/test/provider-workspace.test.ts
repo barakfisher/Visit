@@ -11,3 +11,12 @@ test('provider selectors cannot fall back to another tenant; multiple workspaces
   for (const selector of ['', ['a', 'b'], 'foreign', '../a', 'a/extra']) assert.deepEqual(resolveProviderWorkspace([a, b], selector, 'a'), { state: 'denied' });
   assert.deepEqual(resolveProviderWorkspace([b], 'a', 'a'), { state: 'denied' });
 });
+test("a worker's workspace is their own calendar; an owner's or manager's is the whole business", async () => {
+  const { workerCalendar } = await import('../src/lib/providerWorkspace');
+  const calendar = { id: 'row', displayName: 'Noa', active: false };
+  assert.deepEqual(workerCalendar({ role: 'STAFF', calendar }), calendar);
+  assert.equal(workerCalendar({ role: 'MANAGER', calendar }), null);
+  assert.equal(workerCalendar({ role: 'OWNER' }), null);
+  assert.equal(workerCalendar({ role: 'STAFF' }), null);
+  assert.deepEqual(resolveProviderWorkspace([{ ...a, role: 'STAFF', calendar }], undefined, null), { state: 'allowed', business: { ...a, role: 'STAFF', calendar } });
+});

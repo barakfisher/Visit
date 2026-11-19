@@ -19,7 +19,7 @@ function Roster({ conflicts }: { conflicts?: StaffRemovalConflicts }) {
   return <StaffRosterView {...state} {...(conflicts ? { removing: 'noa', conflicts } : {})} hours={staffId => <AppText testID={`hours-${staffId}`}>WeeklyHours</AppText>}
     access={row => <StaffAccessSection businessId="preview" row={row} copy={async () => true} />} />;
 }
-function RosterPreview({ locale, data = 'staff', conflicts }: { locale: Locale; data?: Data; conflicts?: StaffRemovalConflicts }) {
+function RosterPreview({ locale, data = 'staff', conflicts, viewer = 'OWNER' }: { locale: Locale; data?: Data; conflicts?: StaffRemovalConflicts; viewer?: 'OWNER' | 'MANAGER' }) {
   const [client] = useState(() => {
     const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false, queryFn: () => data === 'failed' ? Promise.reject(new Error('offline')) : new Promise(() => {}) } } });
     if (data === 'failed') return client;
@@ -34,7 +34,7 @@ function RosterPreview({ locale, data = 'staff', conflicts }: { locale: Locale; 
     ] });
     // Noa works in the app, Dan has a pending link, Maya was never invited.
     const later = new Date(Date.now() + 86400000).toISOString();
-    client.setQueryData(['provider', 'preview', 'team'], { role: 'OWNER',
+    client.setQueryData(['provider', 'preview', 'team'], { role: viewer, canLinkCalendars: viewer === 'OWNER',
       members: [{ id: 'm-owner', identityId: 'owner', role: 'OWNER', label: 'o***@example.test', name: he ? 'דנה' : 'Dana', staff: null }, { id: 'm-noa', identityId: 'noa-account', role: 'STAFF', label: 'n***@example.test', name: he ? 'נועה כהן' : 'Noa Cohen', staff: { id: 'noa', displayName: he ? 'נועה' : 'Noa', membershipId: 'm-noa' } }],
       invitations: [{ id: 'i-dan', role: 'STAFF', recipientHint: '***4567', createdAt: later, expiresAt: later, acceptedAt: null, revokedAt: null, staff: { id: 'dan', displayName: he ? 'דן' : 'Dan' } }] });
     return client;
@@ -160,4 +160,12 @@ export const RemoveAccessConfirmation: Story = { args: { locale: 'en' }, play: a
   await expect(card.getByText(/The calendar, its hours and its appointments stay\./)).toBeVisible();
   await userEvent.click(card.getByRole('button', { name: 'Cancel' }));
   await expect(card.getByRole('button', { name: 'Remove app access: Noa' })).toBeVisible();
+} };
+// Only the owner links calendars (decisions.md, "My day for a worker"): a manager sees the badges and a note instead.
+export const ManagerLinksNoCalendar: Story = { args: { locale: 'he', viewer: 'MANAGER' }, play: async ({ canvas }) => {
+  const maya = within(canvas.getByTestId('staff-card-maya'));
+  await expect(maya.getByTestId('staff-access-badge-maya')).toHaveTextContent('לא הוזמן לאפליקציה');
+  await expect(maya.queryByRole('button', { name: 'הזמנה לאפליקציה: מאיה' })).toBeNull();
+  await expect(maya.getByTestId('staff-owner-links-maya')).toHaveTextContent(translate('he', 'roster.ownerLinksCalendars'));
+  await expect(canvas.getByRole('button', { name: 'הסרת גישה לאפליקציה: נועה' })).toBeVisible();
 } };

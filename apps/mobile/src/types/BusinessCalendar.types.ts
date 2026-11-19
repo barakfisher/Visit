@@ -41,6 +41,8 @@ export type BusinessCalendarView = {
   openEntry: (entry: CalendarEntry) => void; closeEntry: () => void;
   openAppointment: AgendaAppointment | null; openBlock: TimeBlock | null;
   businessId: string; timezone: string;
+  /** A worker's calendar: their own row only, and business-wide blocks are not theirs to release. */
+  worker: boolean;
   contact: ProviderAgendaView['contact'];
   blockRemoval: Omit<BlockRemovalState, 'removeFailure'>; feedback: string;
   manual: ManualBookingView;

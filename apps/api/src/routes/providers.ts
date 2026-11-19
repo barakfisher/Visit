@@ -11,7 +11,7 @@ import { BusinessApprovalStatus, MembershipRole, MembershipStatus, PlatformRole 
 import { prisma } from '../db/client.js';
 import { AppError, conflict, forbidden, notFound } from '../http/errors.js';
 import { authenticate } from '../security/sessions.js';
-import { requireBusinessMembership, requirePublicBusiness, requireBusinessPermission } from '../security/tenant-context.js';
+import { requirePublicBusiness, requireBusinessPermission } from '../security/tenant-context.js';
 import { parseService, createBusinessService, deleteBusinessService, getBusinessService, listBusinessServices, listPublicServices, updateBusinessService } from '../repositories/services.js';
 
 import { getBusinessSettings, getBusinessPolicy, saveBusinessPolicy, getBusinessAvailability, saveBusinessAvailability, listBusinessStaff, createBusinessStaff, saveStaffAvailability, getStaffAvailability, removeBusinessStaff, updateBusinessStaff } from '../repositories/provider-settings.js';
@@ -49,7 +49,8 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
     const params = businessIdParams.safeParse(request.params);
     if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
-    const context = await requireBusinessMembership(identity.id, params.data.businessId);
+    // Business settings are setup: a worker reads none of them (decisions.md, "My day for a worker").
+    const context = await requireBusinessPermission(identity.id, params.data.businessId, BusinessPermission.BUSINESS_SETUP);
     return getBusinessSettings(context);
   });
 
@@ -150,7 +151,7 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
     const params = businessIdParams.safeParse(request.params);
     if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
-    const context = await requireBusinessMembership(identity.id, params.data.businessId);
+    const context = await requireBusinessPermission(identity.id, params.data.businessId, BusinessPermission.BUSINESS_SETUP);
     return { services: await listBusinessServices(context) };
   });
 
@@ -168,7 +169,7 @@ export async function registerProviderRoutes(app: FastifyInstance, { reviewScope
     const params = serviceParams.safeParse(request.params);
     if (!params.success) throw notFound();
     const { identity } = await authenticate(request);
-    const context = await requireBusinessMembership(identity.id, params.data.businessId);
+    const context = await requireBusinessPermission(identity.id, params.data.businessId, BusinessPermission.BUSINESS_SETUP);
     return getBusinessService(context, params.data.serviceId);
   });
 

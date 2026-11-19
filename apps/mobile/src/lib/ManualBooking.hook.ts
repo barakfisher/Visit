@@ -44,7 +44,10 @@ export function useManualBooking(business: { id: string; timezone: string }, dat
   const slots = useQuery({ queryKey: ['availability', identity, version, business.id, 'public', draft.serviceId, draft.localDate], queryFn: ({ signal }) => apiRequest<{ slots: Slot[] }>(`/api/providers/${encodeURIComponent(business.id)}/availability?${new URLSearchParams({ serviceId: draft.serviceId, date: draft.localDate })}`, { signal }), enabled: open && Boolean(draft.serviceId) && validBookingDate(draft.localDate), staleTime: 0 });
   const staff = assigned.get(draft.serviceId)?.staff ?? [];
   const filter = staffFilter.scope === `${scope}:${draft.serviceId}` && staff.some(row => row.id === staffFilter.staffId) ? staffFilter.staffId : '';
-  const offered = availableBookingSlots(slots.data?.slots ?? [], null).filter(slot => !filter || slot.staffId === filter);
+  // Public availability lists every staff member; only those the sheet may book are offered: a worker's own calendar,
+  // or every active one for the whole business (manual-booking options, worker-access.md).
+  const bookable = new Set(staff.map(row => row.id));
+  const offered = availableBookingSlots(slots.data?.slots ?? [], null).filter(slot => bookable.has(slot.staffId) && (!filter || slot.staffId === filter));
   // A free card or an earlier choice names a time (and maybe a staff member); it is chosen while a matching slot is free.
   const chosen = draft.localTime ? offered.find(slot => slot.localTime === draft.localTime && (!draft.staffId || slot.staffId === draft.staffId)) : undefined;
   const search = useCustomerCardSearch({ businessId: business.id, identity, version, enabled: open && !stored.customerCard && !stored.reviewed && !attempt && !result, name: draft.customerName, phone: draft.customerPhone });

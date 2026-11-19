@@ -8,6 +8,8 @@ import type { BlockRemovalState, TimeBlockDialogState } from '../lib/TimeBlocks.
 import type { ManualBookingView } from './ManualBooking.types';
 export type ProviderAgenda = {
   business: { id: string; name: string; timezone: string }; fromDate: string; toDate: string;
+  /** A worker's own calendar; null when the agenda is the whole business. */
+  calendar?: { id: string; displayName: string; active: boolean } | null;
   summary: { appointments: number; revenue: Record<string, number> }; staff: { id: string; displayName: string; parallelCapacity: number }[];
   bookings: { source?: string; manualReason?: string | null; id: string; status: AppointmentStatus; canMarkNoShow?: boolean; revision: number; startsAt: string; endsAt: string; customer: { displayName: string | null; phone: string | null; email: string | null }; service: { name: string }; staff: { displayName: string } }[];
   blocks: TimeBlock[];

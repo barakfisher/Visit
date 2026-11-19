@@ -1,3 +1,4 @@
+import { requireCalendarScope } from '../src/security/calendar-scope.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test, { after } from 'node:test';
@@ -7,7 +8,6 @@ import { prisma } from '../src/db/client.js';
 import { redis } from '../src/infra/redis.js';
 import { AppError } from '../src/http/errors.js';
 import { authenticate, tokenDigest } from '../src/security/sessions.js';
-import { requireBusinessMembership } from '../src/security/tenant-context.js';
 import { BLOCK_CONFLICT, MAX_BLOCK_DAYS, MAX_REPORTED_CONFLICTS, createTimeBlock } from '../src/repositories/TimeBlocks.service.js';
 
 after(async () => { redis.disconnect(); await prisma.$disconnect(); });
@@ -113,7 +113,7 @@ test('time blocks cover hours, whole days, date ranges and the whole business', 
 
     await t.test('appointments already over do not refuse a block for the rest of today', async () => {
       const session = await authenticate({ headers: { authorization: `Bearer ${tokens.get(owner.id)}` } } as FastifyRequest);
-      const context = await requireBusinessMembership(owner.id, business.id);
+      const context = await requireCalendarScope(owner.id, business.id, 'act');
       const now = new Date('2027-06-10T20:00:00.000Z'); // 16:00 in New York.
       await book(first.id, '2027-06-10T14:00:00.000Z');
       const created = await createTimeBlock(context, { kind: 'days', fromDate: '2027-06-10', toDate: '2027-06-10' }, session, now);

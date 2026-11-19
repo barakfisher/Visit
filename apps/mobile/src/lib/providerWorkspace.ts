@@ -1,4 +1,7 @@
-export type ManagedBusiness = { id: string; name: string; timezone: string };
+import type { ProviderBusiness } from '../types/flows';
+export type ManagedBusiness = ProviderBusiness;
+/** A worker's own calendar, or null for the whole business (owner, manager). The server scopes every read anyway. */
+export const workerCalendar = (business: Pick<ProviderBusiness, 'role' | 'calendar'>) => business.role === 'STAFF' && business.calendar ? business.calendar : null;
 /** URL selectors never silently fall back to another tenant. */
 export function resolveProviderWorkspace(businesses: ManagedBusiness[], requested: unknown, active: string | null): { state: 'allowed'; business: ManagedBusiness } | { state: 'choose' } | { state: 'denied' } {
   if (requested !== undefined) {

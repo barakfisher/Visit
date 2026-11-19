@@ -12,10 +12,9 @@ import { occupiedInterval, assertCapacity } from '../scheduling/intervals.js';
 import { assertWorkingHours } from '../scheduling/WorkingHours.service.js';
 import { reserveHold, requireHold, releaseHold } from '../scheduling/reservations.js';
 import { localDateTimeToInstant } from '../scheduling/local-time.js';
-import { requireBusinessPermission } from '../security/tenant-context.js';
+import { calendarMembershipWhere, onCalendar, requireCalendarScope } from '../security/calendar-scope.js';
 import { setBookingAudit } from './BookingLifecycle.service.js';
 import { blocksCovering } from '../scheduling/time-blocks.js';
-import { BusinessPermission, rolesWith } from '../security/business-permissions.js';
 
 export const rescheduleInputSchema = z.strictObject({
   finalConsent: z.literal(true), idempotencyKey: z.string().min(16).max(128), expectedRevision: z.number().int().nonnegative(),
@@ -25,8 +24,10 @@ export const rescheduleInputSchema = z.strictObject({
 
 export async function rescheduleBooking(session: AuthenticatedSession, bookingId: string, input: z.infer<typeof rescheduleInputSchema>, businessId?: string) {
   await validateAuthenticatedSession(session);
-  if (businessId) await requireBusinessPermission(session.identity.id, businessId, BusinessPermission.ACT_ON_ALL_CALENDARS);
-  const scope = businessId ? { businessId } : customerOwnedBookingWhere(session.identity.id);
+  // A worker moves appointments on their own row, to their own row; another row's reads as not found.
+  const calendar = businessId ? await requireCalendarScope(session.identity.id, businessId, 'act') : null;
+  if (calendar?.staffId && input.staffId !== calendar.staffId) throw notFound();
+  const scope = calendar ? { businessId: calendar.context.businessId, ...onCalendar(calendar) } : customerOwnedBookingWhere(session.identity.id);
   const original = await prisma.booking.findFirst({ where: { id: bookingId, ...scope }, include: { business: { select: { timezone: true } } } });
   if (!original) throw notFound();
   let startsAt: Date;
@@ -55,7 +56,7 @@ export async function rescheduleBooking(session: AuthenticatedSession, bookingId
       await tx.$queryRaw`SELECT id FROM "Business" WHERE id = ${original.businessId} FOR SHARE`;
       if (businessId) {
         await tx.$queryRaw`SELECT id FROM "Membership" WHERE "businessId" = ${businessId} AND "identityId" = ${session.identity.id} FOR SHARE`;
-        if (!await tx.membership.findFirst({ where: { businessId, identityId: session.identity.id, status: 'ACTIVE', role: { in: rolesWith(BusinessPermission.ACT_ON_ALL_CALENDARS) } } })) throw notFound();
+        if (!await tx.membership.findFirst({ where: calendarMembershipWhere(calendar!, 'act') })) throw notFound();
         await tx.$queryRaw`SELECT id FROM "Booking" WHERE id = ${bookingId} AND "businessId" = ${businessId} FOR UPDATE`;
       } else await lockCustomerOwnedBooking(tx, bookingId, session.identity.id);
       const current = await tx.booking.findFirst({ where: { id: bookingId, ...scope }, include: { business: { include: { bookingPolicy: true } } } });

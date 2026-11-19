@@ -30,3 +30,14 @@ test('login hides "Have a business?" only when it is already returning to the pr
   assert.equal(showsProviderEntry(undefined), true);
   assert.equal(showsProviderEntry(safeAuthReturnTo('/')), true);
 });
+test('a worker linked to a calendar opens provider mode and can still apply for a business of their own', () => {
+  const calendar = { id: 'row', displayName: 'Noa', active: true };
+  const linked = menuCapabilities({ ...empty, memberships: [{ ...membership('salon', 'STAFF'), calendar }] });
+  assert.deepEqual(linked.managed.map(m => [m.business.id, m.role]), [['salon', 'STAFF']]);
+  assert.equal(linked.becomeProvider, true);
+  // Without a calendar a Staff membership opens nothing (an invitation from before calendars, or a revoked link).
+  assert.deepEqual(menuCapabilities({ ...empty, memberships: [{ ...membership('salon', 'STAFF'), calendar: null }] }).managed, []);
+  // A manager of the same business is the whole business, not the worker's day.
+  const both = menuCapabilities({ ...empty, memberships: [{ ...membership('salon', 'STAFF'), calendar }, membership('salon', 'MANAGER')] });
+  assert.deepEqual(both.managed.map(m => m.role), ['MANAGER']); assert.equal(both.becomeProvider, false);
+});

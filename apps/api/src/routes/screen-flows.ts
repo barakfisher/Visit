@@ -4,7 +4,8 @@ import { runBookingAttempt } from '../scheduling/booking-attempts.service.js';
 import { reviewedServiceSchema } from '../scheduling/booking-consent.utils.js';
 import { publicBusinessWhere } from '../security/business-eligibility.js';
 import { withBusinessConfiguration } from '../repositories/publication.js';
-import { requireOwnedReschedule, requireBusinessPermission } from '../security/tenant-context.js';
+import { countedMembershipWhere, requireOwnedReschedule, requireBusinessPermission } from '../security/tenant-context.js';
+import { requireCalendarScope } from '../security/calendar-scope.js';
 import { getBusinessAvailability, getBusinessBookingCalendar } from '../repositories/availability.js';
 import type { FastifyInstance, FastifyRequest, HTTPMethods } from 'fastify';
 import { z } from 'zod';
@@ -29,7 +30,7 @@ async function providerContext(request: FastifyRequest, supplied?: string) {
   const { identity } = await authenticate(request);
   let businessId = supplied;
   if (!businessId) {
-    const memberships = await prisma.membership.findMany({ where: { identityId: identity.id, status: 'ACTIVE', role: { in: rolesWith(BusinessPermission.WORKSPACE) }, business: { approvalStatus: 'APPROVED' } }, select: { businessId: true } });
+    const memberships = await prisma.membership.findMany({ where: { identityId: identity.id, status: 'ACTIVE', role: { in: rolesWith(BusinessPermission.WORKSPACE) }, business: { approvalStatus: 'APPROVED' }, ...countedMembershipWhere }, select: { businessId: true } });
     if (memberships.length !== 1) throw new AppError(400, 'CHOOSE_BUSINESS', 'Choose the business you want to manage.');
     businessId = memberships[0]!.businessId;
   }
@@ -132,24 +133,24 @@ export async function registerScreenFlows(app: FastifyInstance) {
   app.get('/api/provider/agenda', async request => {
     const { businessId, date, days } = z.strictObject({ businessId: z.string().optional(), date: z.string().date(), days: z.enum(['1', '3', '7']).default('1') }).parse(request.query);
     const context = await providerContext(request, businessId);
-    return readProviderAgenda(await requireBusinessPermission(context.identity.id, context.businessId, BusinessPermission.SEE_ALL_CALENDARS), date, Number(days) as 1 | 3 | 7);
+    return readProviderAgenda(await requireCalendarScope(context.identity.id, context.businessId, 'see'), date, Number(days) as 1 | 3 | 7);
   });
   app.get('/api/provider/block-time', async request => {
     const { businessId } = z.strictObject({ businessId: z.string().optional() }).parse(request.query);
     const context = await providerContext(request, businessId);
-    return listTimeBlocks(await requireBusinessPermission(context.identity.id, context.businessId, BusinessPermission.SEE_ALL_CALENDARS));
+    return listTimeBlocks(await requireCalendarScope(context.identity.id, context.businessId, 'see'));
   });
   app.post('/api/provider/block-time', async (request, reply) => {
     const session = await authenticate(request), input = timeBlockSchema.parse(request.body);
     const { businessId } = await providerContext(request, input.businessId);
-    const result = await createTimeBlock(await requireBusinessPermission(session.identity.id, businessId, BusinessPermission.ACT_ON_ALL_CALENDARS), input, session);
+    const result = await createTimeBlock(await requireCalendarScope(session.identity.id, businessId, 'act'), input, session);
     reply.code(201); return result;
   });
   app.delete('/api/provider/block-time/:blockId', async request => {
     const session = await authenticate(request);
     const { businessId } = await providerContext(request, z.object({ businessId: z.string().optional() }).parse(request.query).businessId);
     const { blockId } = z.object({ blockId: z.string().min(1) }).parse(request.params);
-    return deleteTimeBlock(await requireBusinessPermission(session.identity.id, businessId, BusinessPermission.ACT_ON_ALL_CALENDARS), blockId, session);
+    return deleteTimeBlock(await requireCalendarScope(session.identity.id, businessId, 'act'), blockId, session);
   });
   app.post('/api/provider/services', async (request, reply) => {
     const { businessId, identity } = await providerContext(request, (request.query as { businessId?: string }).businessId);

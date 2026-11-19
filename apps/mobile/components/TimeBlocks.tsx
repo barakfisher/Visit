@@ -11,13 +11,14 @@ import { TimeBlockDialog } from './TimeBlockForm.component';
 type Translate = (key: MessageKey, values?: Record<string, string | number>) => string;
 
 /** One block: who, when ("All day" or its hours), the reason, and removal that asks first. */
-export function TimeBlockRow({ block, t, locale, removing, pending, askRemove, confirmRemove }: { block: TimeBlock; t: Translate; locale: Locale } & Omit<BlockRemovalState, 'removeFailure'>) {
+/** `releasable` false shows the block without its release: a business-wide block on a worker's calendar is setup. */
+export function TimeBlockRow({ block, t, locale, removing, pending, askRemove, confirmRemove, releasable = true }: { block: TimeBlock; t: Translate; locale: Locale; releasable?: boolean } & Omit<BlockRemovalState, 'removeFailure'>) {
   const hours = block.allDay || !block.startLocal || !block.endLocal ? t('blocks.allDay') : ltr(`${block.startLocal}–${block.endLocal}`);
   const busy = Boolean(pending);
   return <View testID={`time-block-${block.id}`} className="gap-2 rounded-control border border-line bg-canvas p-4">
     <AppText className="font-semibold text-ink">{blockDates(block, locale)} · {hours}</AppText>
     <AppText className="text-sm text-body">{block.staff?.displayName ?? t('blocks.wholeBusiness')}{block.reason ? ` · ${block.reason}` : ''}</AppText>
-    {removing === block.id ? <View className="gap-3">
+    {!releasable ? <AppText testID="block-business-wide" className="text-sm text-muted">{t('worker.blockBusinessWide')}</AppText> : removing === block.id ? <View className="gap-3">
       <AppText>{t('blocks.removeHelp')}</AppText>
       <View className="flex-row gap-3">
         <View className="flex-1"><ActionButton busy={pending === block.id} disabled={busy && pending !== block.id} label={t('blocks.confirmRemove')} onPress={() => confirmRemove(block.id)} /></View>

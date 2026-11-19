@@ -1,3 +1,4 @@
+import { requireCalendarScope } from '../src/security/calendar-scope.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
@@ -224,6 +225,7 @@ test('the live agenda stream', async t => {
 
     await t.test('committed agenda changes signal the business', async () => {
       const context = await requireBusinessMembership(owner.identity.id, business.id, ['OWNER']);
+      const scope = await requireCalendarScope(owner.identity.id, business.id, 'act');
       const staff = await prisma.staff.create({ data: { businessId: business.id, displayName: 'Live staff', parallelCapacity: 5 } });
       const service = await prisma.service.create({ data: { businessId: business.id, name: 'Live service', durationMinutes: 30 } });
       const session = await authenticate({ headers: { authorization: `Bearer ${owner.token}` } } as never);
@@ -237,8 +239,8 @@ test('the live agenda stream', async t => {
       // A change that rolled back is not a change.
       await expectNoAgendaSignal(business.id, () => changingAgenda(context, async () => { throw new Error('rolled back'); }));
       // Booking first: changing a block rechecks publication, and this fixture has no hours to stay published with.
-      const block = await expectAgendaSignal(business.id, () => createTimeBlock(context, { staffId: staff.id, kind: 'days', fromDate: day, toDate: day }, session));
-      await expectAgendaSignal(business.id, () => deleteTimeBlock(context, (block as { id: string }).id, session));
+      const block = await expectAgendaSignal(business.id, () => createTimeBlock(scope, { staffId: staff.id, kind: 'days', fromDate: day, toDate: day }, session));
+      await expectAgendaSignal(business.id, () => deleteTimeBlock(scope, (block as { id: string }).id, session));
       const added = await expectAgendaSignal(business.id, () => createBusinessStaff(context, { displayName: 'Added', serviceIds: [service.id] }));
       await expectAgendaSignal(business.id, () => updateBusinessStaff(context, added.id, { displayName: 'Renamed' }));
       const removable = await prisma.staff.create({ data: { businessId: business.id, displayName: 'Removable', parallelCapacity: 1 } });

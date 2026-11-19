@@ -7,9 +7,10 @@ import type { Prisma, MembershipRole, BusinessInvitation } from '../generated/pr
 import { lockIdentitySecurity, lockRecentAccountSession, requireRecentAccountAuth } from '../security/account-security.js';
 import { newOpaqueToken, tokenDigest, validateAuthenticatedSession, type AuthenticatedSession } from '../security/sessions.js';
 import { ensureRedisReady, redis } from '../infra/redis.js';
-import { BusinessPermission, rolesWith } from '../security/business-permissions.js';
+import { BusinessPermission, mayGrantRole, roleHas, rolesWith } from '../security/business-permissions.js';
 
-export const permittedInvite = (actor: MembershipRole, role: MembershipRole) => actor === 'OWNER' ? role === 'MANAGER' || role === 'STAFF' : actor === 'MANAGER' && role === 'STAFF';
+/** Who may invite or revoke whom follows the permission table (business-permissions.ts, mayGrantRole). */
+export const permittedInvite = (actor: MembershipRole, role: MembershipRole) => role !== 'OWNER' && mayGrantRole(actor, role);
 export const recipientDigest = (channel: string, recipient: string) => createHmac('sha256', env.SESSION_SECRET).update(`business-invite:${channel}:${recipient}`).digest('hex');
 export function normalizeRecipient(channel: 'email' | 'phone', value: string) {
   const normalized = value.trim();
@@ -67,7 +68,7 @@ export async function team(actor: AuthenticatedSession, businessId: string) {
     const rank = { OWNER: 3, MANAGER: 2, STAFF: 1 };
     for (const member of allMembers) if (!strongest.has(member.identityId) || rank[member.role] > rank[strongest.get(member.identityId)!.role]) strongest.set(member.identityId, member);
     const members = [...strongest.values()].map(({ identity, staff: _staff, ...member }) => ({ ...member, name: identity.displayName?.trim() || null, staff: linked.get(member.identityId) ?? null, label: identity.email && identity.emailVerifiedAt ? `${identity.email.slice(0, 1)}***@${identity.email.split('@')[1]}` : identity.phone && identity.phoneVerifiedAt ? `***${identity.phone.slice(-4)}` : '—' }));
-    return { role: current.role, members, invitations: await tx.businessInvitation.findMany({ where: { businessId }, select: { id: true, role: true, recipientHint: true, createdAt: true, expiresAt: true, acceptedAt: true, revokedAt: true, staff: { select: { id: true, displayName: true } } }, orderBy: { createdAt: 'desc' }, take: 100 }) };
+    return { role: current.role, canLinkCalendars: roleHas(current.role, BusinessPermission.LINK_CALENDARS), members, invitations: await tx.businessInvitation.findMany({ where: { businessId }, select: { id: true, role: true, recipientHint: true, createdAt: true, expiresAt: true, acceptedAt: true, revokedAt: true, staff: { select: { id: true, displayName: true } } }, orderBy: { createdAt: 'desc' }, take: 100 }) };
   });
 }
 export async function createInvitation(actor: AuthenticatedSession, businessId: string, input: { role: 'MANAGER' | 'STAFF'; channel: 'email' | 'phone'; recipient: string; staffId?: string | undefined }) {
@@ -78,6 +79,9 @@ export async function createInvitation(actor: AuthenticatedSession, businessId: 
     if (!permittedInvite(member.role, input.role)) throw forbidden();
     const now = new Date();
     if (input.staffId) {
+      // A calendar link hands that row's appointments and customers to whoever accepts, and the app cannot tell
+      // which row is the owner's own, so only the owner links calendars (decisions.md, "My day for a worker").
+      if (!roleHas(member.role, BusinessPermission.LINK_CALENDARS)) throw forbidden();
       // Another business's row reads as missing, exactly like a removed one.
       if (!await lockStaff(tx, businessId, input.staffId)) throw notFound();
       if (await linkedAccount(tx, businessId, input.staffId)) throw new AppError(409, STAFF_ALREADY_LINKED, 'This calendar already has app access. Remove it before inviting someone else.');
@@ -108,6 +112,8 @@ async function checkInvite(tx: Prisma.TransactionClient, invite: BusinessInvitat
   if (invite.acceptedAt || invite.revokedAt || invite.expiresAt <= new Date()) throw unavailable();
   const member = await tx.membership.findUnique({ where: { id: invite.inviterMembershipId } });
   if (!member || member.status !== 'ACTIVE' || member.role !== invite.inviterRole || !permittedInvite(member.role, invite.role)) throw unavailable();
+  // A calendar link made by someone who may no longer link calendars (a manager's, from before slice 3) fails closed.
+  if (invite.staffId && !roleHas(member.role, BusinessPermission.LINK_CALENDARS)) throw unavailable();
   const identity = await tx.identity.findUniqueOrThrow({ where: { id: actor.identity.id } });
   const contact = invite.recipientChannel === 'email' ? (identity.emailVerifiedAt ? identity.email?.toLowerCase() : null) : (identity.phoneVerifiedAt ? identity.phone : null);
   if (!contact || recipientDigest(invite.recipientChannel, contact) !== invite.recipientDigest) throw new AppError(403, 'INVITATION_RECIPIENT', 'Sign in with the verified contact this invitation was sent to.');

@@ -82,8 +82,8 @@ test('tenant repositories and both HTTP surfaces enforce scope, ownership and cu
       await prisma.business.update({ where: { id: a!.id }, data: { publishedAt: new Date() } }); // Explicit synthetic republish after catalog fixture edits.
       assert.equal((await listPublicServices(await requirePublicBusiness(a!.id)))[0]?.name, 'Private service');
       await assert.rejects(requirePublicBusiness(hidden!.id), denied(404));
-      const staffContext = await requireBusinessMembership(staffMember!.id, a!.id);
-      await assert.rejects(createBusinessService(staffContext, { name: 'Forbidden', durationMinutes: 15 }), denied(403));
+      // A Staff membership without a calendar counts for nothing (worker-access.md, slice 3), so it gets no context at all.
+      await assert.rejects(requireBusinessMembership(staffMember!.id, a!.id), denied(403));
     });
 
     await t.test('legacy and screen service routes reject foreign scope and preserve stored rows', async () => {

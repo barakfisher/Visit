@@ -40,7 +40,9 @@ export function StaffAccessSection({ businessId, row, copy }: { businessId: stri
         </View>
       </View> : <ActionLink testID={`staff-remove-access-${row.id}`} label={t('roster.access.remove')} accessibilityLabel={t('roster.access.removeLabel', { name: row.displayName })} disabled={state.busy} onPress={() => state.askRemove(true)} /> : null)
       : <View className="flex-row flex-wrap gap-2">
-        {access.kind === 'pending' && !manageable ? null : <ActionLink testID={`staff-invite-${row.id}`} label={t(access.kind === 'pending' ? 'roster.access.newLink' : 'roster.access.invite')} accessibilityLabel={t(access.kind === 'pending' ? 'roster.access.newLinkLabel' : 'roster.access.inviteLabel', { name: row.displayName })} disabled={state.busy} onPress={state.openInvite} />}
+        {/* A manager sees the badge and may cancel what they could revoke, but links no calendar. */}
+        {!team.data.canLinkCalendars ? <AppText testID={`staff-owner-links-${row.id}`} className="text-sm text-muted">{t('roster.ownerLinksCalendars')}</AppText>
+          : access.kind === 'pending' && !manageable ? null : <ActionLink testID={`staff-invite-${row.id}`} label={t(access.kind === 'pending' ? 'roster.access.newLink' : 'roster.access.invite')} accessibilityLabel={t(access.kind === 'pending' ? 'roster.access.newLinkLabel' : 'roster.access.inviteLabel', { name: row.displayName })} disabled={state.busy} onPress={state.openInvite} />}
         {access.kind === 'pending' && manageable ? <ActionLink testID={`staff-revoke-invite-${row.id}`} label={t('roster.access.revoke')} disabled={state.busy} onPress={() => state.revokeInvitation(access.invitationId)} /> : null}
       </View>}
     {state.message ? <AppText role={state.failed ? 'alert' : 'status'} className={state.failed ? 'text-danger' : 'text-ink'}>{t(state.message)}</AppText> : null}

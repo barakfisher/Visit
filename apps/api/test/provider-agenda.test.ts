@@ -1,3 +1,4 @@
+import { requireCalendarScope } from '../src/security/calendar-scope.js';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test, { after } from 'node:test';
@@ -32,6 +33,7 @@ test('provider agenda and schedule edits preserve private bookings and occupied 
   const membership = await prisma.membership.create({ data: { businessId: business.id, identityId: owner.id, role: 'OWNER', status: 'ACTIVE' } });
   const session = await prisma.session.create({ data: { identityId: owner.id, tokenHash: tokenDigest(token), expiresAt: new Date(Date.now() + 600000) } });
   const context = await requireBusinessMembership(owner.id, business.id);
+  const scope = await requireCalendarScope(owner.id, business.id, 'see');
   const app = Fastify();
   app.setErrorHandler((error, _request, reply) => reply.code(error instanceof AppError ? error.statusCode : error instanceof ZodError ? 400 : 500).send({ error: { code: error instanceof AppError ? error.code : 'INVALID' } }));
   await registerProviderRoutes(app); await registerScreenFlows(app); await registerBookingRoutes(app);
@@ -48,12 +50,12 @@ test('provider agenda and schedule edits preserve private bookings and occupied 
       await create('z', '2027-03-15T03:10:00Z', '2027-03-15T03:40:00Z');
       await create('a', '2027-03-15T03:10:00Z', '2027-03-15T03:40:00Z');
       await create('outside', '2027-03-15T04:10:00Z', '2027-03-15T04:40:00Z');
-      const day = await readProviderAgenda(context, '2027-03-14', 1);
+      const day = await readProviderAgenda(scope, '2027-03-14', 1);
       assert.deepEqual(day.bookings.map(row => row.id), [`${key}-prior`, `${key}-a`, `${key}-z`]);
       assert.equal(day.business.timezone, 'America/New_York');
       assert.equal(day.fromDate, '2027-03-14'); assert.equal(day.toDate, '2027-03-14');
       assert.deepEqual(Object.keys(day.bookings[0]!).sort(), ['id', 'revision', 'status', 'canMarkNoShow', 'startsAt', 'endsAt', 'customer', 'service', 'staff', 'source', 'manualReason'].sort());
-      const week = await readProviderAgenda(context, '2027-03-17', 7);
+      const week = await readProviderAgenda(scope, '2027-03-17', 7);
       assert.equal(week.fromDate, '2027-03-14'); assert.equal(week.toDate, '2027-03-20'); assert.equal(week.bookings.length, 4);
       // The calendar's grid reads each day's opening hours from the same response, in local time (DST day included).
       assert.deepEqual(week.hours.map(day => day.date), ['2027-03-14', '2027-03-15', '2027-03-16', '2027-03-17', '2027-03-18', '2027-03-19', '2027-03-20']);
@@ -68,16 +70,16 @@ test('provider agenda and schedule edits preserve private bookings and occupied 
       await prisma.booking.update({ where: { id: held.id }, data: { holdExpiresAt: new Date('2027-04-08T00:00:00Z') } });
       const block = await prisma.timeBlock.create({ data: { businessId: business.id, startsAt: new Date('2027-04-07T19:00:00Z'), endsAt: new Date('2027-04-07T20:00:00Z'), reason: 'Lunch' } });
       try {
-        const day = await readProviderAgenda(context, '2027-04-07', 1, new Date('2027-04-07T10:00:00Z'));
+        const day = await readProviderAgenda(scope, '2027-04-07', 1, new Date('2027-04-07T10:00:00Z'));
         assert.equal(day.day?.closed, false);
         assert.deepEqual(day.day?.free.map(gap => [gap.staffId, gap.startLocal, gap.endLocal, gap.bookLocal]), [
           [staff.id, '08:00', '12:50', '08:00'], [staff.id, '13:40', '15:00', '13:40'], [staff.id, '16:00', '16:50', '16:00'],
           // 17:40–18:00 is shorter than the 30-minute service, so it is not offered.
         ]);
         // Later in the day, time already past is not free (16:05 local).
-        const later = await readProviderAgenda(context, '2027-04-07', 1, new Date('2027-04-07T20:05:00Z'));
+        const later = await readProviderAgenda(scope, '2027-04-07', 1, new Date('2027-04-07T20:05:00Z'));
         assert.deepEqual(later.day?.free.map(gap => gap.startLocal), ['16:05']);
-        assert.equal((await readProviderAgenda(context, '2027-04-07', 7)).day, null);
+        assert.equal((await readProviderAgenda(scope, '2027-04-07', 7)).day, null);
       } finally {
         await prisma.timeBlock.delete({ where: { id: block.id } });
         await prisma.booking.deleteMany({ where: { businessId: business.id } });
@@ -177,13 +179,13 @@ test('provider agenda and schedule edits preserve private bookings and occupied 
     await t.test('unowned business and missing staff stay inaccessible; held rows do not enter agenda', async () => {
       await assert.rejects(requireBusinessMembership(owner.id, 'foreign-business'), code('FORBIDDEN'));
       await assert.rejects(previewSchedule(context, hours(), 'foreign-staff'), code('NOT_FOUND'));
-      const agenda = await readProviderAgenda(context, '2027-03-15', 1);
+      const agenda = await readProviderAgenda(scope, '2027-03-15', 1);
       assert.deepEqual(agenda.bookings.map(row => row.id), [booked.id]);
-      const empty = await readProviderAgenda(context, '2027-03-22', 1);
+      const empty = await readProviderAgenda(scope, '2027-03-22', 1);
       assert.deepEqual(empty.bookings, []); assert.deepEqual(empty.blocks, []);
       assert.deepEqual(empty.summary, { appointments: 0, revenue: {} });
       // The calendar's three days start on the chosen date (a Wednesday here), not on its week's Sunday.
-      const three = await readProviderAgenda(context, '2027-03-17', 3);
+      const three = await readProviderAgenda(scope, '2027-03-17', 3);
       assert.deepEqual([three.fromDate, three.toDate, three.hours.map(day => day.date)], ['2027-03-17', '2027-03-19', ['2027-03-17', '2027-03-18', '2027-03-19']]);
       assert.equal((await app.inject({ url: `/api/provider/agenda?businessId=${business.id}&date=2027-03-17&days=3`, headers })).statusCode, 200);
       assert.equal((await app.inject({ url: `/api/provider/agenda?businessId=${business.id}&date=2027-03-15` })).statusCode, 401);
@@ -195,7 +197,7 @@ test('provider agenda and schedule edits preserve private bookings and occupied 
       await prisma.session.update({ where: { id: session.id }, data: { revokedAt: new Date() } });
       assert.equal((await app.inject({ method: 'PUT', url: `/v1/provider/businesses/${business.id}/availability-rules`, headers, payload: hours() })).statusCode, 401);
       await prisma.membership.delete({ where: { id: membership.id } });
-      await assert.rejects(readProviderAgenda(context, '2027-03-14', 1), code('FORBIDDEN'));
+      await assert.rejects(readProviderAgenda(scope, '2027-03-14', 1), code('FORBIDDEN'));
       await assert.rejects(previewSchedule(context, hours()), code('FORBIDDEN'));
     });
   } finally {

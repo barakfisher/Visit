@@ -11,6 +11,7 @@ import { calendarEn, calendarHe } from './calendarMessages';
 import { hoursEn, hoursHe } from './hoursMessages';
 import { blocksEn, blocksHe } from './blockMessages';
 import { staffEn, staffHe } from './staffMessages';
+import { workerEn, workerHe } from './workerMessages';
 import { notificationsEn, notificationsHe } from './notificationMessages';
 import { providerHomeEn, providerHomeHe } from './providerHomeMessages';
 import { pickerEn, pickerHe } from './pickerMessages';
@@ -28,6 +29,7 @@ export const en = {
   ...hoursEn,
   ...blocksEn,
   ...staffEn,
+  ...workerEn,
   ...notificationsEn,
   ...providerHomeEn,
   ...pickerEn,
@@ -331,6 +333,7 @@ export const he: Record<MessageKey, string> = {
   ...hoursHe,
   ...blocksHe,
   ...staffHe,
+  ...workerHe,
   ...notificationsHe,
   ...providerHomeHe,
   ...pickerHe,
