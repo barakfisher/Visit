@@ -1,4 +1,4 @@
-# Worker access (design; slices 1–3 built)
+# Worker access (design; slices 1–4 built)
 
 Agreed with the user on 2026-11-18. Today a STAFF invitation grants a membership that opens nothing, and it is not tied to any calendar (business-access.md). This design gives an invited worker their own calendar in the app.
 
@@ -69,7 +69,7 @@ Measured 2026-11-18: `Membership` has no staff link and `Staff` no account link;
 1. **One permission check, no behaviour change.** A single function answers "can this member do X in this business" for the actions own calendar, other calendars (see / act), business setup, manage team, change switches. For now it derives answers from today's roles. Every Owner/Manager check moves to it. *Done when:* the existing API suite passes unchanged and a matrix test covers each action × Owner/Manager/Staff/outsider/other business. `bf-security-reviewer`.
 2. **Invite tied to a staff row.** *Built in PR #72; removing a row with active app access is refused until access is removed (decisions.md, "Invitations tied to a staff row").* `Membership` gains an optional staff link (one account per staff row per business); the invitation carries the staff row; accepting links it. Roster cards show the access badge and *Invite to app*; *Remove app access* keeps the row and bookings. *Done when:* the invite, accept, remove and fail-closed states above work in the browser, in Hebrew RTL. `bf-security-reviewer`.
 3. **My day for a worker.** *Built in PR #73 (decisions.md, "My day for a worker"); only the owner links calendars, and a worker reads only what booking on their own row needs.* Provider mode for a linked worker opens their own agenda; add, move, cancel, block and outcomes on their own staff row; customer search across the business. The server scopes every worker action to their linked staff row. *Done when:* a worker cannot read or change another row by URL or API, and the states above are covered. `bf-security-reviewer`, `bf-qa`.
-4. **Worker notifications.** Booking, move and cancellation on a worker's row also notify that worker; owners and managers unchanged. *Done when:* one notification per recipient, none for a removed worker.
+4. **Worker notifications.** *Built in PR #74 (decisions.md, "Worker notifications"); a move between rows tells both workers, and outcomes are not sent to workers.* Booking, move and cancellation on a worker's row also notify that worker; owners and managers unchanged. *Done when:* one notification per recipient, none for a removed worker.
 5. **Switches.** One membership per person per business; four stored switches; migration from roles to presets; the permission check reads switches; the owner edits them on the member's card; the label derives from them. *Done when:* the migration changes no one's access (tested), only the owner can change switches, nobody their own. `bf-security-reviewer`.
 
 Slices 1–4 deliver the worker; 5 delivers editable privileges. Each slice is mergeable on its own.
@@ -86,6 +86,6 @@ Each item is answered in decisions.md, "My day for a worker":
 - **Owner's own calendar:** never linked, no My day; the owner filters the whole-business agenda to their row.
 - **Write paths in the matrix test:** one refused write per permission.
 
-### Open before slice 4
+### Open before slice 4 (resolved in PR #74)
 
-- **Moving an appointment has no provider UI**, for an owner either; a worker can move one only through the API. Notifications for moves (slice 4) should not assume a screen exists.
+- **Moving an appointment has no provider UI**, for an owner either. Slice 4 assumes no screen: a move notification opens the business home like any other business notification.
