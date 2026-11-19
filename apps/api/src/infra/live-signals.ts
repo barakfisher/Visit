@@ -87,10 +87,14 @@ export const signalAgendaChanged = (businessId: string) => publishLiveSignal(age
 
 export const signalPersonChanged = (identityId: string) => publishLiveSignal(personTopic(identityId));
 
-/** Who is told is decided by the booking event's trigger; this only wakes the screens that might show it. A manager who was not notified just re-reads. */
+/**
+ * Who is told is decided by the booking event's trigger; this only wakes the screens that might show it. A manager who
+ * was not notified just re-reads. Every linked worker is woken too, not only the row's: a wake carries no data, and
+ * their re-read shows only their own row (decisions.md, "Worker notifications").
+ */
 async function signalBusinessManagers(businessId: string) {
   try {
-    const managers = await prisma.membership.findMany({ where: { businessId, status: 'ACTIVE', role: { in: [...MANAGING_ROLES] } }, distinct: ['identityId'], select: { identityId: true } });
+    const managers = await prisma.membership.findMany({ where: { businessId, status: 'ACTIVE', OR: [{ role: { in: [...MANAGING_ROLES] } }, { staffId: { not: null }, staff: { is: { archivedAt: null } } }] }, distinct: ['identityId'], select: { identityId: true } });
     for (const { identityId } of managers) signalPersonChanged(identityId);
   } catch { console.warn('The business managers could not be signalled.'); }
 }
