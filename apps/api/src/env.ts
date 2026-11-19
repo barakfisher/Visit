@@ -2,7 +2,22 @@ import dotenv from "dotenv";
 import { isIP } from "node:net";
 import { z } from "zod";
 
-dotenv.config({ path: "../../.env" });
+// Settings that make the API send real email or SMS. Under Node's test runner they are never taken
+// from .env: a developer's real provider key there would otherwise let any test that forgets to
+// inject a local inbox mail or text real people. A test that needs a provider sets it explicitly.
+const OUTBOUND_MESSAGE_KEYS = new Set([
+  "EMAIL_DELIVERY_MODE", "EMAIL_API_KEY",
+  "SMS_DELIVERY_MODE", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_MESSAGING_SERVICE_SID", "TWILIO_VERIFY_SERVICE_SID",
+]);
+// NODE_TEST_CONTEXT marks each file the runner isolates in its own process; --test covers --test-isolation=none.
+const underTestRunner = process.env.NODE_TEST_CONTEXT !== undefined || process.execArgv.includes("--test");
+const fromFile: Record<string, string> = {};
+dotenv.config({ path: "../../.env", processEnv: fromFile });
+for (const [key, value] of Object.entries(fromFile)) {
+  // As before, a value already in the environment wins over the file.
+  if (Object.hasOwn(process.env, key) || (underTestRunner && OUTBOUND_MESSAGE_KEYS.has(key))) continue;
+  process.env[key] = value;
+}
 
 const settings = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
