@@ -8,7 +8,7 @@ import { redis, ensureRedisReady } from '../src/infra/redis.js';
 import { env } from '../src/env.js';
 import { AppError } from '../src/http/errors.js';
 import { createAccountMethodsService } from '../src/security/account-methods.js';
-import { createLocalAccountDelivery, createAccountDelivery } from '../src/security/account-delivery.js';
+import { createLocalAccountDelivery, createAccountDelivery, signUpEmail } from '../src/security/account-delivery.js';
 import { hashPassword } from '../src/security/password-login.js';
 import { createEmailLoginService, createLocalEmailDelivery } from '../src/security/email-login.js';
 import { createOtpService } from '../src/security/phone-otp.js';
@@ -215,6 +215,19 @@ test('account methods bind ownership, recent authentication, proof, contact name
       assert.ok((await account.remove({ method: 'email' }, a.context)).sessionToken);
       assert.equal(await prisma.passwordCredential.count({ where: { identityId: a.identity.id } }), 0);
     });
+    await t.test('proving an address with the code makes an earlier unproven password the owner\'s, so a later email link keeps it', async () => {
+      const a = await actor({ email: true });
+      await prisma.passwordCredential.create({ data: { identityId: a.identity.id, hash: await hashPassword('owner password value'), unprovenEmail: a.identity.email } });
+      const proof = await emailProof(a);
+      const result = await account.verify({ challenge: proof.start.challenge, code: proof.code }, a.context, randomUUID());
+      assert.equal((await prisma.passwordCredential.findUniqueOrThrow({ where: { identityId: a.identity.id } })).unprovenEmail, null);
+      const links = createEmailLoginService({ delivery: createLocalEmailDelivery(), namespace: `${namespace}:links` });
+      await links.send(proof.email, randomUUID());
+      const signedIn = await links.verify((await links.localMessage(proof.email)).token, randomUUID());
+      assert.equal(signedIn.identity.id, a.identity.id);
+      assert.equal(await prisma.passwordCredential.count({ where: { identityId: a.identity.id } }), 1);
+      await nextContext(result.sessionToken!);
+    });
     await t.test('removed email is released only for a newly proven identity, stale links cannot recover the original account and last-method recovery has no bypass', async () => {
       const a = await actor({ email: true, google: true });
       const emailDelivery = createLocalEmailDelivery();
@@ -276,6 +289,10 @@ test('account email and alert providers pin endpoints, bound calls and never dis
   assert.equal(await delivery.alert({ channel: 'email', destination: 'old@example.test', id: 'event-email', locale: 'en' }), 'resend');
   assert.equal(await delivery.alert({ channel: 'phone', destination: '+15551234567', id: 'event-phone', locale: 'he' }), 'twilio');
   assert.equal(calls[0]!.url, 'https://api.resend.com/emails'); assert.match(calls[0]!.body, /123456/); assert.equal(calls[1]!.body.includes('123456'), false); assert.ok(calls[2]!.url.endsWith('/Messages.json'));
+  await delivery.signUp({ destination: 'new@example.test', code: '654321', id: 'sign-up', locale: 'he' });
+  await delivery.signUp({ destination: 'known@example.test', code: null, id: 'sign-up-known', locale: 'en' });
+  assert.match(calls[3]!.body, /654321/); assert.match(calls[3]!.body, /Visit/); assert.equal(JSON.parse(calls[3]!.body).subject, signUpEmail({ code: '654321', locale: 'he' }).subject);
+  assert.equal(JSON.parse(calls[4]!.body).subject, signUpEmail({ code: null, locale: 'en' }).subject); assert.equal(/[0-9]{6}/.test(calls[4]!.body), false);
   const failed = createAccountDelivery({ emailMode: 'resend', apiKey: 'private-key', transport: async () => { throw new Error('private provider response'); } });
   await assert.rejects(failed.emailVerification({ destination: 'new@example.test', code: '123456', id: 'failed', locale: 'en' }), error => denied(503)(error) && !(error as Error).message.includes('private'));
 });

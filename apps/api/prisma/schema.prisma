@@ -413,6 +413,26 @@ model AccountContactChallenge {
   @@index([expiresAt])
 }
 
+// A password sign-up waiting for its six-digit email code (login-plan-stage-2.md, slice 1). No
+// Identity exists until the code is right. A row for an address that already has an account has no
+// password or code: that address was sent "you already have an account" instead, and no code matches.
+model PendingSignUp {
+  id String @id @default(cuid())
+  handleHash String @unique
+  email String
+  displayName String
+  passwordHash String?
+  codeHash String?
+  locale String
+  attempts Int @default(0)
+  expiresAt DateTime @db.Timestamptz
+  deliveredAt DateTime? @db.Timestamptz
+  consumedAt DateTime? @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  @@index([email, consumedAt])
+  @@index([expiresAt])
+}
+
 // MVP email+password sign-in (decisions.md, 2026-11-01). Kept apart from Identity so ordinary
 // identity reads never carry the password hash.
 model PasswordCredential {

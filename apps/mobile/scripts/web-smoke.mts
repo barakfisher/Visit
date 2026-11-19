@@ -137,7 +137,7 @@ try {
     const { googleSmoke } = await import('./google-smoke.js');
     await googleSmoke({ browser, webUrl, apiUrl, claims: googleClaims, run, prisma, identityIds, sharedBusinessId: businessIds[0]! });
     const { passwordSignInSmoke } = await import('./password-sign-in-smoke.js');
-    await passwordSignInSmoke({ browser, webUrl, prisma, run, identityIds });
+    await passwordSignInSmoke({ browser, webUrl, apiUrl, prisma, run, identityIds });
     const { homeNavigationSmoke } = await import('./home-navigation-smoke.js');
     await homeNavigationSmoke({ browser, webUrl, apiUrl, prisma, run, identityIds, businessIds });
     const { pilotLifecycleSmoke } = await import('./pilot-lifecycle-smoke.js');

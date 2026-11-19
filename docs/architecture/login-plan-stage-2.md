@@ -51,6 +51,8 @@ Local data: 14 password accounts, all with `unprovenEmail = email`.
 
 ## Slice 1: sign-up proves the email first
 
+*Built (decisions.md, "Verified sign-up"). The code step is on the same screen, wrong codes also count per address over a day, and the `requireVerifiedEmail` rule below was dropped: `env.ts` never lets email delivery be off.*
+
 - `POST /v1/auth/password/sign-up` validates name, email and password, then stores a pending
   sign-up (name, email, scrypt hash, HMAC of a six-digit code, 10-minute expiry, 5 attempts,
   delivery state) and sends the code. It always answers `202` with a pending id and a cooldown.
@@ -66,8 +68,9 @@ Local data: 14 password accounts, all with `unprovenEmail = email`.
   Pending rows are removed a day after expiry. A new code for the same address supersedes the old.
 - Email delivery unavailable: sign-up answers `503 METHOD_NOT_CONFIGURED`. Locally, `local-inbox`
   plus a loopback-only development helper shows the code (like `/__dev/account/contact-code`).
-- `requireVerifiedEmail` follows the verified-phone rule: `409 VERIFIED_EMAIL_UNAVAILABLE` from the
-  policy save while email delivery is unavailable, and the editor switch reads capabilities.
+- ~~`requireVerifiedEmail` follows the verified-phone rule: `409 VERIFIED_EMAIL_UNAVAILABLE` from the
+  policy save while email delivery is unavailable, and the editor switch reads capabilities.~~ Dropped
+  when built: email delivery cannot be off (`env.ts`), so the rule could never run.
 - Code verification of the account's own address clears `unprovenEmail` (bug 1).
 - UI: the sign-up form leads to a code screen ("we sent a code to …", resend with cooldown, change
   the address). Emails in the user's locale, Hebrew and English.

@@ -12,15 +12,30 @@ import { passwordLoginService, type createPasswordLoginService } from '../securi
 export async function registerAuthRoutes(app: FastifyInstance, { emailLogin = emailLoginService, passwordLogin = passwordLoginService }: { emailLogin?: ReturnType<typeof createEmailLoginService>; passwordLogin?: ReturnType<typeof createPasswordLoginService> } = {}) {
   // Field rules are enforced by the service; the route only bounds the shape before hashing.
   const passwordFields = { email: z.string().max(320), password: z.string().max(1024) };
+  // Sign-up proves the email before the account exists (login-plan-stage-2.md, slice 1): step 1 always
+  // answers 202, whether or not the address is registered; step 2 creates the account and its session.
   app.post('/v1/auth/password/sign-up', async (request, reply) => {
-    const parsed = z.strictObject({ ...passwordFields, displayName: z.string().max(512) }).safeParse(request.body);
+    const parsed = z.strictObject({ ...passwordFields, displayName: z.string().max(512), locale: z.string().max(8).optional() }).safeParse(request.body);
     if (!parsed.success) throw new AppError(400, 'VALIDATION_ERROR', 'Enter your name, email and password.');
-    const result = await passwordLogin.signUp(parsed.data, request.ip).catch((error: unknown) => {
+    const result = await passwordLogin.startSignUp(parsed.data, request.ip).catch((error: unknown) => {
       if (error instanceof z.ZodError) throw new AppError(400, 'VALIDATION_ERROR', 'Enter your name, a valid email and a password of at least 8 characters.');
       throw error;
     });
+    reply.code(202);
+    return result;
+  });
+  app.post('/v1/auth/password/sign-up/verify', async (request, reply) => {
+    const parsed = z.strictObject({ signUp: z.string().max(128), code: z.string().max(16) }).safeParse(request.body);
+    if (!parsed.success) throw new AppError(400, 'VALIDATION_ERROR', 'Enter the six-digit code.');
+    const result = await passwordLogin.verifySignUp(parsed.data, request.ip);
     reply.code(201);
     return { ...issueSessionToken(reply, request, result.token), identity: result.identity };
+  });
+  app.post('/__dev/sign-up-code', async request => {
+    if (env.NODE_ENV !== 'development' || env.EMAIL_DELIVERY_MODE !== 'local-inbox' || !['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(request.ip)) throw new AppError(404, 'NOT_FOUND', 'Not found.');
+    const parsed = z.strictObject({ signUp: z.string().max(128) }).safeParse(request.body);
+    if (!parsed.success) throw new AppError(404, 'NOT_FOUND', 'Not found.');
+    return passwordLogin.localSignUpCode(parsed.data.signUp);
   });
   app.post('/v1/auth/password/sign-in', async (request, reply) => {
     const parsed = z.strictObject(passwordFields).safeParse(request.body);
