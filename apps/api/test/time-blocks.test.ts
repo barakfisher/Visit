@@ -9,6 +9,7 @@ import { redis } from '../src/infra/redis.js';
 import { AppError } from '../src/http/errors.js';
 import { authenticate, tokenDigest } from '../src/security/sessions.js';
 import { BLOCK_CONFLICT, MAX_BLOCK_DAYS, MAX_REPORTED_CONFLICTS, createTimeBlock } from '../src/repositories/TimeBlocks.service.js';
+import { memberPreset } from '../src/security/business-permissions.js';
 
 after(async () => { redis.disconnect(); await prisma.$disconnect(); });
 
@@ -30,8 +31,8 @@ test('time blocks cover hours, whole days, date ranges and the whole business', 
   }
   await prisma.membership.createMany({ data: [
     { businessId: business.id, identityId: owner.id, role: 'OWNER', status: 'ACTIVE' },
-    { businessId: business.id, identityId: manager.id, role: 'MANAGER', status: 'ACTIVE' },
-    { businessId: business.id, identityId: staffMember.id, role: 'STAFF', status: 'ACTIVE' },
+    { businessId: business.id, identityId: manager.id, ...memberPreset('MANAGER'), status: 'ACTIVE' },
+    { businessId: business.id, identityId: staffMember.id, ...memberPreset('STAFF'), status: 'ACTIVE' },
   ] });
   const service = await prisma.service.create({ data: { businessId: business.id, name: 'Visit', durationMinutes: 30 } });
   const [first, second, inactive] = await Promise.all(['First', 'Second', 'Inactive'].map(displayName => prisma.staff.create({ data: { businessId: business.id, displayName, active: displayName !== 'Inactive' } })));

@@ -15,6 +15,7 @@ import { FormDialog } from './FormDialog';
 import { ManualBookingDialog } from './ManualBooking.component';
 import { MonthStep } from './MonthStep.component';
 import { TimeBlockDialog } from './TimeBlockForm.component';
+import { actsOn } from '@/src/lib/ActingScope';
 import { TimeBlockRow } from './TimeBlocks';
 
 const stepLabels: Record<CalendarMode, readonly ['calendar.previousWeek' | 'calendar.previousThreeDays' | 'calendar.previousDay', 'calendar.nextWeek' | 'calendar.nextThreeDays' | 'calendar.nextDay']> = {
@@ -107,15 +108,15 @@ export function BusinessCalendar(view: BusinessCalendarView) {
     </View>
     <SlotChoice {...view} />
     <ManualBookingDialog {...view.manual} />
-    <TimeBlockDialog staff={view.staff} {...view.blockDialog} />
+    <TimeBlockDialog staff={view.staff} wholeBusiness={view.setup} {...view.blockDialog} />
     {/* Until the appointment screen exists, a tapped appointment opens the home's card, unfolded, in a sheet. */}
     <FormDialog testID="calendar-appointment" title={t('calendar.appointmentTitle')} open={booking !== null} onClose={view.closeEntry}>
       {booking ? <AgendaAppointmentCard key={booking.id} initiallyOpen booking={booking} span={view.span(booking.startsAt, booking.endsAt)} t={t} contact={view.contact}
-        lifecycle={<AppointmentAudit key={`${view.businessId}:${booking.id}`} booking={booking} timezone={view.timezone} businessId={view.businessId} quiet />} /> : null}
+        lifecycle={<AppointmentAudit key={`${view.businessId}:${booking.id}`} booking={booking} timezone={view.timezone} businessId={view.businessId} quiet readOnly={!actsOn(view.act, booking.staff.id)} />} /> : null}
     </FormDialog>
     {/* A block's details and its release, as on the home. */}
     <FormDialog testID="calendar-block" title={t('dashboard.blockTitle')} open={block !== null} onClose={view.closeEntry}>
-      {block ? <TimeBlockRow block={block} t={t} locale={view.locale} releasable={!view.worker || block.staff !== null} {...view.blockRemoval} /> : null}
+      {block ? <TimeBlockRow block={block} t={t} locale={view.locale} releasable={block.staff ? actsOn(view.act, block.staff.id) : view.setup} {...view.blockRemoval} /> : null}
     </FormDialog>
   </View></GestureHandlerRootView>;
 }

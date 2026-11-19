@@ -13,6 +13,7 @@ import { registerBookingRoutes } from '../src/routes/bookings.js';
 import { saveBusinessAvailability } from '../src/repositories/provider-settings.js';
 import { requireBusinessMembership } from '../src/security/tenant-context.js';
 import { releaseHold } from '../src/scheduling/reservations.js';
+import { memberPreset } from '../src/security/business-permissions.js';
 after(async () => { redis.disconnect(); await prisma.$disconnect(); });
 test('manual bookings need no contact exception and keep authoritative scheduling without creating identities', async t => {
  const key = randomUUID(), token = randomUUID();
@@ -36,7 +37,7 @@ test('manual bookings need no contact exception and keep authoritative schedulin
   await t.test('requires session, correct tenant/role and strict contact input', async () => {
    assert.equal((await app.inject({ method: 'POST', url, payload: payload() })).statusCode, 401);
    assert.equal((await app.inject({ method: 'POST', url: '/v1/provider/businesses/foreign/manual-bookings', headers, payload: payload() })).statusCode, 403);
-   await prisma.membership.update({ where: { id: membership.id }, data: { role: 'STAFF' } }); assert.equal((await post(payload())).statusCode, 403);
+   await prisma.membership.update({ where: { id: membership.id }, data: { ...memberPreset('STAFF') } }); assert.equal((await post(payload())).statusCode, 403);
    await prisma.membership.update({ where: { id: membership.id }, data: { role: 'OWNER' } });
    for (const patch of [{ customerId: owner.id }, { source: 'CUSTOMER' }, { customerPhoneVerifiedAt: new Date().toISOString() }, { finalConsent: false }, { customerPhone: '2025550123' }, { customerName: ' ' }, { customerEmail: 'broken' }, { exceptionReason: 'Requested by telephone' }]) assert.equal((await post({ ...payload(), ...patch })).statusCode, 400, JSON.stringify(patch));
    await prisma.session.update({ where: { id: session.id }, data: { revokedAt: new Date() } }); assert.equal((await post(payload())).statusCode, 401);

@@ -34,9 +34,10 @@ function saveFailure(error: unknown): MessageKey {
 /**
  * The "Block time" dialog, shared by the hours screen and the agenda. A refused block lists what it
  * would have covered and keeps the form, so the owner can change it or go and move those appointments.
- * `calendarId` pins every block to a worker's own calendar.
+ * `calendarId` pins every block to a worker's own calendar; `startStaffId` is the row a new block starts on, for a
+ * member who may not close the whole business.
  */
-export function useTimeBlockDialog(businessId: string, timezone: string | undefined, onSaved?: () => void, calendarId?: string) {
+export function useTimeBlockDialog(businessId: string, timezone: string | undefined, onSaved?: () => void, calendarId?: string, startStaffId?: string) {
   const { t, locale, direction } = useAppLocale(), client = useQueryClient(), scope = useCurrentScope(businessId);
   const operation = useRef(false);
   const [open, setOpen] = useState(false);
@@ -49,7 +50,7 @@ export function useTimeBlockDialog(businessId: string, timezone: string | undefi
   /** A calendar slot passes its time too, and the block starts there. */
   function openDialog(date?: string, startLocal?: string) {
     if (operation.current || !timezone) return;
-    setForm(emptyBlockForm(date ?? localDate(timezone), startLocal)); setErrors({}); setConflicts(null); setFailure(''); setOpen(true);
+    setForm({ ...emptyBlockForm(date ?? localDate(timezone), startLocal), ...(startStaffId ? { staffId: startStaffId } : {}) }); setErrors({}); setConflicts(null); setFailure(''); setOpen(true);
   }
   /** A pending save keeps the dialog open, so its result lands where the owner is looking. */
   function close() { if (!operation.current) setOpen(false); }

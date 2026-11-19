@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate } from '../security/sessions.js';
-import { team, createInvitation, revokeInvitation, inspectInvitation, revokeMember, ownershipCases, createOwnershipCase, decideOwnership } from '../repositories/business-access.js';
+import { team, createInvitation, revokeInvitation, inspectInvitation, revokeMember, changeSwitches, ownershipCases, createOwnershipCase, decideOwnership } from '../repositories/business-access.js';
 const businessParams = z.object({ businessId: z.string().min(1), id: z.string().min(1).optional() });
 const tokenBody = z.strictObject({ token: z.string().regex(/^[A-Za-z0-9_-]{43}$/) });
 export async function registerBusinessAccess(app: FastifyInstance) {
@@ -12,6 +12,12 @@ export async function registerBusinessAccess(app: FastifyInstance) {
   });
   app.delete('/v1/provider/businesses/:businessId/invitations/:id', async request => { const p = businessParams.parse(request.params); return revokeInvitation(await authenticate(request), p.businessId, p.id!); });
   app.delete('/v1/provider/businesses/:businessId/members/:id', async request => { const p = businessParams.parse(request.params); return revokeMember(await authenticate(request), p.businessId, p.id!); });
+  // The four switches, all sent together (decisions.md, "Switches").
+  app.put('/v1/provider/businesses/:businessId/members/:id/switches', async request => {
+    const p = businessParams.parse(request.params);
+    const input = z.strictObject({ seeAllCalendars: z.boolean(), actOnAllCalendars: z.boolean(), businessSetup: z.boolean(), manageTeam: z.boolean() }).parse(request.body);
+    return changeSwitches(await authenticate(request), p.businessId, p.id!, input);
+  });
   for (const action of ['preview', 'accept'] as const) app.post(`/v1/business-invitations/${action}`, async request => inspectInvitation(await authenticate(request), tokenBody.parse(request.body).token, action === 'accept'));
   app.get('/v1/admin/ownership-cases', async request => ownershipCases(await authenticate(request)));
   app.post('/v1/admin/ownership-cases', async request => createOwnershipCase(await authenticate(request), z.strictObject({ businessId: z.string().min(1), claimantIdentityId: z.string().min(1), caseReference: z.string().trim().min(5).max(120), evidenceKind: z.enum(['CURRENT_OWNER_CONSENT', 'REGISTRATION_RECORDS', 'PLATFORM_RECORDS']), evidenceSummary: z.string().trim().min(20).max(2000) }).parse(request.body)));

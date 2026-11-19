@@ -6,12 +6,15 @@ import type { DayHours } from '../lib/CalendarGrid';
 import type { AgendaItem, FreeGap } from '../lib/AgendaToday.utils';
 import type { BlockRemovalState, TimeBlockDialogState } from '../lib/TimeBlocks.hook';
 import type { ManualBookingView } from './ManualBooking.types';
+import type { ActingScope } from '../lib/ActingScope';
 export type ProviderAgenda = {
   business: { id: string; name: string; timezone: string }; fromDate: string; toDate: string;
   /** A worker's own calendar; null when the agenda is the whole business. */
   calendar?: { id: string; displayName: string; active: boolean } | null;
+  /** Where this member may act; absent from an older server, which reads as nowhere. */
+  act?: ActingScope;
   summary: { appointments: number; revenue: Record<string, number> }; staff: { id: string; displayName: string; parallelCapacity: number }[];
-  bookings: { source?: string; manualReason?: string | null; id: string; status: AppointmentStatus; canMarkNoShow?: boolean; revision: number; startsAt: string; endsAt: string; customer: { displayName: string | null; phone: string | null; email: string | null }; service: { name: string }; staff: { displayName: string } }[];
+  bookings: { source?: string; manualReason?: string | null; id: string; status: AppointmentStatus; canMarkNoShow?: boolean; revision: number; startsAt: string; endsAt: string; customer: { displayName: string | null; phone: string | null; email: string | null }; service: { name: string }; staff: { id?: string; displayName: string } }[];
   blocks: TimeBlock[];
   /** When someone works on each day of the range, in local time; no windows means closed. */
   hours: DayHours[];
@@ -23,6 +26,8 @@ export type AgendaDraft = { savedDate: string };
 export type AgendaAppointment = ProviderAgenda['bookings'][number];
 export type ProviderAgendaView = {
   business: { id: string; name: string; timezone: string }; profile: AuthProfile | null;
+  /** Where this member may act, whether they do business setup, and the rows a block may name (decisions.md, "Switches"). */
+  act: ActingScope; setup: boolean; blockStaff: readonly { id: string; displayName: string }[];
   t: (key: MessageKey, values?: Record<string, string | number>) => string;
   /** Today in the business's timezone; the home has no other day. */
   day: string; agenda: { data: ProviderAgenda | undefined; isError: boolean; isLoading: boolean };

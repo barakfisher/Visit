@@ -15,14 +15,14 @@ import { apiRequest } from '@/src/lib/api';
 import { useSessionStore } from '@/src/state/session';
 import { SessionLoading } from '@/components/SessionLoading';
 import { accountBusiness, menuCapabilities } from '@/src/lib/navigation';
-import { workerCalendar } from '@/src/lib/providerWorkspace';
+import { mayUse } from '@/src/lib/providerWorkspace';
 
 
 export default function AccountScreen() {
   const { t, direction } = useAppLocale();
   const business = accountBusiness('/account', useLocalSearchParams<{ businessId?: string }>().businessId, useSessionStore(state => state.profile?.businesses));
-  // A worker has no business settings to open (worker-access.md, Worker flow).
-  const settingsOpen = useSessionStore(state => { const entry = state.profile?.businesses.find(item => item.id === business); return !!entry && !workerCalendar(entry); });
+  // Business settings open with the "business setup" switch only (decisions.md, "Switches").
+  const settingsOpen = useSessionStore(state => mayUse(state.profile?.businesses.find(item => item.id === business), 'businessSetup'));
   const identityId = useSessionStore((state) => state.identityId);
   const bootstrap = useSessionStore(state => state.bootstrapStatus);
   const account = useQuery({ queryKey: ['me', identityId], queryFn: () => apiRequest<{ identity: { platformRole: string; contactPhone: string | null }; memberships: { role: string; status: string; business: { id: string; name: string; approvalStatus: string } }[]; providerApplications: { id: string; status: string; business: { name: string } }[] }>('/v1/me'), enabled: Boolean(identityId) });

@@ -1,7 +1,6 @@
 import { prisma } from '../db/client.js';
 import type { Prisma } from '../generated/prisma/client.js';
-import { BusinessPermission, rolesWith } from '../security/business-permissions.js';
-import { MANAGING_ROLES } from '../security/tenant-context.js';
+import { seesWholeBusinessWhere } from '../security/tenant-context.js';
 
 export const NOTIFICATION_LIST_LIMIT = 50;
 /** The most `markNotificationsRead` accepts: what one list can show. */
@@ -19,10 +18,10 @@ const liveBusiness = { deletedAt: null, approvalStatus: 'APPROVED' } satisfies P
  * A customer's own notification follows the person, not the business.
  */
 async function visibleTo(identityId: string): Promise<Prisma.NotificationWhereInput> {
-  const calendars = await prisma.membership.findMany({ where: { identityId, status: 'ACTIVE', role: { in: rolesWith(BusinessPermission.OWN_CALENDAR) }, staffId: { not: null }, staff: { is: { archivedAt: null } }, business: liveBusiness }, select: { businessId: true, staffId: true } });
+  const calendars = await prisma.membership.findMany({ where: { identityId, status: 'ACTIVE', staffId: { not: null }, staff: { is: { archivedAt: null } }, business: liveBusiness }, select: { businessId: true, staffId: true } });
   return { identityId, OR: [
     { audience: 'CUSTOMER' },
-    { audience: 'BUSINESS', business: { ...liveBusiness, memberships: { some: { identityId, status: 'ACTIVE', role: { in: [...MANAGING_ROLES] } } } } },
+    { audience: 'BUSINESS', business: { ...liveBusiness, memberships: { some: { identityId, status: 'ACTIVE', ...seesWholeBusinessWhere } } } },
     ...calendars.map(({ businessId, staffId }) => ({ audience: 'BUSINESS', businessId, kind: { in: [...WORKER_NOTIFICATION_KINDS] }, event: { OR: [{ newStaffId: staffId! }, { oldStaffId: staffId! }] } })),
   ] };
 }

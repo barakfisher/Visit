@@ -57,6 +57,9 @@ Four switches per member. The role picked at invite (Worker or Manager) only set
 - The card label comes from the switches: *Manager* when all four are on, otherwise *Worker* plus the extra permissions it has.
 - Migration: every current MANAGER gets all four on, every STAFF all four off, so no one's access changes on the day.
 - The server replaces its Owner/Manager checks (58 in 18 files when measured) with one function answering "can this member do X in this business". This is security work and needs `bf-security-reviewer`.
+- *Act on other calendars* needs *See other calendars*; turning one changes the other in the editor, and the server refuses the pair otherwise.
+- A member with no calendar opens provider mode only with *See other calendars*.
+- A *Manage team* holder invites only Workers and removes only members with fewer switches than their own.
 
 ## Parked (later decisions)
 
@@ -70,7 +73,7 @@ Measured 2026-11-18: `Membership` has no staff link and `Staff` no account link;
 2. **Invite tied to a staff row.** *Built in PR #72; removing a row with active app access is refused until access is removed (decisions.md, "Invitations tied to a staff row").* `Membership` gains an optional staff link (one account per staff row per business); the invitation carries the staff row; accepting links it. Roster cards show the access badge and *Invite to app*; *Remove app access* keeps the row and bookings. *Done when:* the invite, accept, remove and fail-closed states above work in the browser, in Hebrew RTL. `bf-security-reviewer`.
 3. **My day for a worker.** *Built in PR #73 (decisions.md, "My day for a worker"); only the owner links calendars, and a worker reads only what booking on their own row needs.* Provider mode for a linked worker opens their own agenda; add, move, cancel, block and outcomes on their own staff row; customer search across the business. The server scopes every worker action to their linked staff row. *Done when:* a worker cannot read or change another row by URL or API, and the states above are covered. `bf-security-reviewer`, `bf-qa`.
 4. **Worker notifications.** *Built in PR #74 (decisions.md, "Worker notifications"); a move between rows tells both workers, and outcomes are not sent to workers.* Booking, move and cancellation on a worker's row also notify that worker; owners and managers unchanged. *Done when:* one notification per recipient, none for a removed worker.
-5. **Switches.** One membership per person per business; four stored switches; migration from roles to presets; the permission check reads switches; the owner edits them on the member's card; the label derives from them. *Done when:* the migration changes no one's access (tested), only the owner can change switches, nobody their own. `bf-security-reviewer`.
+5. **Switches.** *Built in PR #77 (decisions.md, "Switches"); act needs see, a member without a calendar counts only with see, and an invitation to an active member only links a calendar.* One membership per person per business; four stored switches; migration from roles to presets; the permission check reads switches; the owner edits them on the member's card; the label derives from them. *Done when:* the migration changes no one's access (tested), only the owner can change switches, nobody their own. `bf-security-reviewer`.
 
 Slices 1–4 deliver the worker; 5 delivers editable privileges. Each slice is mergeable on its own.
 

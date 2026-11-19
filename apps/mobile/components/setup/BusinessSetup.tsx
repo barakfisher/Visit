@@ -26,7 +26,8 @@ function SettingsAccess({ businessId, children }: { businessId: string; children
   const business = useQuery({ queryKey: ['provider', businessId, 'business'], queryFn: () => apiRequest<{ business: BusinessProfile; role: string }>(`/v1/provider/businesses/${encodeURIComponent(businessId)}`), enabled: !!identity });
   if (!identity && bootstrap !== 'ready') return <SessionLoading />;
   if (!identity) return <View className="flex-1 gap-4 bg-canvas p-6"><AppText>{t('setup.denied')}</AppText><Link href="/auth/login">{t('common.signIn')}</Link></View>;
-  if (business.isError || business.data && !['OWNER', 'MANAGER'].includes(business.data.role)) return <View className="flex-1 gap-4 bg-canvas p-6"><AppText accessibilityRole="alert">{t(business.error instanceof ApiError && [401, 403, 404].includes(business.error.status) || !!business.data ? 'setup.denied' : 'setup.failure')}</AppText><ActionButton secondary label={t('common.retry')} onPress={() => void business.refetch()} /><Link href="/account">{t('nav.account')}</Link></View>;
+  // The server answers only someone with business setup (decisions.md, "Switches"); a refusal is its 403.
+  if (business.isError) return <View className="flex-1 gap-4 bg-canvas p-6"><AppText accessibilityRole="alert">{t(business.error instanceof ApiError && [401, 403, 404].includes(business.error.status) ? 'setup.denied' : 'setup.failure')}</AppText><ActionButton secondary label={t('common.retry')} onPress={() => void business.refetch()} /><Link href="/account">{t('nav.account')}</Link></View>;
   if (!business.data) return <SessionLoading />;
   return children(business.data.business);
 }

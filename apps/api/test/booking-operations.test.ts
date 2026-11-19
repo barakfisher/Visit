@@ -7,6 +7,7 @@ import { redis } from '../src/infra/redis.js';
 import { expectAgendaSignal, expectCustomerSignal, expectNoAgendaSignal } from './support/live-signal.js';
 import { tokenDigest } from '../src/security/sessions.js';
 import { CANCELLATION_CUTOFF, RESCHEDULE_CUTOFF } from '../src/http/errors.js';
+import { memberPreset } from '../src/security/business-permissions.js';
 
 after(async () => { redis.disconnect(); await prisma.$disconnect(); });
 
@@ -22,7 +23,7 @@ test('reschedule and cancellation preserve atomic capacity, ownership and lifecy
     const token = randomUUID(); tokens.set(person.id, token);
     await prisma.session.create({ data: { identityId: person.id, tokenHash: tokenDigest(token), expiresAt: new Date(Date.now() + 600000) } });
   }
-  await prisma.membership.createMany({ data: [{ businessId: business.id, identityId: owner.id, role: 'OWNER', status: 'ACTIVE' }, { businessId: business.id, identityId: staffIdentity.id, role: 'STAFF', status: 'ACTIVE' }] });
+  await prisma.membership.createMany({ data: [{ businessId: business.id, identityId: owner.id, role: 'OWNER', status: 'ACTIVE' }, { businessId: business.id, identityId: staffIdentity.id, ...memberPreset('STAFF'), status: 'ACTIVE' }] });
   const service = await prisma.service.create({ data: { businessId: business.id, name: 'Original snapshot', durationMinutes: 30, priceMinor: 10000, currency: 'ILS' } });
   const staff = await prisma.staff.create({ data: { businessId: business.id, displayName: 'QA specialist' } });
   await prisma.staffService.create({ data: { businessId: business.id, staffId: staff.id, serviceId: service.id } });

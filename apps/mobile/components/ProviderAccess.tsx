@@ -10,7 +10,7 @@ import { apiRequest } from '@/src/lib/api';
 import { useSessionStore } from '@/src/state/session';
 import type { AuthProfile } from '@/src/types/flows';
 import { useAppLocale } from '@/src/i18n/LocaleContext';
-import { resolveProviderWorkspace, type ManagedBusiness } from '@/src/lib/providerWorkspace';
+import { resolveProviderWorkspace, workspaceKey, type ManagedBusiness } from '@/src/lib/providerWorkspace';
 const Workspace = createContext<ManagedBusiness | null>(null);
 export function useProviderWorkspace() { const value = useContext(Workspace); if (!value) throw new Error('Provider workspace requires current authorization.'); return value; }
 /** Remembers the choice like any other way in; if that fails, the route's own checks still decide. */
@@ -47,7 +47,7 @@ function FocusedProviderAccess({ children }: { children: ReactNode }) {
   if (selection.state === 'choose') return <View className="flex-1 gap-4 bg-canvas p-6"><AppText accessibilityRole="header" className="text-2xl font-bold">{t('nav.chooseBusiness')}</AppText>{authorized.businesses.map(b => <ActionButton key={b.id} label={b.name} onPress={() => void chooseBusiness(b.id)} />)}<Link href="/">{t('nav.home')}</Link></View>;
   if (selection.state === 'denied') return <View className="flex-1 gap-4 bg-canvas p-6"><AppText accessibilityRole="alert">{t('dashboard.denied')}</AppText><Link href="/account">{t('dashboard.account')}</Link><Link href="/">{t('nav.home')}</Link></View>;
   const localBusiness = currentProfile?.businesses.find(b => b.id === selection.business.id);
-  if (active !== selection.business.id || !localBusiness || localBusiness.role !== authorized.businesses.find(b => b.id === selection.business.id)?.role) return <SessionLoading />;
+  if (active !== selection.business.id || !localBusiness || workspaceKey(localBusiness) !== workspaceKey(authorized.businesses.find(b => b.id === selection.business.id) ?? {})) return <SessionLoading />;
   // Permission/workspace changes unmount all private form drafts and agenda state.
   return <Workspace.Provider value={selection.business}><View key={`${identity}:${version}:${selection.business.id}`} style={{ flex: 1 }}>{children}</View></Workspace.Provider>;
 }

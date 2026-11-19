@@ -7,10 +7,12 @@ import { defaultLocale, directionFor, translate } from '../src/i18n/messages';
 import type { Slot } from '../src/types/flows';
 
 const account = (memberships: AccountNavigation['memberships'], providerApplications: AccountNavigation['providerApplications'] = []): AccountNavigation => ({ identity: { platformRole: 'CUSTOMER' }, memberships, providerApplications });
-const member = (role: string, status: string, approvalStatus: string): AccountNavigation['memberships'][number] => ({ role, status, business: { id: 'tenant', name: 'Tenant', approvalStatus } });
+const ALL = { seeAllCalendars: true, actOnAllCalendars: true, businessSetup: true, manageTeam: true }, NONE = { seeAllCalendars: false, actOnAllCalendars: false, businessSetup: false, manageTeam: false };
+/** `MANAGER` and `STAFF` are a MEMBER row with that preset's switches (decisions.md, "Switches"); other roles carry none. */
+const member = (role: string, status: string, approvalStatus: string): AccountNavigation['memberships'][number] => ({ ...(role === 'MANAGER' ? { role: 'MEMBER', switches: ALL } : role === 'STAFF' ? { role: 'MEMBER', switches: NONE } : { role }), status, business: { id: 'tenant', name: 'Tenant', approvalStatus } });
 
 test('VIS-11 menu capability matrix denies every unsupported membership boundary', () => {
-  for (const role of ['OWNER', 'MANAGER', 'STAFF', 'CUSTOMER', '', 'owner']) {
+  for (const role of ['OWNER', 'MANAGER', 'STAFF', 'MEMBER', 'CUSTOMER', '', 'owner']) {
     for (const status of ['ACTIVE', 'PENDING', 'SUSPENDED', 'REVOKED', '']) {
       for (const approval of ['APPROVED', 'PENDING', 'REJECTED', '']) {
         const result = menuCapabilities(account([member(role, status, approval)]));

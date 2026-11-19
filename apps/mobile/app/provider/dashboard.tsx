@@ -9,11 +9,12 @@ import { useAppLocale } from '@/src/i18n/LocaleContext';
 import { needsSetupGuide } from '@/src/lib/BusinessReadiness';
 import { useBusinessReadiness } from '@/src/lib/BusinessReadiness.hook';
 import { useProviderAgenda } from '@/src/lib/ProviderAgenda.hook';
-import { workerCalendar } from '@/src/lib/providerWorkspace';
+import { mayUse, workerCalendar } from '@/src/lib/providerWorkspace';
 export default function ProviderDashboard() {
   const business = useProviderWorkspace();
   // A worker's home is their own My day: no setup guide and no publication, which they may not read (worker-access.md).
-  return workerCalendar(business) ? <Agenda published worker /> : <BusinessDashboard />;
+  // A member who sees every calendar without "business setup" gets the whole agenda, also without the setup guide.
+  return workerCalendar(business) ? <Agenda published worker /> : mayUse(business, 'businessSetup') ? <BusinessDashboard /> : <Agenda published />;
 }
 function BusinessDashboard() {
   const business = useProviderWorkspace(), { t } = useAppLocale();

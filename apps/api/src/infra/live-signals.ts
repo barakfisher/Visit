@@ -1,7 +1,7 @@
 import { Redis, type RedisOptions } from 'ioredis';
 import { prisma } from '../db/client.js';
 import { AppError } from '../http/errors.js';
-import { MANAGING_ROLES } from '../security/tenant-context.js';
+import { seesWholeBusinessWhere } from '../security/tenant-context.js';
 import { redis } from './redis.js';
 
 /**
@@ -94,7 +94,7 @@ export const signalPersonChanged = (identityId: string) => publishLiveSignal(per
  */
 async function signalBusinessManagers(businessId: string) {
   try {
-    const managers = await prisma.membership.findMany({ where: { businessId, status: 'ACTIVE', OR: [{ role: { in: [...MANAGING_ROLES] } }, { staffId: { not: null }, staff: { is: { archivedAt: null } } }] }, distinct: ['identityId'], select: { identityId: true } });
+    const managers = await prisma.membership.findMany({ where: { businessId, status: 'ACTIVE', OR: [seesWholeBusinessWhere, { staffId: { not: null }, staff: { is: { archivedAt: null } } }] }, distinct: ['identityId'], select: { identityId: true } });
     for (const { identityId } of managers) signalPersonChanged(identityId);
   } catch { console.warn('The business managers could not be signalled.'); }
 }

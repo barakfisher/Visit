@@ -18,6 +18,7 @@ import { changingAgenda, createTimeBlock, deleteTimeBlock } from '../src/reposit
 import { AGENDA_CHANGED_EVENT, APPOINTMENTS_CHANGED_EVENT, LIVE_READY_EVENT, LIVE_SIGNAL_COALESCE_MS, MAX_LIVE_STREAMS_PER_IDENTITY, registerLiveStreaming, registerLiveUpdates } from '../src/routes/live-updates.js';
 import { authenticate, tokenDigest } from '../src/security/sessions.js';
 import { requireBusinessMembership } from '../src/security/tenant-context.js';
+import { BusinessPermission, memberPreset } from '../src/security/business-permissions.js';
 import { expectAgendaSignal, expectCustomerSignal, expectNoAgendaSignal } from './support/live-signal.js';
 
 const WAIT_MS = 3000, QUIET_MS = LIVE_SIGNAL_COALESCE_MS * 3, SHUTDOWN_WAIT_MS = 15000;
@@ -59,7 +60,7 @@ test('the live agenda stream', async t => {
   const foreign = await prisma.business.create({ data: { slug: `live-foreign-${key}`, name: 'Foreign', approvalStatus: 'APPROVED', publishedAt: new Date(), timezone: 'Asia/Jerusalem' } });
   const person = async (name: string, role?: 'OWNER' | 'MANAGER' | 'STAFF', expiresIn = 600000) => {
     const identity = await prisma.identity.create({ data: { email: `live-${name}-${key}@example.test` } }), token = randomUUID();
-    if (role) await prisma.membership.create({ data: { businessId: business.id, identityId: identity.id, role, status: 'ACTIVE' } });
+    if (role) await prisma.membership.create({ data: { businessId: business.id, identityId: identity.id, ...(role === 'OWNER' ? { role } : memberPreset(role)), status: 'ACTIVE' } });
     const session = await prisma.session.create({ data: { identityId: identity.id, tokenHash: tokenDigest(token), expiresAt: new Date(Date.now() + expiresIn) } });
     return { identity, token, session };
   };
@@ -224,7 +225,7 @@ test('the live agenda stream', async t => {
     });
 
     await t.test('committed agenda changes signal the business', async () => {
-      const context = await requireBusinessMembership(owner.identity.id, business.id, ['OWNER']);
+      const context = await requireBusinessMembership(owner.identity.id, business.id, BusinessPermission.CHANGE_SWITCHES);
       const scope = await requireCalendarScope(owner.identity.id, business.id, 'act');
       const staff = await prisma.staff.create({ data: { businessId: business.id, displayName: 'Live staff', parallelCapacity: 5 } });
       const service = await prisma.service.create({ data: { businessId: business.id, name: 'Live service', durationMinutes: 30 } });
