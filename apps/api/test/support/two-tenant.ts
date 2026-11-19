@@ -3,7 +3,8 @@ import { prisma } from '../../src/db/client.js';
 import { env } from '../../src/env.js';
 import { tokenDigest } from '../../src/security/sessions.js';
 
-export const actors = ['north', 'south', 'dual', 'staff', 'pending', 'outsider'] as const;
+// `staff` is an unlinked Staff member (no workspace); `worker` is Staff linked to north's staff row (worker-access.md, slice 3).
+export const actors = ['north', 'south', 'dual', 'staff', 'pending', 'outsider', 'worker'] as const;
 function identifiers(run: string) {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(run)) throw new Error('Fixture run must be a UUID.');
   const target = new URL(env.DATABASE_URL);
@@ -53,6 +54,7 @@ export async function createTwoTenantFixture(run: string = randomUUID(), date = 
       bookings.push(await tx.booking.create({ data: { id: `qa-${run}-booking-${index}`, businessId: business.id, customerId: people[index]!.id, serviceId: service.id, staffId: resource.id, idempotencyKey: `qa-${run}-booking-${index}`, startsAt: new Date(`${date}T09:00:00Z`), endsAt: new Date(`${date}T09:30:00Z`), occupiedFrom: new Date(`${date}T09:00:00Z`), occupiedUntil: new Date(`${date}T09:30:00Z`), status: 'CONFIRMED' } }));
       blocks.push(await tx.timeBlock.create({ data: { businessId: business.id, staffId: resource.id, startsAt: new Date(`${date}T12:00:00Z`), endsAt: new Date(`${date}T12:30:00Z`), reason: 'Synthetic fixture break' } }));
     }
+    await tx.membership.create({ data: { identityId: people[6]!.id, businessId: businesses[0]!.id, role: 'STAFF', status: 'ACTIVE', staffId: staff[0]!.id } });
     return { businesses, people, services, staff, bookings, blocks };
   });
   return { ...result, run, date, headers: (actor: typeof actors[number]) => ({ authorization: `Bearer ${tokens[actors.indexOf(actor)]!}`, 'x-visit-client': 'native' }), reset: () => resetTwoTenantFixture(run) };

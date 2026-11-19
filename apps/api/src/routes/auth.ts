@@ -71,9 +71,10 @@ export async function registerAuthRoutes(app: FastifyInstance, { emailLogin = em
     // publishedAt tells Home whether a managed business is open yet.
     const [profile, memberships, applications] = await Promise.all([
       prisma.identity.findUniqueOrThrow({ where: { id: identity.id }, select: { displayName: true, contactPhone: true } }),
-      prisma.membership.findMany({ where: { identityId: identity.id }, select: { role: true, status: true, business: { select: { id: true, name: true, slug: true, approvalStatus: true, publishedAt: true } } } }),
+      prisma.membership.findMany({ where: { identityId: identity.id }, select: { role: true, status: true, staff: { select: { id: true, displayName: true, active: true, archivedAt: true } }, business: { select: { id: true, name: true, slug: true, approvalStatus: true, publishedAt: true } } } }),
       prisma.providerApplication.findMany({ where: { identityId: identity.id }, select: { id: true, status: true, business: { select: { id: true, name: true, approvalStatus: true } } } }),
     ]);
-    return { identity: { ...identity, displayName: profile.displayName, contactPhone: profile.contactPhone }, memberships, providerApplications: applications };
+    // A membership's calendar is the live staff row it works on; a worker without one has no workspace (worker-access.md).
+    return { identity: { ...identity, displayName: profile.displayName, contactPhone: profile.contactPhone }, memberships: memberships.map(({ staff, ...membership }) => ({ ...membership, calendar: staff && !staff.archivedAt ? { id: staff.id, displayName: staff.displayName, active: staff.active } : null })), providerApplications: applications };
   });
 }

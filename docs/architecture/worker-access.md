@@ -1,4 +1,4 @@
-# Worker access (design; slices 1–2 built)
+# Worker access (design; slices 1–3 built)
 
 Agreed with the user on 2026-11-18. Today a STAFF invitation grants a membership that opens nothing, and it is not tied to any calendar (business-access.md). This design gives an invited worker their own calendar in the app.
 
@@ -68,18 +68,24 @@ Measured 2026-11-18: `Membership` has no staff link and `Staff` no account link;
 
 1. **One permission check, no behaviour change.** A single function answers "can this member do X in this business" for the actions own calendar, other calendars (see / act), business setup, manage team, change switches. For now it derives answers from today's roles. Every Owner/Manager check moves to it. *Done when:* the existing API suite passes unchanged and a matrix test covers each action × Owner/Manager/Staff/outsider/other business. `bf-security-reviewer`.
 2. **Invite tied to a staff row.** *Built in PR #72; removing a row with active app access is refused until access is removed (decisions.md, "Invitations tied to a staff row").* `Membership` gains an optional staff link (one account per staff row per business); the invitation carries the staff row; accepting links it. Roster cards show the access badge and *Invite to app*; *Remove app access* keeps the row and bookings. *Done when:* the invite, accept, remove and fail-closed states above work in the browser, in Hebrew RTL. `bf-security-reviewer`.
-3. **My day for a worker.** Provider mode for a linked worker opens their own agenda; add, move, cancel, block and outcomes on their own staff row; customer search across the business. The server scopes every worker action to their linked staff row. *Done when:* a worker cannot read or change another row by URL or API, and the states above are covered. `bf-security-reviewer`, `bf-qa`.
+3. **My day for a worker.** *Built in PR #73 (decisions.md, "My day for a worker"); only the owner links calendars, and a worker reads only what booking on their own row needs.* Provider mode for a linked worker opens their own agenda; add, move, cancel, block and outcomes on their own staff row; customer search across the business. The server scopes every worker action to their linked staff row. *Done when:* a worker cannot read or change another row by URL or API, and the states above are covered. `bf-security-reviewer`, `bf-qa`.
 4. **Worker notifications.** Booking, move and cancellation on a worker's row also notify that worker; owners and managers unchanged. *Done when:* one notification per recipient, none for a removed worker.
 5. **Switches.** One membership per person per business; four stored switches; migration from roles to presets; the permission check reads switches; the owner edits them on the member's card; the label derives from them. *Done when:* the migration changes no one's access (tested), only the owner can change switches, nobody their own. `bf-security-reviewer`.
 
 Slices 1–4 deliver the worker; 5 delivers editable privileges. Each slice is mergeable on its own.
 
-### Open before slice 3 (from the slice 1 security review)
+### Open before slice 3 (resolved in PR #73)
 
-- **Business-wide blocks.** A block without a staff row closes the whole business, but it is guarded by ACT_ON_ALL_CALENDARS. Proposed: a block without a staff row also needs BUSINESS_SETUP.
-- **Manual booking looks up customer cards** (a `CUSTOMER_CARD_EXISTS` conflict returns the card for an exact phone). Harmless while every worker has customer search; decide whether ACT implies SEARCH_CUSTOMERS or the path requires it too.
-- **Three reads accept any active member, Staff included, today:** business settings, the service list and one service (`routes/providers.ts`). The worker design says workers do not see settings or prices; give them a permission or narrow what they return.
-- **Role logic still hardcoded:** the profile's business list (`routes/flow-auth.ts`) is built from Owner and Manager rows only, and invite rules (`permittedInvite`) are by role. Both must follow the permission table when Staff gets WORKSPACE, or a worker sees provider mode with no business.
-- **Who may link whom to which calendar.** Slice 2 lets a manager link any person to any unlinked calendar. Harmless while Staff has no permission; once slice 3 gives a linked worker full control of their row, decide whether a manager may link someone to a calendar the owner works on.
-- **Owner's own calendar.** An owner is never linked (slice 2). If an owner should see My day for their own row, decide how without breaking last-owner protection.
-- **Write paths in the matrix test.** It covers reads only; add a Staff attempt at one write per permission when Staff gains its first permission.
+Each item is answered in decisions.md, "My day for a worker":
+
+- **Business-wide blocks** need BUSINESS_SETUP; a worker sees them read-only.
+- **Manual booking that touches customer cards** also needs SEARCH_CUSTOMERS.
+- **Settings, service list and one service** need BUSINESS_SETUP; a worker gets `manual-booking-options` narrowed to their own active row.
+- **The profile's business list and `permittedInvite`** follow the permission table (`mayGrantRole`).
+- **Linking calendars** is the owner's alone (`LINK_CALENDARS`); a manager's older calendar invitation fails at accept.
+- **Owner's own calendar:** never linked, no My day; the owner filters the whole-business agenda to their row.
+- **Write paths in the matrix test:** one refused write per permission.
+
+### Open before slice 4
+
+- **Moving an appointment has no provider UI**, for an owner either; a worker can move one only through the API. Notifications for moves (slice 4) should not assume a screen exists.

@@ -115,7 +115,7 @@ export function BusinessCalendar(view: BusinessCalendarView) {
     </FormDialog>
     {/* A block's details and its release, as on the home. */}
     <FormDialog testID="calendar-block" title={t('dashboard.blockTitle')} open={block !== null} onClose={view.closeEntry}>
-      {block ? <TimeBlockRow block={block} t={t} locale={view.locale} {...view.blockRemoval} /> : null}
+      {block ? <TimeBlockRow block={block} t={t} locale={view.locale} releasable={!view.worker || block.staff !== null} {...view.blockRemoval} /> : null}
     </FormDialog>
   </View></GestureHandlerRootView>;
 }

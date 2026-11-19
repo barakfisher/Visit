@@ -4,7 +4,8 @@ import { ApiError } from './apiClient';
 export type TeamStaffLink = { id: string; displayName: string; membershipId: string };
 export type TeamMember = { id: string; identityId: string; role: 'OWNER' | 'MANAGER' | 'STAFF'; label: string; name: string | null; staff: TeamStaffLink | null };
 export type TeamInvitation = { id: string; role: 'MANAGER' | 'STAFF'; recipientHint: string; createdAt: string; expiresAt: string; acceptedAt: string | null; revokedAt: string | null; staff: { id: string; displayName: string } | null };
-export type Team = { role: 'OWNER' | 'MANAGER' | 'STAFF'; members: TeamMember[]; invitations: TeamInvitation[] };
+/** `canLinkCalendars`: only the owner ties an invitation to a calendar (decisions.md, "My day for a worker"). */
+export type Team = { role: 'OWNER' | 'MANAGER' | 'STAFF'; canLinkCalendars?: boolean; members: TeamMember[]; invitations: TeamInvitation[] };
 
 export type InviteRole = 'STAFF' | 'MANAGER';
 export type InviteChannel = 'email' | 'phone';

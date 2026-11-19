@@ -4,12 +4,11 @@ import { prisma } from '../db/client.js';
 import { signalAppointmentChanged } from '../infra/live-signals.js';
 import { cancellationCutoff, conflict, notFound, unauthenticated } from '../http/errors.js';
 import { validateAuthenticatedSession, type AuthenticatedSession } from '../security/sessions.js';
-import { requireBusinessPermission } from '../security/tenant-context.js';
+import { calendarMembershipWhere, onCalendar, requireCalendarScope } from '../security/calendar-scope.js';
 import { withBookingTransaction } from '../scheduling/booking-transaction.js';
 import { releaseHold } from '../scheduling/reservations.js';
 import { presentedStatus } from './AppointmentOutcome.utils.js';
 import type { AppointmentOutcome, BookingAuditReason, BookingAuditSource } from './BookingLifecycle.types.js';
-import { BusinessPermission, rolesWith } from '../security/business-permissions.js';
 
 export async function setBookingAudit(tx: Prisma.TransactionClient, actor: string, source: BookingAuditSource, reason: BookingAuditReason) {
   await tx.$queryRaw`SELECT set_config('visit.booking_actor', ${actor}, true), set_config('visit.booking_source', ${source}, true), set_config('visit.booking_reason', ${reason}, true)`;
@@ -17,8 +16,9 @@ export async function setBookingAudit(tx: Prisma.TransactionClient, actor: strin
 
 export async function changeBookingOutcome(session: AuthenticatedSession, bookingId: string, outcome: AppointmentOutcome, businessId?: string, expectedRevision?: number) {
   await validateAuthenticatedSession(session);
-  if (businessId) await requireBusinessPermission(session.identity.id, businessId, BusinessPermission.ACT_ON_ALL_CALENDARS);
-  else if (outcome !== 'CANCELLED') throw notFound();
+  // A worker changes appointments on their own row only; another row's reads as not found.
+  const scope = businessId ? await requireCalendarScope(session.identity.id, businessId, 'act') : null;
+  if (!scope && outcome !== 'CANCELLED') throw notFound();
   let changed = false;
   const booking = await withBookingTransaction(async tx => {
     // Fence concurrent logout/revocation and role changes before authorizing the write.
@@ -27,11 +27,11 @@ export async function changeBookingOutcome(session: AuthenticatedSession, bookin
     if (businessId) {
       await tx.$queryRaw`SELECT id FROM "Business" WHERE id = ${businessId} FOR SHARE`;
       await tx.$queryRaw`SELECT id FROM "Membership" WHERE "businessId" = ${businessId} AND "identityId" = ${session.identity.id} FOR SHARE`;
-      if (!await tx.membership.findFirst({ where: { businessId, identityId: session.identity.id, status: 'ACTIVE', role: { in: rolesWith(BusinessPermission.ACT_ON_ALL_CALENDARS) }, business: { approvalStatus: 'APPROVED', deletedAt: null } }, select: { id: true } })) throw notFound();
+      if (!await tx.membership.findFirst({ where: calendarMembershipWhere(scope!, 'act'), select: { id: true } })) throw notFound();
     }
     if (businessId) await tx.$queryRaw`SELECT id FROM "Booking" WHERE id = ${bookingId} AND "businessId" = ${businessId} FOR UPDATE`;
     else await lockCustomerOwnedBooking(tx, bookingId, session.identity.id);
-    const current = await tx.booking.findFirst({ where: { id: bookingId, ...(businessId ? { businessId } : customerOwnedBookingWhere(session.identity.id)) }, include: { business: { select: { bookingPolicy: true } } } });
+    const current = await tx.booking.findFirst({ where: { id: bookingId, ...(scope ? { businessId: scope.context.businessId, ...onCalendar(scope) } : customerOwnedBookingWhere(session.identity.id)) }, include: { business: { select: { bookingPolicy: true } } } });
     if (!current) throw notFound();
     if (current.status === outcome) return current;
     if (expectedRevision !== undefined && current.revision !== expectedRevision) throw conflict('This appointment changed. Refresh before updating it.');
@@ -52,8 +52,8 @@ export async function changeBookingOutcome(session: AuthenticatedSession, bookin
 
 export async function readBookingHistory(session: AuthenticatedSession, bookingId: string, businessId?: string) {
   await validateAuthenticatedSession(session);
-  if (businessId) await requireBusinessPermission(session.identity.id, businessId, BusinessPermission.SEE_ALL_CALENDARS);
-  const booking = await prisma.booking.findFirst({ where: { id: bookingId, ...(businessId ? { businessId } : customerOwnedBookingWhere(session.identity.id)), events: { some: {} } }, select: {
+  const scope = businessId ? await requireCalendarScope(session.identity.id, businessId, 'see') : null;
+  const booking = await prisma.booking.findFirst({ where: { id: bookingId, ...(scope ? { businessId: scope.context.businessId, ...onCalendar(scope) } : customerOwnedBookingWhere(session.identity.id)), events: { some: {} } }, select: {
     id: true, businessId: true, status: true, revision: true, endsAt: true,
     events: { orderBy: { revision: 'asc' }, select: { id: true, revision: true, kind: true, source: true, reason: true, oldStatus: true, newStatus: true, oldStartsAt: true, oldEndsAt: true, newStartsAt: true, newEndsAt: true, oldStaffId: true, newStaffId: true, createdAt: true } },
   } });

@@ -3,8 +3,9 @@ import { z } from 'zod';
 import { prisma } from '../db/client.js';
 import { signalAgendaChanged } from '../infra/live-signals.js';
 import type { Prisma } from '../generated/prisma/client.js';
-import { AppError, notFound } from '../http/errors.js';
-import { type AuthorizedBusinessContext, validateBusinessPermission } from '../security/tenant-context.js';
+import { AppError, forbidden, notFound } from '../http/errors.js';
+import { requireBusinessPermission, type AuthorizedBusinessContext } from '../security/tenant-context.js';
+import { blocksSeenBy, calendarMembershipWhere, validateCalendarScope, type CalendarScope } from '../security/calendar-scope.js';
 import type { AuthenticatedSession } from '../security/sessions.js';
 import { withBusinessConfiguration } from './publication.js';
 import { fenceScheduleSession } from './ScheduleImpact.service.js';
@@ -47,10 +48,11 @@ function presentBlock(block: { id: string; startsAt: Date; endsAt: Date; allDay:
 export const blockProjection = { id: true, startsAt: true, endsAt: true, allDay: true, reason: true, staff: { select: { id: true, displayName: true } } } as const;
 export const presentBlocks = <T extends Parameters<typeof presentBlock>[0]>(blocks: T[], timezone: string) => blocks.map(block => presentBlock(block, timezone));
 
-export async function listTimeBlocks(context: AuthorizedBusinessContext, now = new Date()) {
-  await validateBusinessPermission(context, BusinessPermission.SEE_ALL_CALENDARS);
+export async function listTimeBlocks(scope: CalendarScope, now = new Date()) {
+  await validateCalendarScope(scope, 'see');
+  const { context } = scope;
   const business = await prisma.business.findUniqueOrThrow({ where: { id: context.businessId }, select: { timezone: true } });
-  const blocks = await prisma.timeBlock.findMany({ where: { businessId: context.businessId, endsAt: { gt: now } }, orderBy: [{ startsAt: 'asc' }, { id: 'asc' }], take: MAX_LISTED_BLOCKS, select: blockProjection });
+  const blocks = await prisma.timeBlock.findMany({ where: { businessId: context.businessId, endsAt: { gt: now }, ...blocksSeenBy(scope) }, orderBy: [{ startsAt: 'asc' }, { id: 'asc' }], take: MAX_LISTED_BLOCKS, select: blockProjection });
   return { timezone: business.timezone, blocks: presentBlocks(blocks, business.timezone) };
 }
 
@@ -72,9 +74,30 @@ export async function changingAgenda<T>(context: AuthorizedBusinessContext, work
   return result;
 }
 
-export async function createTimeBlock(context: AuthorizedBusinessContext, input: TimeBlockInput, session: AuthenticatedSession, now = new Date()) {
+/**
+ * The context a block change runs under, and the permission its configuration lock rechecks. A block on one row is
+ * calendar work: every calendar, or the worker's own row only. A block without a row closes the whole business, so it
+ * is business setup too (decisions.md, "My day for a worker").
+ */
+async function blockAuthority(scope: CalendarScope, staffId: string | null) {
+  await validateCalendarScope(scope, 'act');
+  if (staffId === null) {
+    if (scope.staffId) throw forbidden();
+    return { context: await requireBusinessPermission(scope.context.identityId, scope.context.businessId, BusinessPermission.BUSINESS_SETUP), permission: BusinessPermission.BUSINESS_SETUP };
+  }
+  if (scope.staffId && scope.staffId !== staffId) throw notFound();
+  return { context: scope.context, permission: scope.staffId ? BusinessPermission.OWN_CALENDAR : BusinessPermission.ACT_ON_ALL_CALENDARS };
+}
+/** Inside the lock: the member still works this calendar (a worker relinked meanwhile is refused). */
+async function assertStillActing(tx: Prisma.TransactionClient, scope: CalendarScope) {
+  if (scope.staffId && !await tx.membership.findFirst({ where: calendarMembershipWhere(scope, 'act'), select: { id: true } })) throw notFound();
+}
+
+export async function createTimeBlock(scope: CalendarScope, input: TimeBlockInput, session: AuthenticatedSession, now = new Date()) {
+  const { context, permission } = await blockAuthority(scope, input.staffId ?? null);
   return changingAgenda(context, async tx => {
     await fenceScheduleSession(tx, session);
+    await assertStillActing(tx, scope);
     if (input.staffId && !await tx.staff.findFirst({ where: { businessId: context.businessId, id: input.staffId, active: true }, select: { id: true } })) throw notFound();
     const business = await tx.business.findUniqueOrThrow({ where: { id: context.businessId }, select: { timezone: true } });
     const range = blockRange(input, business.timezone);
@@ -84,13 +107,19 @@ export async function createTimeBlock(context: AuthorizedBusinessContext, input:
     if (total) throw new AppError(409, BLOCK_CONFLICT, 'This block overlaps appointments or reservations. Move or cancel them first.', undefined, { total, conflicts });
     const block = await tx.timeBlock.create({ data: { businessId: context.businessId, staffId: input.staffId ?? null, ...range, reason: input.reason || null }, select: blockProjection });
     return presentBlock(block, business.timezone);
-  }, BusinessPermission.ACT_ON_ALL_CALENDARS);
+  }, permission);
 }
 
-export async function deleteTimeBlock(context: AuthorizedBusinessContext, id: string, session: AuthenticatedSession) {
+/** A worker releases only their own row's blocks; a business-wide one they can see reads as not found. */
+export async function deleteTimeBlock(scope: CalendarScope, id: string, session: AuthenticatedSession) {
+  const block = await prisma.timeBlock.findFirst({ where: { id, businessId: scope.context.businessId, ...(scope.staffId ? { staffId: scope.staffId } : {}) }, select: { staffId: true } });
+  if (!block) throw notFound();
+  const { context, permission } = await blockAuthority(scope, block.staffId);
   return changingAgenda(context, async tx => {
     await fenceScheduleSession(tx, session);
-    if (!(await tx.timeBlock.deleteMany({ where: { id, businessId: context.businessId } })).count) throw notFound();
+    await assertStillActing(tx, scope);
+    // The row it was read with: a block cannot change rows, so a mismatch means it is gone.
+    if (!(await tx.timeBlock.deleteMany({ where: { id, businessId: context.businessId, staffId: block.staffId } })).count) throw notFound();
     return { deleted: true };
-  }, BusinessPermission.ACT_ON_ALL_CALENDARS);
+  }, permission);
 }

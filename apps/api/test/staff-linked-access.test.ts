@@ -14,7 +14,7 @@ import { STAFF_HAS_APP_ACCESS } from '../src/repositories/provider-settings.js';
 
 after(async () => { redis.disconnect(); await prisma.$disconnect(); });
 
-type Team = { members: { id: string; identityId: string; role: string; staff: { id: string; displayName: string; membershipId: string } | null }[]; invitations: { id: string; staff: { id: string; displayName: string } | null }[] };
+type Team = { canLinkCalendars: boolean; members: { id: string; identityId: string; role: string; staff: { id: string; displayName: string; membershipId: string } | null }[]; invitations: { id: string; staff: { id: string; displayName: string } | null }[] };
 
 test('an invitation tied to a staff row links the account to that calendar and fails closed', async t => {
   const run = randomUUID();
@@ -71,8 +71,9 @@ test('an invitation tied to a staff row links the account to that calendar and f
       const membership = await prisma.membership.findFirstOrThrow({ where: { businessId: business.id, identityId: people.worker.id, status: 'ACTIVE' } });
       assert.equal(membership.staffId, noa.id); assert.equal(membership.role, 'STAFF');
       assert.equal((await team()).members.find(member => member.identityId === people.worker.id)?.staff?.id, noa.id);
-      // Slice 2 grants a link, not a workspace: a linked worker still has no provider business.
-      assert.equal((await authProfile(people.worker.id)).businesses.some(item => item.id === business.id), false);
+      // Since slice 3 the link opens the worker's own calendar in provider mode.
+      const entry = (await authProfile(people.worker.id)).businesses.find(item => item.id === business.id);
+      assert.equal(entry?.role, 'STAFF'); assert.equal(entry && 'calendar' in entry ? entry.calendar.id : null, noa.id);
     });
 
     await t.test('a row that already has an account cannot be invited, and a link taken after the invite fails closed', async () => {
@@ -130,12 +131,23 @@ test('an invitation tied to a staff row links the account to that calendar and f
       assert.equal((await invite(noa.id, people.second.email!, people.otherOwner.id, 'STAFF', other.id)).statusCode, 404);
     });
 
-    await t.test('a manager invites a worker to a row; staff and outsiders cannot', async () => {
+    await t.test('only the owner links a calendar; a manager invites without one; staff and outsiders cannot', async () => {
       const maya = await row('Maya');
-      assert.equal((await invite(maya.id, people.second.email!, people.manager.id)).statusCode, 200);
+      // The decision "My day for a worker": the app cannot tell which row is the owner's own, so managers link none.
+      assert.equal((await invite(maya.id, people.second.email!, people.manager.id)).statusCode, 403);
       assert.equal((await invite(maya.id, people.second.email!, people.manager.id, 'MANAGER')).statusCode, 403);
       assert.equal((await invite(maya.id, people.second.email!, people.worker.id)).statusCode, 403);
       assert.equal((await invite(maya.id, people.second.email!, people.outsider.id)).statusCode, 403);
+      assert.equal((await prisma.businessInvitation.count({ where: { staffId: maya.id } })), 0);
+      const plain = await invite(undefined, people.second.email!, people.manager.id);
+      assert.equal(plain.statusCode, 200, plain.body);
+      // A manager's calendar link from before this rule (written as it was stored then) fails closed at accept.
+      await prisma.businessInvitation.update({ where: { id: plain.json<{ id: string }>().id }, data: { staffId: maya.id } });
+      const accepted = await invitation('accept', tokenOf(plain), people.second.id);
+      assert.equal(accepted.statusCode, 409); assert.equal(accepted.json<{ error: { code: string } }>().error.code, INVITATION_UNAVAILABLE);
+      assert.equal(await prisma.membership.count({ where: { businessId: business.id, identityId: people.second.id, status: 'ACTIVE' } }), 0);
+      assert.equal((await team()).canLinkCalendars, true);
+      assert.equal((await app.inject({ url: `${base}/team`, headers: headers(people.manager.id) })).json<{ canLinkCalendars: boolean }>().canLinkCalendars, false);
     });
 
     await t.test("a manager's new link never replaces an owner's Manager invitation for the same calendar", async () => {

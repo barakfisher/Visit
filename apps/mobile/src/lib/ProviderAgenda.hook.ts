@@ -8,6 +8,7 @@ import { useSessionStore } from '../state/session';
 import { agendaDraftScope, emptyAgendaDraft, useAgendaDraft } from '../state/ProviderAgenda.store';
 import { readProviderAgenda, openAgendaContact } from './ProviderAgenda.service';
 import { useBlockRemoval, useTimeBlockDialog } from './TimeBlocks.hook';
+import { workerCalendar } from './providerWorkspace';
 import { canContinueAppointmentAction } from './AppointmentLifecycle.utils';
 import { todayInTimezone } from './calendar';
 import { agendaTimeline, nextAgendaRecheck, splitAgendaToday, type FreeGap } from './AgendaToday.utils';
@@ -28,7 +29,7 @@ export function useProviderAgenda(): ProviderAgendaView {
   // The clock moves an appointment to the ended row when it ends, and today to the next day after midnight.
   const [now, setNow] = useState(() => Date.now());
   const day = todayInTimezone(business.timezone, new Date(now));
-  const blockDialog = useTimeBlockDialog(business.id, business.timezone), blockRemoval = useBlockRemoval(business.id);
+  const blockDialog = useTimeBlockDialog(business.id, business.timezone, undefined, workerCalendar(business)?.id), blockRemoval = useBlockRemoval(business.id);
   const manual = useManualBooking(business, day);
   // A pending block save or removal holds the business, so its result lands where it was made.
   const busy = blockDialog.busy || Boolean(blockRemoval.pending);

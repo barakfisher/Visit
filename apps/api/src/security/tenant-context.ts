@@ -1,13 +1,19 @@
 import { publicBusinessWhere } from './business-eligibility.js';
 import { customerOwnedBookingWhere } from './booking-ownership.js';
 import { validateAuthenticatedSession, type AuthenticatedSession } from './sessions.js';
-import { MembershipRole, MembershipStatus } from '../generated/prisma/client.js';
+import { MembershipRole, MembershipStatus, type Prisma } from '../generated/prisma/client.js';
 import { prisma } from '../db/client.js';
 import { conflict, forbidden, notFound, rescheduleCutoff } from '../http/errors.js';
 import { BusinessPermission, ROLE_PRIORITY, rolesWith } from './business-permissions.js';
 
 /** Who sees the whole business: they see its agenda and are told about all of its bookings. */
 export const MANAGING_ROLES: readonly MembershipRole[] = Object.freeze(rolesWith(BusinessPermission.SEE_ALL_CALENDARS));
+
+/**
+ * A Staff membership counts only while it is linked to a staff row that has not been removed: an unlinked worker
+ * (an invitation from before calendars, or a link that was revoked) has no workspace (worker-access.md, slice 3).
+ */
+export const countedMembershipWhere = Object.freeze({ OR: [{ role: { not: MembershipRole.STAFF } }, { staffId: { not: null }, staff: { is: { archivedAt: null } } }] }) satisfies Prisma.MembershipWhereInput;
 
 const contextBrand: unique symbol = Symbol('AuthorizedBusinessContext');
 const publicContextBrand: unique symbol = Symbol('PublicBusinessContext');
@@ -35,6 +41,7 @@ export async function requireBusinessMembership(
       status: MembershipStatus.ACTIVE,
       ...(allowedRoles ? { role: { in: [...allowedRoles] } } : {}),
       business: { approvalStatus: 'APPROVED' },
+      ...countedMembershipWhere,
     },
     select: { role: true },
   });

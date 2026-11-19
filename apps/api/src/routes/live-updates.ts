@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { AppError } from '../http/errors.js';
 import { agendaTopic, closeLiveSignals, personTopic, followLiveSignal } from '../infra/live-signals.js';
 import { authenticate, validateAuthenticatedSession, type AuthenticatedSession } from '../security/sessions.js';
-import { MANAGING_ROLES, requireBusinessMembership } from '../security/tenant-context.js';
+import { requireCalendarScope } from '../security/calendar-scope.js';
 
 export const AGENDA_CHANGED_EVENT = 'agenda-changed';
 export const APPOINTMENTS_CHANGED_EVENT = 'appointments-changed';
@@ -72,7 +72,9 @@ export function registerLiveUpdates(app: FastifyInstance) {
   app.get('/api/provider/agenda/live', { sse: 'only' }, async (request, reply) => {
     const { businessId } = z.strictObject({ businessId: z.string().min(1).max(256) }).parse(request.query);
     const session = await authenticate(request);
-    const stillAllowed = () => requireBusinessMembership(session.identity.id, businessId, MANAGING_ROLES);
+    // A worker follows the business's agenda topic too: a signal carries no data, only "read your agenda again",
+    // and that re-read is scoped to their own row.
+    const stillAllowed = () => requireCalendarScope(session.identity.id, businessId, 'see');
     await stillAllowed();
     await streamLiveSignals(reply, { session, topic: agendaTopic(businessId), event: AGENDA_CHANGED_EVENT, stillAllowed });
   });

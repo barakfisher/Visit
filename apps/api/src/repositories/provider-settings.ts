@@ -11,7 +11,7 @@ import { isDatabaseCapacityError } from '../scheduling/booking-transaction.js';
 import { releaseHold } from '../scheduling/reservations.js';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { validateBusinessContext, type AuthorizedBusinessContext, validateBusinessPermission } from '../security/tenant-context.js';
+import { type AuthorizedBusinessContext, validateBusinessPermission } from '../security/tenant-context.js';
 import { env } from '../env.js';
 import { BusinessPermission } from '../security/business-permissions.js';
 
@@ -27,7 +27,7 @@ export type PolicyInput = {
 };
 
 export async function getBusinessSettings(context: AuthorizedBusinessContext) {
-  await validateBusinessContext(context);
+  await validateBusinessPermission(context, BusinessPermission.BUSINESS_SETUP);
   const business = await prisma.business.findUnique({ where: { id: context.businessId }, select: { id: true, name: true, slug: true, timezone: true, approvalStatus: true, publishedAt: true, location: true, category: true, description: true, contactEmail: true, contactPhone: true } });
   if (!business) throw notFound();
   return { business, role: context.role };
