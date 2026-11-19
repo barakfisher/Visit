@@ -1,4 +1,4 @@
-# Visit handoff — 2026-11-19, sending domain and tests that cannot send (PR #TBD)
+# Visit handoff — 2026-11-19, sending domain and tests that cannot send (PR #75)
 
 Built on `main` after PR #73. Decisions: `decisions.md`, "Tests never take outbound providers from .env". Login plan stage 2 has started.
 
