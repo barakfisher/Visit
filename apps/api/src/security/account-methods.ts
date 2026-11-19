@@ -125,7 +125,12 @@ export function createAccountMethodsService({ delivery = accountDelivery, otp = 
           if (initial.channel === 'phone') for (const phone of [...new Set([initial.destination, ...(identity.phone ? [identity.phone] : [])])]) { await otp.invalidate(phone); await loginOtp.invalidate(phone); }
           await tx.accountContactChallenge.update({ where: { id: initial.id }, data: { consumedAt: new Date(now()) } });
           await tx.identity.update({ where: { id: identity.id }, data: initial.channel === 'email' ? { email: initial.destination, emailVerifiedAt: new Date(now()) } : { phone: initial.destination, phoneVerifiedAt: new Date(now()) } });
-          if (initial.channel === 'email') await tx.emailChallenge.updateMany({ where: { email: initial.destination, consumedAt: null }, data: { consumedAt: new Date(now()) } });
+          if (initial.channel === 'email') {
+            await tx.emailChallenge.updateMany({ where: { email: initial.destination, consumedAt: null }, data: { consumedAt: new Date(now()) } });
+            // The account's address is proven now, so a password set before that proof is the owner's own: without
+            // this, a later email-link sign-in to the same address would treat it as a squatter's and delete it.
+            await tx.passwordCredential.updateMany({ where: { identityId: identity.id, unprovenEmail: { not: null } }, data: { unprovenEmail: null } });
+          }
           return finishAccountSecurityChange(tx, { identity, session, channels, notificationScope: namespace === 'visit:account' ? 'live' : namespace, action: old ? 'REPLACED' : 'LINKED', method: initial.channel as AccountChannel, rotate: true, proofHash }, new Date(now()));
         }, { maxWait: 5000, timeout: 5000 });
       } catch (error) { if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') throw methodUnavailable(); throw error; }

@@ -6,11 +6,32 @@ export type AccountDelivery = {
   alert: (input: { channel: AccountChannel; destination: string; id: string; locale: string | null }) => Promise<string>;
   available: (channel: AccountChannel) => boolean;
   localCode?: (id: string) => string | undefined;
+  /** A password sign-up's code, or "you already have an account" when the address is registered (login-plan-stage-2.md, slice 1). */
+  signUp: (input: { destination: string; code: string | null; id: string; locale: 'he' | 'en' }) => Promise<void>;
+  localSignUp?: (id: string) => { code: string | null } | undefined;
 };
 const unavailable = () => new AppError(503, 'ACCOUNT_DELIVERY_UNAVAILABLE', 'Verification delivery is unavailable. Try again shortly.');
 export function createLocalAccountDelivery(): AccountDelivery {
-  const codes = new Map<string, { code: string; expiresAt: number }>();
-  return { available: () => true, async emailVerification({ id, code }) { for (const [key, value] of codes) if (value.expiresAt <= Date.now()) codes.delete(key); if (codes.size >= 1000) codes.delete(codes.keys().next().value!); codes.set(id, { code, expiresAt: Date.now() + 600000 }); }, async alert() { return 'local-inbox'; }, localCode: id => { const value = codes.get(id); if (!value || value.expiresAt <= Date.now()) { codes.delete(id); return undefined; } return value.code; } };
+  const codes = new Map<string, { code: string | null; expiresAt: number }>();
+  const keep = (id: string, code: string | null) => { for (const [key, value] of codes) if (value.expiresAt <= Date.now()) codes.delete(key); if (codes.size >= 1000) codes.delete(codes.keys().next().value!); codes.set(id, { code, expiresAt: Date.now() + 600000 }); };
+  const read = (id: string) => { const value = codes.get(id); if (!value || value.expiresAt <= Date.now()) { codes.delete(id); return undefined; } return value; };
+  return {
+    available: () => true,
+    async emailVerification({ id, code }) { keep(id, code); },
+    async alert() { return 'local-inbox'; },
+    localCode: id => read(id)?.code ?? undefined,
+    async signUp({ id, code }) { keep(id, code); },
+    localSignUp: id => { const value = read(id); return value && { code: value.code }; },
+  };
+}
+export function signUpEmail(input: { code: string | null; locale: 'he' | 'en' }) {
+  const he = input.locale === 'he';
+  if (input.code === null) return he
+    ? { subject: 'כבר יש לכם חשבון Visit', text: 'מישהו ניסה להירשם ל־Visit עם הכתובת הזו, אבל כבר קיים לה חשבון.\nאפשר פשוט להיכנס לחשבון הקיים במסך הכניסה. אם לא ניסיתם להירשם, התעלמו מהודעה זו.' }
+    : { subject: 'You already have a Visit account', text: 'Someone tried to sign up for Visit with this address, but it already has an account.\nSign in to your existing account on the sign-in screen instead. If this was not you, ignore this email.' };
+  return he
+    ? { subject: 'קוד ההרשמה שלכם ל־Visit', text: `קוד ההרשמה שלכם ל־Visit: ${input.code}\nהקוד תקף ל־10 דקות. אם לא ניסיתם להירשם, התעלמו מהודעה זו.` }
+    : { subject: 'Your Visit sign-up code', text: `Your Visit sign-up code: ${input.code}\nThis code expires in 10 minutes. If you did not try to sign up, ignore this email.` };
 }
 export function createAccountDelivery({ emailMode = env.EMAIL_DELIVERY_MODE, apiKey = env.EMAIL_API_KEY, from = env.EMAIL_FROM, smsMode = env.SMS_DELIVERY_MODE, messagingServiceSid = env.TWILIO_MESSAGING_SERVICE_SID, accountSid = env.TWILIO_ACCOUNT_SID, authToken = env.TWILIO_AUTH_TOKEN, transport = fetch }: { emailMode?: string; apiKey?: string | undefined; from?: string; smsMode?: string; messagingServiceSid?: string | undefined; accountSid?: string | undefined; authToken?: string | undefined; transport?: typeof fetch } = {}): AccountDelivery {
   const local = createLocalAccountDelivery();
@@ -23,6 +44,13 @@ export function createAccountDelivery({ emailMode = env.EMAIL_DELIVERY_MODE, api
   return {
     available: channel => channel === 'email' ? emailMode === 'local-inbox' || Boolean(apiKey) : smsMode === 'local-inbox' || Boolean(messagingServiceSid && accountSid && authToken),
     localCode: id => local.localCode?.(id),
+    localSignUp: id => local.localSignUp?.(id),
+    async signUp(input) {
+      if (emailMode === 'local-inbox') return local.signUp(input);
+      if (!apiKey) throw unavailable();
+      const message = signUpEmail(input);
+      await email(input.destination, message.subject, message.text, input.id);
+    },
     async emailVerification(input) {
       if (emailMode === 'local-inbox') return local.emailVerification(input);
       if (!apiKey) throw unavailable();
