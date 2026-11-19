@@ -1,4 +1,4 @@
-# Visit handoff — 2026-11-19, login plan stage 2 agreed (plan only)
+# Visit handoff — 2026-11-19, login plan stage 2 agreed (plan only, PR #78)
 
 Built on `main` after PR #76. Plan: [login-plan-stage-2.md](../architecture/login-plan-stage-2.md). Decisions: `decisions.md`, "Login plan stage 2 scope". No code changed.
 

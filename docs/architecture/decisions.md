@@ -784,7 +784,7 @@ PR #75. Login plan stage 2 started: `mail.my-visit.xyz` is verified in Resend (r
 
 ## Login plan stage 2 scope — 2026-11-19
 
-Plan only ([login-plan-stage-2.md](login-plan-stage-2.md)); nothing built. Measured first, read-only: what an unverified email breaks (booking contact rules, team invitations, administrator promotion, review and security email) and two bugs in the six-digit account code. Replaces, slice by slice, "the email is marked verified at sign-up" from "Email and password sign-in for the MVP".
+PR #78. Plan only ([login-plan-stage-2.md](login-plan-stage-2.md)); nothing built. Measured first, read-only: what an unverified email breaks (booking contact rules, team invitations, administrator promotion, review and security email) and two bugs in the six-digit account code. Replaces, slice by slice, "the email is marked verified at sign-up" from "Email and password sign-in for the MVP".
 
 - **Choice: a new account exists only after a six-digit code proves its email (the user's call).** A pending sign-up holds the name, address and password hash until the code is right. *Rejected:* creating the account and asking to verify later, which leaves the address squatted (the real owner gets `EMAIL_TAKEN`) and every flow above needs an unverified branch; a locked account until verified, which keeps the squatting and needs cleanup of locked accounts.
 - **Choice: sign-up answers the same for a registered address and sends it "you already have an account" instead of a code (the user's call).** Sign-up stops revealing which addresses exist. *Rejected:* keeping `EMAIL_TAKEN`, which the MVP accepted only for lack of delivery.

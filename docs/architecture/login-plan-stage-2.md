@@ -1,7 +1,7 @@
 # Login plan stage 2: verified sign-up, password reset and change
 
 Agreed with the user 2026-11-19. Plan only; nothing here is built yet. Part of
-[login-plan.md](login-plan.md) stage 2; decisions in `decisions.md`, "Login plan stage 2 scope".
+[login-plan.md](login-plan.md) stage 2; decisions in `decisions.md`, "Login plan stage 2 scope" (PR #78).
 
 ## Problem
 
