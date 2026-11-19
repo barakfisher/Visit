@@ -61,8 +61,9 @@ export const English: Story = { args: { locale: 'en' }, play: async ({ canvas })
   // The form opens only from the header button; each card has one Edit and one Remove.
   await expect(canvas.queryByLabelText('Name', { exact: true })).toBeNull();
   const card = within(canvas.getByTestId('staff-card-noa'));
-  // Edit, Remove, and Noa's "Remove app access".
-  await expect(card.getAllByRole('button')).toHaveLength(3);
+  // Edit, Remove, and for Noa's app access the owner's "Permissions" and "Remove app access".
+  await expect(card.getAllByRole('button')).toHaveLength(4);
+  await expect(card.getByRole('button', { name: translate('en', 'switches.editLabel', { name: 'Noa' }) })).toBeVisible();
   await expect(card.getByRole('button', { name: 'Edit Noa' })).toHaveAttribute('aria-expanded', 'false');
   await expect(card.getByRole('button', { name: 'Remove Noa' })).toBeVisible();
   await expect(canvas.queryByText('Not available for new appointments', { exact: true })).toBeVisible();

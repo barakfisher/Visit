@@ -49,7 +49,7 @@ They also chose to fix the "see without act" screens in this PR rather than leav
       - a manager unable to cancel or replace the owner's calendar invitation;
       - an inviter who no longer counts;
       - the agenda's `act` for owner, manager, worker, a linked "see only" worker and an unlinked "see only" member.
-  - **Mobile:** lint and tsc clean, 240/240 tests (`acting-scope.test.ts`, `member-switches.test.ts`).
+  - **Mobile:** lint and tsc clean, 240/240 tests (`acting-scope.test.ts`, `member-switches.test.ts`); Storybook 270/270. CI's first run caught the Roster story's button count, which the Permissions button raised; run `npm run test-storybook` before opening a PR.
   - **Browser pane, 375px, Hebrew RTL:**
     - As the owner: Team access and Roster cards, the editor (act turns see on; see off turns act off and warns an unlinked member), save and label.
     - As a linked "see only" worker:
