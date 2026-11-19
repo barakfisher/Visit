@@ -811,7 +811,7 @@ PR #77. Worker access slice 5 ([worker-access.md](worker-access.md), Build plan)
 
 ## Verified sign-up — 2026-11-19
 
-PR #PR_NUMBER. Login plan stage 2, slice 1 ([login-plan-stage-2.md](login-plan-stage-2.md)). Measured first, read-only: the account six-digit code (`AccountContactChallenge`, HMAC, attempts, sweeper) already had the shape slice 1 needed, and `env.ts` accepts only `local-inbox` or `resend` with a key, so email delivery is never off. Replaces "the email is marked verified at sign-up" for new accounts.
+PR #79. Login plan stage 2, slice 1 ([login-plan-stage-2.md](login-plan-stage-2.md)). Measured first, read-only: the account six-digit code (`AccountContactChallenge`, HMAC, attempts, sweeper) already had the shape slice 1 needed, and `env.ts` accepts only `local-inbox` or `resend` with a key, so email delivery is never off. Replaces "the email is marked verified at sign-up" for new accounts.
 
 - **Choice: the code step is a second step on the same sign-up screen, and the pending handle lives only in the screen's memory (the user's call).** Reloading or leaving starts over; the form keeps its fields when the person picks "use a different email". *Rejected:* a separate `/auth/sign-up/verify` route, which survives a reload only by putting the handle in the URL (history, logs) or in storage that must be cleared.
 - **Choice: a `PendingSignUp` row in Postgres holds the name, the scrypt hash and an HMAC of the code**, and the right code consumes it in the same transaction that creates the identity, the password and the session. *Rejected:* Redis only, where consuming the code and creating the account cannot be one atomic step.

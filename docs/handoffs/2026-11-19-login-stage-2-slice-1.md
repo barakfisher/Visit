@@ -1,4 +1,4 @@
-# Visit handoff — 2026-11-19, verified sign-up (login stage 2, slice 1) (PR #PR_NUMBER)
+# Visit handoff — 2026-11-19, verified sign-up (login stage 2, slice 1) (PR #79)
 
 Built on `main` after PR #77. Plan: [login-plan-stage-2.md](../architecture/login-plan-stage-2.md), slice 1. Decisions: `decisions.md`, "Verified sign-up".
 
