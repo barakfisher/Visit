@@ -1,6 +1,6 @@
 # Email and password sign-in (MVP)
 
-Decided 2026-11-01 for the MVP; see the decision log. It replaces, for now, the "no password" rule in [email-authentication.md](email-authentication.md). Email-link, phone and Google sign-in stay implemented.
+Decided 2026-11-01 for the MVP; see the decision log. Being replaced by [login-plan-stage-2.md](login-plan-stage-2.md) (sign-up proves the email, reset, change), not built yet. It replaces, for now, the "no password" rule in [email-authentication.md](email-authentication.md). Email-link, phone and Google sign-in stay implemented.
 
 ## Behaviour
 
