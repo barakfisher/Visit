@@ -8,7 +8,7 @@ import { redis, ensureRedisReady } from '../src/infra/redis.js';
 import { env } from '../src/env.js';
 import { AppError } from '../src/http/errors.js';
 import { createAccountMethodsService } from '../src/security/account-methods.js';
-import { createLocalAccountDelivery, createAccountDelivery, signUpEmail } from '../src/security/account-delivery.js';
+import { accountVerificationEmail, createLocalAccountDelivery, createAccountDelivery, signUpEmail } from '../src/security/account-delivery.js';
 import { hashPassword } from '../src/security/password-login.js';
 import { createEmailLoginService, createLocalEmailDelivery } from '../src/security/email-login.js';
 import { createOtpService } from '../src/security/phone-otp.js';
@@ -228,6 +228,49 @@ test('account methods bind ownership, recent authentication, proof, contact name
       assert.equal(await prisma.passwordCredential.count({ where: { identityId: a.identity.id } }), 1);
       await nextContext(result.sessionToken!);
     });
+    await t.test('an MVP account whose trusted address was never proven can prove it with the code; a proven address still cannot be re-linked', async () => {
+      const a = await actor({ email: true, google: true }), address = a.identity.email!;
+      await prisma.passwordCredential.create({ data: { identityId: a.identity.id, hash: await hashPassword('owner password value'), unprovenEmail: address } });
+      const otherDevice = await prisma.session.create({ data: { identityId: a.identity.id, tokenHash: tokenDigest(newOpaqueToken()), expiresAt: new Date(Date.now() + 3600000) } });
+      // Whoever reads this code may not hold the account, so the email warns them not to share it.
+      const purposes: (string | undefined)[] = [];
+      const spied = createAccountMethodsService({ delivery: { ...delivery, emailVerification: async input => { purposes.push(input.purpose); return delivery.emailVerification(input); } }, otp, loginOtp, namespace, secret: 'test-only-email-secret' });
+      const start = await spied.start({ channel: 'email', destination: address }, a.context, randomUUID());
+      assert.deepEqual(purposes, ['confirm-own']);
+      const verified = await spied.verify({ challenge: start.challenge, code: (await spied.localCode(start.challenge, a.context)).code }, a.context, randomUUID());
+      assert.equal((await prisma.passwordCredential.findUniqueOrThrow({ where: { identityId: a.identity.id } })).unprovenEmail, null);
+      const event = await prisma.identitySecurityEvent.findFirstOrThrow({ where: { identityId: a.identity.id }, orderBy: { createdAt: 'desc' } });
+      assert.equal(event.action, 'LINKED');
+      assert.ok(await prisma.securityNotification.findFirst({ where: { eventId: event.id, channel: 'email' } }));
+      assert.ok((await prisma.session.findUniqueOrThrow({ where: { id: otherDevice.id } })).revokedAt);
+      const links = createEmailLoginService({ delivery: createLocalEmailDelivery(), namespace: `${namespace}:mvp-owner-link` });
+      await links.send(address, randomUUID());
+      await links.verify((await links.localMessage(address)).token, randomUUID());
+      assert.equal(await prisma.passwordCredential.count({ where: { identityId: a.identity.id } }), 1);
+      // Now proven, the same address is refused as before, and a plain change sends the ordinary email.
+      await redis.del(`${namespace}:destination:${tokenDigest(`email:${address}`)}:cooldown`);
+      const again = await spied.start({ channel: 'email', destination: address }, await nextContext(verified.sessionToken!), randomUUID());
+      assert.deepEqual(purposes, ['confirm-own', 'change']);
+      const context = await nextContext(verified.sessionToken!);
+      await assert.rejects(spied.verify({ challenge: again.challenge, code: (await spied.localCode(again.challenge, context)).code }, context, randomUUID()), denied(409, 'METHOD_UNAVAILABLE'));
+    });
+    await t.test('an already verified phone still cannot be re-proven: the MVP exception is for an unproven email only', async () => {
+      const a = await actor({ email: true, phone: true });
+      const start = await account.start({ channel: 'phone', destination: a.identity.phone! }, a.context, randomUUID());
+      await assert.rejects(account.verify({ challenge: start.challenge, code: (await account.localCode(start.challenge, a.context)).code }, a.context, randomUUID()), denied(409, 'METHOD_UNAVAILABLE'));
+    });
+    await t.test('once an email link has taken the address back, a confirm-own code sent earlier no longer proves it', async () => {
+      const a = await actor({ email: true }), address = a.identity.email!;
+      await prisma.passwordCredential.create({ data: { identityId: a.identity.id, hash: await hashPassword('squatter password value'), unprovenEmail: address } });
+      const start = await account.start({ channel: 'email', destination: address }, a.context, randomUUID());
+      const { code } = await account.localCode(start.challenge, a.context);
+      const links = createEmailLoginService({ delivery: createLocalEmailDelivery(), namespace: `${namespace}:owner-takes-back` });
+      await links.send(address, randomUUID());
+      await links.verify((await links.localMessage(address)).token, randomUUID());
+      assert.equal(await prisma.passwordCredential.count({ where: { identityId: a.identity.id } }), 0);
+      await assert.rejects(account.verify({ challenge: start.challenge, code }, a.context, randomUUID()));
+      assert.equal(await prisma.passwordCredential.count({ where: { identityId: a.identity.id } }), 0);
+    });
     await t.test('removed email is released only for a newly proven identity, stale links cannot recover the original account and last-method recovery has no bypass', async () => {
       const a = await actor({ email: true, google: true });
       const emailDelivery = createLocalEmailDelivery();
@@ -298,3 +341,16 @@ test('account email and alert providers pin endpoints, bound calls and never dis
 });
 
 test.after(async () => { redis.disconnect(); await prisma.$disconnect(); });
+
+test('the confirm-own email warns a reader who never created an account not to share the code, in Hebrew and English', () => {
+  for (const locale of ['he', 'en']) {
+    const own = accountVerificationEmail(locale, '482913', 'confirm-own'), change = accountVerificationEmail(locale, '482913', 'change');
+    assert.match(own.text, /482913/); assert.notEqual(own.subject, change.subject); assert.doesNotMatch(own.text, /https?:/);
+  }
+  assert.match(accountVerificationEmail('en', '000000', 'confirm-own').text, /do not share this code/);
+  assert.match(accountVerificationEmail('he', '000000', 'confirm-own').text, /אל תמסרו את הקוד/);
+  // An email link removes the password and signs out every device; it does not remove a phone or Google the holder linked.
+  assert.doesNotMatch(accountVerificationEmail('en', '000000', 'confirm-own').text, /becomes yours/);
+  assert.match(accountVerificationEmail('en', '000000', 'change').text, /Do not share this code/);
+  assert.match(accountVerificationEmail('he', '000000', 'change').text, /אל תמסרו את הקוד/);
+});

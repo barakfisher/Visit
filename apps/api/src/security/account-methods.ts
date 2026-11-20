@@ -63,12 +63,14 @@ export function createAccountMethodsService({ delivery = accountDelivery, otp = 
         await lockIdentitySecurity(tx, actor.identity.id); await lockRecentAccountSession(tx, actor, new Date(now()));
         const identity = await tx.identity.findUniqueOrThrow({ where: { id: actor.identity.id } });
         await tx.accountContactChallenge.updateMany({ where: { identityId: identity.id, consumedAt: null }, data: { consumedAt: new Date(now()) } });
-        return tx.accountContactChallenge.create({ data: { id, handleHash: tokenDigest(handle), identityId: identity.id, sessionId: actor.sessionId, securityVersion: identity.securityVersion, channel: input.channel, destination, codeHash: input.channel === 'email' ? digest(id, code) : null, expiresAt: new Date(now() + 600000) }, include: { identity: { select: { preferredLocale: true } } } });
+        const confirmOwn = input.channel === 'email' && identity.email === destination && Boolean(await tx.passwordCredential.findFirst({ where: { identityId: identity.id, unprovenEmail: destination }, select: { identityId: true } }));
+        const created = await tx.accountContactChallenge.create({ data: { id, handleHash: tokenDigest(handle), identityId: identity.id, sessionId: actor.sessionId, securityVersion: identity.securityVersion, channel: input.channel, destination, codeHash: input.channel === 'email' ? digest(id, code) : null, expiresAt: new Date(now() + 600000) }, include: { identity: { select: { preferredLocale: true } } } });
+        return { ...created, confirmOwn };
       }, { maxWait: 5000, timeout: 5000 });
       try {
         let remaining = 600;
         if (input.channel === 'phone') remaining = (await otp.send(destination, ip)).expiresInSeconds;
-        else await delivery.emailVerification({ destination, code, id, locale: challenge.identity.preferredLocale });
+        else await delivery.emailVerification({ destination, code, id, locale: challenge.identity.preferredLocale, purpose: challenge.confirmOwn ? 'confirm-own' : 'change' });
         const expiresAt = new Date(Math.min(challenge.expiresAt.getTime(), now() + remaining * 1000));
         const delivered = await prisma.accountContactChallenge.updateMany({ where: { id, consumedAt: null, expiresAt: { gt: new Date(now()) }, identity: { securityVersion: challenge.securityVersion }, session: { revokedAt: null, expiresAt: { gt: new Date(now()) } } }, data: { deliveredAt: new Date(now()), expiresAt } });
         if (delivered.count !== 1) throw invalid();
@@ -119,8 +121,11 @@ export function createAccountMethodsService({ delivery = accountDelivery, otp = 
           if (challenge.consumedAt || challenge.expiresAt.getTime() <= now() || !challenge.deliveredAt) throw invalid();
           const owner = await tx.identity.findUnique({ where: initial.channel === 'email' ? { email: initial.destination } : { phone: initial.destination }, select: { id: true } });
           if (owner && owner.id !== identity.id) throw methodUnavailable();
+          // An MVP address was marked verified without proof; while its password still records it as unproven, the
+          // owner may prove it with the code (login-plan-stage-2.md, bug 2). Any other verified address is refused.
+          const unprovenOwn = initial.channel === 'email' && identity.email === initial.destination && Boolean(await tx.passwordCredential.findFirst({ where: { identityId: identity.id, unprovenEmail: initial.destination }, select: { identityId: true } }));
           const alreadyVerified = initial.channel === 'email' ? identity.email === initial.destination && identity.emailVerifiedAt : identity.phone === initial.destination && identity.phoneVerifiedAt;
-          if (alreadyVerified) throw methodUnavailable();
+          if (alreadyVerified && !unprovenOwn) throw methodUnavailable();
           const channels = await previousSecurityChannels(tx, identity);
           if (initial.channel === 'phone') for (const phone of [...new Set([initial.destination, ...(identity.phone ? [identity.phone] : [])])]) { await otp.invalidate(phone); await loginOtp.invalidate(phone); }
           await tx.accountContactChallenge.update({ where: { id: initial.id }, data: { consumedAt: new Date(now()) } });
@@ -131,7 +136,7 @@ export function createAccountMethodsService({ delivery = accountDelivery, otp = 
             // this, a later email-link sign-in to the same address would treat it as a squatter's and delete it.
             await tx.passwordCredential.updateMany({ where: { identityId: identity.id, unprovenEmail: { not: null } }, data: { unprovenEmail: null } });
           }
-          return finishAccountSecurityChange(tx, { identity, session, channels, notificationScope: namespace === 'visit:account' ? 'live' : namespace, action: old ? 'REPLACED' : 'LINKED', method: initial.channel as AccountChannel, rotate: true, proofHash }, new Date(now()));
+          return finishAccountSecurityChange(tx, { identity, session, channels, notificationScope: namespace === 'visit:account' ? 'live' : namespace, action: old && old !== initial.destination ? 'REPLACED' : 'LINKED', method: initial.channel as AccountChannel, rotate: true, proofHash }, new Date(now()));
         }, { maxWait: 5000, timeout: 5000 });
       } catch (error) { if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') throw methodUnavailable(); throw error; }
     },

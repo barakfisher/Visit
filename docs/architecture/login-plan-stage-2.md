@@ -29,7 +29,8 @@ Two latent bugs in the six-digit account code:
    A later email-link sign-in by the same owner then deletes their own password and ends their
    sessions (`email-login.ts`, "the real owner wins"). **Fixed in slice 1.**
 2. An account whose email was trusted at sign-up cannot verify it with the code
-   (`alreadyVerified` answers `METHOD_UNAVAILABLE`). Moot while those accounts stay verified (below).
+   (`alreadyVerified` answers `METHOD_UNAVAILABLE`). **Fixed after slice 1** (decisions.md, "An MVP account proves
+   its own address"): without it, the bug 1 fix never reached these accounts' own address.
 
 Local data: 14 password accounts, all with `unprovenEmail = email`.
 

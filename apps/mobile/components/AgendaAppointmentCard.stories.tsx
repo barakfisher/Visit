@@ -16,6 +16,8 @@ const meta = { globals: { locale: 'he' }, title: 'Provider/Agenda appointment ca
 }, decorators: [Story => <View style={{ maxWidth: 390 }}><Story /></View>] } satisfies Meta<typeof AgendaAppointmentCard>;
 export default meta;
 type Story = StoryObj<typeof meta>;
+// Opened details fade in (SmoothReveal). toBeVisible and the accessibility check after a story both read opacity, so a story waits for all of it.
+const opaque = (element: Element | null): boolean => !element || (getComputedStyle(element).opacity === '1' && opaque(element.parentElement));
 
 // Folded, a card says when, who and what; a tap opens who serves it, how to reach the customer and the actions, and a second tap folds it.
 export const Folded: Story = { play: async ({ canvas, args }) => {
@@ -25,6 +27,7 @@ export const Folded: Story = { play: async ({ canvas, args }) => {
   await expect(canvas.queryByText('lifecycle actions')).toBeNull(); await expect(canvas.queryByText(/דנה/)).toBeNull();
   await userEvent.click(toggle);
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await waitFor(() => expect(opaque(canvas.getByText('lifecycle actions'))).toBe(true));
   await expect(canvas.getByText('lifecycle actions')).toBeVisible(); await expect(canvas.getByText(/דנה · \+972501234567/)).toBeVisible();
   await userEvent.click(canvas.getByRole('button', { name: he('dashboard.whatsapp') })); await expect(args.contact).toHaveBeenCalledWith('+972501234567', 'whatsapp');
   await userEvent.click(toggle);
@@ -34,6 +37,7 @@ export const Folded: Story = { play: async ({ canvas, args }) => {
 export const ManualWithoutPhone: Story = { args: { booking: booking({ source: 'MANUAL', manualReason: 'בקשה טלפונית', customer: { displayName: null, phone: null, email: 'guest@example.test' } }) }, play: async ({ canvas }) => {
   const toggle = canvas.getByRole('button', { name: /guest@example\.test/ });
   await userEvent.click(toggle);
+  await waitFor(() => expect(opaque(canvas.getByText('lifecycle actions'))).toBe(true));
   await expect(canvas.getByText(new RegExp(`${he('manual.tag')} · בקשה טלפונית`))).toBeVisible();
   await expect(canvas.getByRole('button', { name: he('dashboard.noPhoneCall') })).toBeDisabled();
 } };
