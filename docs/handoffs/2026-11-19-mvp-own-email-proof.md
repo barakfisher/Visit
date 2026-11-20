@@ -20,6 +20,7 @@ The user's global working agreement governs. This session built slice 1 in paral
   - #80 created a `PendingSignUp` table in the shared local `visit` and `visit_test` databases, recorded in `_prisma_migrations` as `20261120130000_pending_sign_up`.
   - #79 has its own migration, `20261121120000_pending_sign_up`. On those databases, `prisma migrate deploy` from `main` will fail until #80's table and its `_prisma_migrations` row are dropped.
   - Status: not dropped yet, waiting for the user's word.
+- **A story that opens a `SmoothReveal` must wait for full opacity before it asserts.** `toBeVisible` fails at opacity 0, and the Storybook accessibility check reads near-white text as a contrast failure (1.01:1). `AgendaAppointmentCard`'s "Manual Without Phone" story failed about 1 run in 3 this way, on `main` (4bfbbff) as well as here. Both of its opening stories now wait with an `opaque` check up the ancestors. Other stories that open a reveal and then assert may have the same race.
 - **This branch was tested against its own database, `visit_bug2`,** so the shared ones stay untouched: `DATABASE_URL` is exported, and an explicit environment value wins over `.env`.
 
 ## Not verified
