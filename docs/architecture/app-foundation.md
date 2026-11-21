@@ -22,9 +22,9 @@ Remote data stays in Query; editable component drafts stay local and reset on wo
 
 ## Web/PWA policy
 
-The HTML links `public/manifest.json` and supplies the theme color. The manifest points to existing 192/512 pixel icons. The app registers no service worker and creates no Cache Storage entries. `public/service-worker.js` is an unused network-only placeholder with no fetch handler; it is not an offline implementation. Authenticated pages and bookings require a network connection.
+The web app is a single-page export (`web.output: "single"`): `public/index.html` is the HTML shell, links `public/manifest.json`, and Expo adds the theme color. The manifest points to existing 192/512 pixel icons. The app registers no service worker and creates no Cache Storage entries. `public/service-worker.js` is an unused network-only placeholder with no fetch handler; it is not an offline implementation. Authenticated pages and bookings require a network connection.
 
-The API sends `Cache-Control: no-store` for every response, including errors. Production hosting must preserve this header and avoid caching private HTML/API responses; only fingerprinted public assets may receive immutable caching. Deployment/header checks remain VIS-40. Any future offline/service-worker feature requires a separate review of tenant data and logout cleanup.
+The API sends `Cache-Control: no-store` for every response, including errors. Production hosting must preserve this header and avoid caching private HTML/API responses; only fingerprinted public assets may receive immutable caching. The hosted static site sends `Cache-Control: no-cache` for every file and the API keeps `no-store` ([production-hosting.md](production-hosting.md)); checking the live headers after the first deploy is listed there. Any future offline/service-worker feature requires a separate review of tenant data and logout cleanup.
 
 ## Verification and remaining native evidence
 
