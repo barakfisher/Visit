@@ -34,5 +34,7 @@ Hebrew is the default app language. Switch to English or Hebrew from **Account â
 
 The current screens and API contracts are documented in [screen flows](docs/architecture/screen-flows.md), including Google/SMS configuration, provider approval routing, Redis reservations, and the two-browser contention test. The web test uses ports 3001/8082 and leaves the development app on 8081 available.
 
+See [hosted environment](docs/architecture/production-hosting.md) for the Render setup (`render.yaml`), DNS, post-deploy checks and carrying test data to a new free database.
+
 See [app foundation](docs/architecture/app-foundation.md) for workspace cache boundaries, transport behavior, PWA policy, native bundle commands and remaining device validation.
 # Visit

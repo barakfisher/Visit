@@ -4,10 +4,11 @@ import { pickTime } from './pickers';
 import { openConfirmation, selectBookingDate, showBookingTime } from './booking-controls.utils';
 import { answerCancellation } from './cancellation-prompt';
 import assert from 'node:assert/strict';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { createServer as createHttpServer, type Server } from 'node:http';
 import { randomUUID, randomInt, createHash } from 'node:crypto';
 import { mkdir, readFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
+import sirv from 'sirv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Page, BrowserContext } from 'playwright';
@@ -33,7 +34,7 @@ if (unassigned.length) throw new Error(`Add to testEnvironment() so .env cannot 
 const { chromium } = await import('playwright');
 const run = randomUUID();
 const date = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-let apiServer: Awaited<ReturnType<typeof import('../../api/src/app.js').createApp>> | undefined, webProcess: ChildProcess | undefined;
+let apiServer: Awaited<ReturnType<typeof import('../../api/src/app.js').createApp>> | undefined, webServer: Server | undefined;
 const googleClaims = new Map<string, Record<string, unknown>>();
 const googleNamespace = `test:google-web:${run}`;
 const accountNamespace = `test:account-web:${run}`;
@@ -45,15 +46,6 @@ const diagnostics = path.join(appRoot, 'test-results');
 
 async function available(port: number) {
   await new Promise<void>((resolve, reject) => { const server = createServer(); server.once('error', () => reject(new Error(`Test port ${port} is occupied; stop that test server before running.`))); server.listen(port, () => server.close(() => resolve())); });
-}
-async function ready(url: string, child: ChildProcess, label: string) {
-  const until = Date.now() + 60000;
-  while (Date.now() < until) {
-    if (child.exitCode !== null) throw new Error(`${label} exited (${child.exitCode}).`);
-    try { if ((await fetch(url)).ok) return; } catch { /* Wait for startup. */ }
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  throw new Error(`${label} startup timed out.`);
 }
 async function otpLogin(page: Page, phone: string, provider = false) {
   await page.goto(`${webUrl}/auth/login`);
@@ -107,8 +99,11 @@ try {
   identityIds.push(...identities.map((identity) => identity.id));
   await prisma.membership.createMany({ data: businessIds.map(businessId => ({ identityId: identities[2]!.id, businessId, status: 'ACTIVE' as const, role: 'OWNER' as const })) });
   const service = await prisma.service.findFirstOrThrow({ where: { businessId: businessIds[0]! } });
-  webProcess = spawn(process.execPath, [path.join(repoRoot, 'node_modules/expo/bin/cli'), 'serve', 'dist', '--port', String(webPort)], { cwd: appRoot, env: { ...process.env, NODE_PATH: path.join(appRoot, 'node_modules') }, stdio: 'ignore' });
-  await ready(webUrl, webProcess, 'Web');
+  // Serves the single-page export the way the hosted static site does (render.yaml): an existing file as it is,
+  // every other path as index.html, so a deep link opens its route instead of a 404.
+  const serving = createHttpServer(sirv(path.join(appRoot, 'dist'), { single: true, dev: true }));
+  await new Promise<void>((resolve, reject) => { serving.once('error', reject); serving.listen(webPort, '127.0.0.1', () => resolve()); });
+  webServer = serving;
   const browser = await chromium.launch({ headless: true });
   try {
     const { providerAgendaSmoke } = await import('./provider-agenda-smoke.js');
@@ -586,7 +581,7 @@ try {
   } catch (error) { if (capture) { console.error((await capture.locator('body').innerText()).slice(0, 3500)); await capture.screenshot({ path: path.join(diagnostics, 'web-smoke-failure.png'), fullPage: true }).catch(() => {}); } throw error; }
   finally { await Promise.all(contexts.map((context) => context.close())); await browser.close(); }
 } finally {
-  webProcess?.kill('SIGTERM'); await apiServer?.close();
+  await new Promise<void>(resolve => webServer ? webServer.close(() => resolve()) : resolve()); await apiServer?.close();
   const accountKeys: string[] = []; for await (const batch of redis.scanStream({ match: `${accountNamespace}:*` })) accountKeys.push(...batch); if (accountKeys.length) await redis.del(...accountKeys);
   const googleKeys: string[] = []; for await (const batch of redis.scanStream({ match: `${googleNamespace}:*` })) googleKeys.push(...batch); if (googleKeys.length) await redis.del(...googleKeys);
   const holds = await prisma.booking.findMany({ where: { businessId: { in: businessIds } }, select: { id: true } });

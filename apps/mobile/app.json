@@ -21,7 +21,7 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "server",
+      "output": "single",
       "name": "Visit Scheduling",
       "shortName": "Visit",
       "themeColor": "#0f766e",

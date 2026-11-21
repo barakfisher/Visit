@@ -1,0 +1,33 @@
+<!doctype html>
+<!-- The single-page web shell (app.json web.output "single"). Hebrew/RTL is the default before
+     LocaleProvider applies the saved language. no-referrer keeps sign-in links out of Referer headers. -->
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="referrer" content="no-referrer" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <title>%WEB_TITLE%</title>
+    <link rel="manifest" href="/manifest.json" />
+    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <style id="expo-reset">
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        overflow: hidden;
+      }
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>Visit needs JavaScript. / Visit דורש JavaScript.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
