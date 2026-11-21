@@ -1,4 +1,4 @@
-# Visit handoff — 2026-11-20, hosted environment on Render (PR #(pending))
+# Visit handoff — 2026-11-20, hosted environment on Render (PR #82)
 
 Built on `main` after PR #81. Decisions: `decisions.md`, "Hosted environment on Render". Setup and procedures: [production-hosting.md](../architecture/production-hosting.md).
 
@@ -11,7 +11,7 @@ The user's global working agreement governs. The user chose each step in chat:
 - a single-page static web app
 - `sirv` for the browser suite
 
-Committing, opening the PR and deploying still wait for the user's word.
+The user asked for this PR. Merging and deploying still wait for their word.
 
 ## Where things stand
 
